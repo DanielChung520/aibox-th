@@ -65,22 +65,6 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
         run: npx tauri build --target ${{ matrix.target }}
 
-      - name: Debug bundle output
-        run: |
-          set +e
-          echo "=== Release dir ==="
-          ls src-tauri/target/${{ matrix.target }}/release/ 2>/dev/null || echo "release dir not found"
-          echo "=== Bundle dir ==="
-          ls src-tauri/target/${{ matrix.target }}/release/bundle/ 2>/dev/null || echo "bundle dir not found"
-          echo "=== Macos bundle ==="
-          ls src-tauri/target/${{ matrix.target }}/release/bundle/macos/ 2>/dev/null || echo "macos bundle not found"
-          echo "=== All bundle files ==="
-          find src-tauri/target/${{ matrix.target }}/release/bundle -type f 2>/dev/null
-          echo "=== .tar.gz files ==="
-          find src-tauri/target/${{ matrix.target }}/release -name "*.tar.gz*" 2>/dev/null
-          echo "=== .app files ==="
-          find src-tauri/target/${{ matrix.target }}/release -name "*.app" 2>/dev/null
-
       - name: Upload updater artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -122,21 +106,6 @@ jobs:
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
         run: npx tauri build
-
-      - name: Debug bundle output
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Continue'
-          Write-Output "=== Release dir ==="
-          if (Test-Path "src-tauri\target\release") { Get-ChildItem "src-tauri\target\release" | Select-Object Name } else { Write-Output "release dir not found" }
-          Write-Output "=== Bundle dir ==="
-          if (Test-Path "src-tauri\target\release\bundle") { Get-ChildItem "src-tauri\target\release\bundle" | Select-Object Name } else { Write-Output "bundle dir not found" }
-          Write-Output "=== NSIS bundle ==="
-          if (Test-Path "src-tauri\target\release\bundle\nsis") { Get-ChildItem "src-tauri\target\release\bundle\nsis" | Select-Object Name } else { Write-Output "nsis bundle not found" }
-          Write-Output "=== All bundle files ==="
-          Get-ChildItem -Recurse "src-tauri\target\release\bundle" -File 2>$null | Select-Object FullName
-          Write-Output "=== .nsis.zip files ==="
-          Get-ChildItem -Recurse "src-tauri\target\release" -Filter "*.nsis.zip" | Select-Object FullName
 
       - name: Upload updater artifacts
         uses: actions/upload-artifact@v4
