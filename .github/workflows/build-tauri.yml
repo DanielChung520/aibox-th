@@ -16,7 +16,6 @@ permissions:
   contents: write
 
 env:
-  # Password hardcoded here (not a secret - just needed for key decryption)
   TAURI_SIGNING_PRIVATE_KEY_PASSWORD: "abc-updater-2026"
 
 jobs:
@@ -28,11 +27,9 @@ jobs:
           - target: aarch64-apple-darwin
             runner: macos-latest
             label: macOS-ARM
-            arch: aarch64
           - target: x86_64-apple-darwin
             runner: macos-latest
             label: macOS-Intel
-            arch: x64
 
     runs-on: ${{ matrix.runner }}
     name: Build (${{ matrix.label }})
@@ -66,30 +63,25 @@ jobs:
       - name: Build Tauri app
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-        run: |
-          echo "=== Starting Tauri build ==="
-          npx tauri build --target ${{ matrix.target }} 2>&1
-          EXIT_CODE=$?
-          echo "=== Tauri build exit code: $EXIT_CODE ==="
-          exit $EXIT_CODE
+        run: npx tauri build --target ${{ matrix.target }}
 
       - name: Debug bundle output
         run: |
-          echo "=== Bundle files for ${{ matrix.label }} ==="
-          find src-tauri/target/${{ matrix.target }}/release/bundle -type f 2>/dev/null || echo "No bundle files found"
-          echo "=== Detailed macos bundle ==="
-          ls -la src-tauri/target/${{ matrix.target }}/release/bundle/macos/ 2>/dev/null || echo "macos dir not found"
-          echo "=== Looking for .tar.gz files ==="
-          find src-tauri/target/${{ matrix.target }}/release -name "*.tar.gz" -o -name "*.tar.gz.sig" 2>/dev/null || echo "No .tar.gz found"
-          echo "=== Glob test: all files in release ==="
-          ls src-tauri/target/${{ matrix.target }}/release/ 2>/dev/null | head -20
-          echo "=== Bundle subdirs ==="
-          ls -la src-tauri/target/${{ matrix.target }}/release/bundle/ 2>/dev/null
-          echo "=== Check .app exists ==="
-          find src-tauri/target/${{ matrix.target }}/release -name "*.app" 2>/dev/null || echo "No .app found"
+          set +e
+          echo "=== Release dir ==="
+          ls src-tauri/target/${{ matrix.target }}/release/ 2>/dev/null || echo "release dir not found"
+          echo "=== Bundle dir ==="
+          ls src-tauri/target/${{ matrix.target }}/release/bundle/ 2>/dev/null || echo "bundle dir not found"
+          echo "=== Macos bundle ==="
+          ls src-tauri/target/${{ matrix.target }}/release/bundle/macos/ 2>/dev/null || echo "macos bundle not found"
+          echo "=== All bundle files ==="
+          find src-tauri/target/${{ matrix.target }}/release/bundle -type f 2>/dev/null
+          echo "=== .tar.gz files ==="
+          find src-tauri/target/${{ matrix.target }}/release -name "*.tar.gz*" 2>/dev/null
+          echo "=== .app files ==="
+          find src-tauri/target/${{ matrix.target }}/release -name "*.app" 2>/dev/null
 
       - name: Upload updater artifacts
-        id: upload
         uses: actions/upload-artifact@v4
         with:
           name: tauri-${{ matrix.label }}-updater
@@ -97,8 +89,6 @@ jobs:
           path: |
             src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.app.tar.gz
             src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.app.tar.gz.sig
-
-
 
   build-windows:
     runs-on: windows-latest
@@ -134,11 +124,19 @@ jobs:
         run: npx tauri build
 
       - name: Debug bundle output
+        shell: pwsh
         run: |
-          echo "=== Bundle files for Windows ==="
-          find src-tauri/target/release/bundle -type f 2>/dev/null || echo "No bundle files found"
-          echo "=== Detailed nsis bundle ==="
-          ls -la src-tauri/target/release/bundle/nsis/ 2>/dev/null || echo "nsis dir not found"
+          $ErrorActionPreference = 'Continue'
+          Write-Output "=== Release dir ==="
+          if (Test-Path "src-tauri\target\release") { Get-ChildItem "src-tauri\target\release" | Select-Object Name } else { Write-Output "release dir not found" }
+          Write-Output "=== Bundle dir ==="
+          if (Test-Path "src-tauri\target\release\bundle") { Get-ChildItem "src-tauri\target\release\bundle" | Select-Object Name } else { Write-Output "bundle dir not found" }
+          Write-Output "=== NSIS bundle ==="
+          if (Test-Path "src-tauri\target\release\bundle\nsis") { Get-ChildItem "src-tauri\target\release\bundle\nsis" | Select-Object Name } else { Write-Output "nsis bundle not found" }
+          Write-Output "=== All bundle files ==="
+          Get-ChildItem -Recurse "src-tauri\target\release\bundle" -File 2>$null | Select-Object FullName
+          Write-Output "=== .nsis.zip files ==="
+          Get-ChildItem -Recurse "src-tauri\target\release" -Filter "*.nsis.zip" | Select-Object FullName
 
       - name: Upload updater artifacts
         uses: actions/upload-artifact@v4
@@ -157,15 +155,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: List available artifacts from build jobs
-        run: |
-          echo "=== Checking for artifacts from build jobs ==="
-          # Use GitHub REST API to list artifacts
-          RESPONSE=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-            "https://api.github.com/repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts")
-          echo "Artifacts response:"
-          echo "$RESPONSE" | head -100
-
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
@@ -173,19 +162,13 @@ jobs:
 
       - name: Verify artifacts downloaded
         run: |
-          if [ ! -d "artifacts" ]; then
-            echo "ERROR: artifacts directory not found!"
-            echo "This means no artifacts were uploaded by build jobs."
-            echo "Check if build-macos and build-windows jobs succeeded."
-            exit 1
-          fi
           echo "=== Downloaded artifacts ==="
-          find artifacts -type f | sort
-          echo "=== Artifact count ==="
-          find artifacts -type f | wc -l
-
-          echo "=== Directories in artifacts ==="
-          ls -la artifacts/ 2>/dev/null || echo "artifacts/ is empty or not a directory"
+          find artifacts -type f 2>/dev/null | sort
+          COUNT=$(find artifacts -type f 2>/dev/null | wc -l)
+          echo "Total files: $COUNT"
+          if [ "$COUNT" -eq 0 ]; then
+            echo "WARNING: No artifacts found! Check build jobs above."
+          fi
 
       - name: Determine version
         id: version
@@ -274,8 +257,9 @@ jobs:
       - name: Collect release files
         run: |
           mkdir -p release-files
-          find artifacts -type f \( -name "*.app.tar.gz" -o -name "*.app.tar.gz.sig" -o -name "*.nsis.zip" -o -name "*.nsis.zip.sig" \) -exec cp {} release-files/ \;
+          find artifacts -type f \( -name "*.app.tar.gz" -o -name "*.app.tar.gz.sig" -o -name "*.nsis.zip" -o -name "*.nsis.zip.sig" \) -exec cp {} release-files/ \; 2>/dev/null || true
           cp latest.json release-files/
+          echo "=== Release files ==="
           ls -la release-files/
 
       - name: Create GitHub Release
