@@ -66,7 +66,12 @@ jobs:
       - name: Build Tauri app
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-        run: npx tauri build --target ${{ matrix.target }} 2>&1
+        run: |
+          echo "=== Starting Tauri build ==="
+          npx tauri build --target ${{ matrix.target }} 2>&1
+          EXIT_CODE=$?
+          echo "=== Tauri build exit code: $EXIT_CODE ==="
+          exit $EXIT_CODE
 
       - name: Debug bundle output
         run: |
@@ -80,6 +85,8 @@ jobs:
           ls src-tauri/target/${{ matrix.target }}/release/ 2>/dev/null | head -20
           echo "=== Bundle subdirs ==="
           ls -la src-tauri/target/${{ matrix.target }}/release/bundle/ 2>/dev/null
+          echo "=== Check .app exists ==="
+          find src-tauri/target/${{ matrix.target }}/release -name "*.app" 2>/dev/null || echo "No .app found"
 
       - name: Upload updater artifacts
         id: upload
