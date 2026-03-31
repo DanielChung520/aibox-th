@@ -65,14 +65,19 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
         run: npx tauri build --target ${{ matrix.target }}
 
-      - name: Upload updater artifacts
+      - name: Upload .app.tar.gz
         uses: actions/upload-artifact@v4
         with:
-          name: tauri-${{ matrix.label }}-updater
+          name: tauri-${{ matrix.label }}-bundle
+          if-no-files-found: error
+          path: src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.app.tar.gz
+
+      - name: Upload .sig signature
+        uses: actions/upload-artifact@v4
+        with:
+          name: tauri-${{ matrix.label }}-sig
           if-no-files-found: warning
-          path: |
-            src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.app.tar.gz
-            src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.app.tar.gz.sig
+          path: src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.app.tar.gz.sig
 
   build-windows:
     runs-on: windows-latest
@@ -107,14 +112,19 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
         run: npx tauri build
 
-      - name: Upload updater artifacts
+      - name: Upload .nsis.zip
         uses: actions/upload-artifact@v4
         with:
-          name: tauri-Windows-x64-updater
+          name: tauri-Windows-x64-bundle
+          if-no-files-found: error
+          path: src-tauri/target/release/bundle/nsis/*.nsis.zip
+
+      - name: Upload .nsis.sig signature
+        uses: actions/upload-artifact@v4
+        with:
+          name: tauri-Windows-x64-sig
           if-no-files-found: warning
-          path: |
-            src-tauri/target/release/bundle/nsis/*.nsis.zip
-            src-tauri/target/release/bundle/nsis/*.nsis.zip.sig
+          path: src-tauri/target/release/bundle/nsis/*.nsis.zip.sig
 
   release:
     needs: [build-macos, build-windows]
@@ -135,9 +145,6 @@ jobs:
           find artifacts -type f 2>/dev/null | sort
           COUNT=$(find artifacts -type f 2>/dev/null | wc -l)
           echo "Total files: $COUNT"
-          if [ "$COUNT" -eq 0 ]; then
-            echo "WARNING: No artifacts found! Check build jobs above."
-          fi
 
       - name: Determine version
         id: version
@@ -158,14 +165,14 @@ jobs:
           REPO="https://github.com/${{ github.repository }}/releases/download/${VERSION}"
 
           # Find files
-          MAC_ARM_TAR=$(ls artifacts/tauri-macOS-ARM-updater/*.app.tar.gz 2>/dev/null | head -1)
-          MAC_INTEL_TAR=$(ls artifacts/tauri-macOS-Intel-updater/*.app.tar.gz 2>/dev/null | head -1)
-          WIN_NSIS_ZIP=$(ls artifacts/tauri-Windows-x64-updater/*.nsis.zip 2>/dev/null | head -1)
+          MAC_ARM_TAR=$(ls artifacts/tauri-macOS-ARM-bundle/*.app.tar.gz 2>/dev/null | head -1)
+          MAC_INTEL_TAR=$(ls artifacts/tauri-macOS-Intel-bundle/*.app.tar.gz 2>/dev/null | head -1)
+          WIN_NSIS_ZIP=$(ls artifacts/tauri-Windows-x64-bundle/*.nsis.zip 2>/dev/null | head -1)
 
           # Read signatures
-          MAC_ARM_SIG=$(cat "artifacts/tauri-macOS-ARM-updater/$(basename $MAC_ARM_TAR).sig" 2>/dev/null || echo "")
-          MAC_INTEL_SIG=$(cat "artifacts/tauri-macOS-Intel-updater/$(basename $MAC_INTEL_TAR).sig" 2>/dev/null || echo "")
-          WIN_NSIS_SIG=$(cat "artifacts/tauri-Windows-x64-updater/$(basename $WIN_NSIS_ZIP).sig" 2>/dev/null || echo "")
+          MAC_ARM_SIG=$(cat "artifacts/tauri-macOS-ARM-sig/$(basename $MAC_ARM_TAR).sig" 2>/dev/null || echo "")
+          MAC_INTEL_SIG=$(cat "artifacts/tauri-macOS-Intel-sig/$(basename $MAC_INTEL_TAR).sig" 2>/dev/null || echo "")
+          WIN_NSIS_SIG=$(cat "artifacts/tauri-Windows-x64-sig/$(basename $WIN_NSIS_ZIP).sig" 2>/dev/null || echo "")
 
           # macOS ARM
           if [ -f "$MAC_ARM_TAR" ]; then
@@ -226,7 +233,8 @@ jobs:
       - name: Collect release files
         run: |
           mkdir -p release-files
-          find artifacts -type f \( -name "*.app.tar.gz" -o -name "*.app.tar.gz.sig" -o -name "*.nsis.zip" -o -name "*.nsis.zip.sig" \) -exec cp {} release-files/ \; 2>/dev/null || true
+          find artifacts -type f \( -name "*.app.tar.gz" -o -name "*.nsis.zip" \) -exec cp {} release-files/ \; 2>/dev/null || true
+          find artifacts -type f \( -name "*.sig" \) -exec cp {} release-files/ \; 2>/dev/null || true
           cp latest.json release-files/
           echo "=== Release files ==="
           ls -la release-files/
