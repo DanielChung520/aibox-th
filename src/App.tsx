@@ -7,6 +7,8 @@
  */
 
 import { useState, useEffect, ReactNode } from 'react';
+import { getCurrentWindow } from '@tauri-apps/api/window';
+import { paramsApi } from './services/api';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ConfigProvider, App as AntApp, theme } from 'antd';
 import { AppThemeProvider, useEffectiveTheme, useContentTokens } from './contexts/AppThemeProvider';
@@ -54,6 +56,20 @@ function ProtectedRoute({ children }: { children: ReactNode }) {
 function AppContent() {
   const effectiveTheme = useEffectiveTheme();
   const contentTokens = useContentTokens();
+
+  useEffect(() => {
+    paramsApi.list().then((res: any) => {
+      const params = res.data.data || [];
+      const appName = params.find((p: any) => p.param_key === 'app.name');
+      if (appName?.param_value) {
+        try {
+          getCurrentWindow().setTitle(appName.param_value);
+        } catch (_) {
+          // non-Tauri environment
+        }
+      }
+    }).catch(() => {});
+  }, []);
 
   const algorithm = effectiveTheme === 'dark' ? theme.darkAlgorithm : theme.defaultAlgorithm;
 
