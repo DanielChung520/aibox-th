@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
+import logoCollapsed from '../assets/logo.png';
 import logoFull from '../assets/EDGE-logo-light.png';
-import logoIcon from '../assets/EDGE-logo-icon.png';
 
 interface AppLogoProps {
   logo: string;
@@ -11,7 +11,7 @@ interface AppLogoProps {
 
 export default function AppLogo({ logo, collapsed }: AppLogoProps) {
   const navigate = useNavigate();
-  const imgSrc = collapsed ? logoIcon : (logo || logoFull);
+  const imgSrc = collapsed ? logoCollapsed : (logo || logoFull);
 
   return (
     <div
