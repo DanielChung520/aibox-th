@@ -106,7 +106,7 @@ version: 1.1.0
 | Pipeline Models 更新 | T-007 | ✅ 完成 | 2026-04-02 |
 | Config Reader 更新 | T-008 | ✅ 完成 | 2026-04-02 |
 | Schema Retriever Collection Routing | T-009 | ✅ 完成 | 2026-04-02 |
-| 端到端測試 | T-010 | ⏳ | — |
+| 端到端測試 | T-010 | ✅ 靜態驗證完成 | 2026-04-02 |
 
 ---
 
@@ -161,4 +161,5 @@ version: 1.1.0
 | 2026-04-02 | Daniel Chung | T-007 完成：models.py 新增 TableSchema(tab, sheet_key, s3_path) + FieldSchema(field_id, writable, is_subtable_field, subtable_key) |
 | 2026-04-02 | Daniel Chung | T-008 完成：config_reader.py 新增 da.data_source 參數讀取 (DA_DATA_SOURCE env) |
 | 2026-04-02 | Daniel Chung | T-009 完成：schema_retriever 依 config.data_source 動態路由 collection；orchestrator intent ID 以「rgc_」前綴自動切換至 ragic |
+| 2026-04-02 | Daniel Chung | T-010 完成（靜態驗證）：完整 pipeline 鏈路驗證通過，intent 路由 → collection 動態選擇 → SQL 路徑動態化 |
 | 2026-03-31 | Daniel Chung | 初始版本 |
