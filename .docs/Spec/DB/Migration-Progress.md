@@ -97,7 +97,7 @@ version: 1.1.0
 | 任務 | 代碼 | 狀態 | 完成日期 |
 |------|------|------|---------|
 | Rename Collections 為 _sap | T-000 | ⏳ | — |
-| 建立 Ragic Schema Seed Script | T-001 | ⏳ | — |
+| 建立 Ragic Schema Seed Script | T-001 | ✅ 完成 | 2026-04-02 |
 | 建立 _ragic Collections | T-002 | ⏳ | — |
 | 執行 Phase 1 Schema Seed | T-003 | ⏳ | — |
 | SQL Generator 路徑動態化 | T-004 | ⏳ | — |
@@ -153,4 +153,5 @@ version: 1.1.0
 | 日期 | 更新者 | 變更內容 |
 |------|--------|---------|
 | 2026-04-02 | Daniel Chung | Phase 1+2 完成：seed_intent_catalog.py (1129→4), dataAgentApi.ts (305→3), 遷移計劃文件 (1209→5) |
+| 2026-04-02 | Daniel Chung | T-001 完成：建立 seed_ragic_schema.py (717 行)，含 6 張 Ragic Phase1 表格、202 個欄位、8 個關聯 |
 | 2026-03-31 | Daniel Chung | 初始版本 |
