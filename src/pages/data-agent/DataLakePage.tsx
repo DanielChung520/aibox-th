@@ -1,17 +1,18 @@
 /**
  * @file        數據湖表結構及數據檢視頁面
  * @description 左側顯示所有資料表列表，點擊後右側顯示欄位結構與資料預覽（分頁模式）
- * @lastUpdate  2026-03-24 19:01:41
+ * @lastUpdate  2026-04-02 19:30:00
  * @author      Daniel Chung
- * @version     1.2.0
+ * @version     1.3.0
  */
 
 import { useState, useEffect, useMemo } from 'react';
-import { Table, Card, Typography, Tag, Space, Spin, Empty, Descriptions, Alert, Tabs, theme, Input } from 'antd';
+import { Table, Card, Typography, Tag, Space, Spin, Empty, Descriptions, Alert, Tabs, theme, Input, Segmented } from 'antd';
 import { DatabaseOutlined, TableOutlined, InfoCircleOutlined } from '@ant-design/icons';
 import { dataAgentApi, TableInfo, FieldInfo } from '../../services/dataAgentApi';
 
 const { Text } = Typography;
+type DataSourceType = 'sap' | 'ragic' | 'ALL';
 
 const MODULE_COLORS: Record<string, string> = {
   MM: 'blue',
@@ -27,6 +28,7 @@ export default function DataLakePage() {
   const [tables, setTables] = useState<TableInfo[]>([]);
   const [loadingTables, setLoadingTables] = useState(false);
   const [searchText, setSearchText] = useState('');
+  const [dataSourceFilter, setDataSourceFilter] = useState<DataSourceType>('ALL');
   const [selectedTable, setSelectedTable] = useState<string | null>(null);
   const [tableInfo, setTableInfo] = useState<TableInfo | null>(null);
   const [fields, setFields] = useState<FieldInfo[]>([]);
@@ -54,6 +56,11 @@ export default function DataLakePage() {
   useEffect(() => {
     loadTables();
   }, []);
+
+  const filteredTables = useMemo(() => {
+    if (dataSourceFilter === 'ALL') return tables;
+    return tables.filter(t => t.data_source === dataSourceFilter);
+  }, [tables, dataSourceFilter]);
 
   const loadTableData = async (tableName: string, page = 1, size = 20) => {
     const isNewTable = tableName !== selectedTable;
@@ -247,8 +254,20 @@ export default function DataLakePage() {
           <Space>
             <DatabaseOutlined />
             <span>資料表列表</span>
-            <Tag>{tables.length}</Tag>
+            <Tag>{filteredTables.length}</Tag>
           </Space>
+        }
+        extra={
+          <Segmented
+            value={dataSourceFilter}
+            onChange={(v) => setDataSourceFilter(v as DataSourceType)}
+            size="small"
+            options={[
+              { label: `全部 (${tables.filter(t => !t.data_source || t.data_source === 'sap' || t.data_source === 'ragic').length})`, value: 'ALL' },
+              { label: `SAP (${tables.filter(t => t.data_source === 'sap').length})`, value: 'sap' },
+              { label: `Ragic (${tables.filter(t => t.data_source === 'ragic').length})`, value: 'ragic' },
+            ]}
+          />
         }
         style={{ width: 300, flexShrink: 0 }}
         styles={{ body: { padding: 0 } }}
@@ -263,20 +282,21 @@ export default function DataLakePage() {
         </div>
         <div style={{ maxHeight: 'calc(100vh - 200px)', overflowY: 'auto' }}>
           <Table
-            dataSource={tables.filter(t =>
+            dataSource={filteredTables.filter(t =>
               !searchText ||
               t.table_name.toLowerCase().includes(searchText.toLowerCase()) ||
               t.description?.toLowerCase().includes(searchText.toLowerCase()) ||
-              t.module.toLowerCase().includes(searchText.toLowerCase())
+              t.module.toLowerCase().includes(searchText.toLowerCase()) ||
+              t.table_id.toLowerCase().includes(searchText.toLowerCase())
             )}
-            rowKey="table_name"
+            rowKey="table_id"
             size="small"
             pagination={false}
             onRow={t => ({
-              onClick: () => loadTableData(t.table_name, 1, pageSize),
+              onClick: () => loadTableData(t.table_id, 1, pageSize),
               style: {
                 cursor: 'pointer',
-                background: selectedTable === t.table_name ? token.controlItemBgActive : 'transparent',
+                background: selectedTable === t.table_id ? token.controlItemBgActive : 'transparent',
               },
             })}
             columns={[
@@ -290,7 +310,15 @@ export default function DataLakePage() {
                       <Tag color={MODULE_COLORS[t.module] || 'default'} style={{ fontSize: 10 }}>
                         {t.module}
                       </Tag>
+                      {t.data_source && (
+                        <Tag color={t.data_source === 'sap' ? 'blue' : 'green'} style={{ fontSize: 10 }}>
+                          {t.data_source.toUpperCase()}
+                        </Tag>
+                      )}
                     </Space>
+                    <Text type="secondary" style={{ fontSize: 10 }}>
+                      {t.table_id}
+                    </Text>
                     {(t.row_count_estimate ?? t.record_count) !== undefined && (
                       <Text type="secondary" style={{ fontSize: 11 }}>
                         ~{(t.row_count_estimate ?? t.record_count)?.toLocaleString()} rows
@@ -331,8 +359,18 @@ export default function DataLakePage() {
                   <Descriptions.Item label="表名">
                     <Text strong>{tableInfo.table_name}</Text>
                   </Descriptions.Item>
+                  <Descriptions.Item label="Table ID">
+                    <Text code>{tableInfo.table_id}</Text>
+                  </Descriptions.Item>
                   <Descriptions.Item label="模組">
                     <Tag color={MODULE_COLORS[tableInfo.module] || 'default'}>{tableInfo.module}</Tag>
+                  </Descriptions.Item>
+                  <Descriptions.Item label="來源">
+                    {tableInfo.data_source ? (
+                      <Tag color={tableInfo.data_source === 'sap' ? 'blue' : 'green'}>
+                        {tableInfo.data_source.toUpperCase()}
+                      </Tag>
+                    ) : '-'}
                   </Descriptions.Item>
                   <Descriptions.Item label="主鍵">
                     {tableInfo.primary_keys?.join(', ') || '-'}
