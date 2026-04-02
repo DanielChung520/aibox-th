@@ -7,7 +7,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import { App, Card, Form, Input, Button, Switch, InputNumber, Tabs, Space, Upload, Image, theme, type TabsProps } from 'antd';
+import { App, Card, Form, Input, Button, Switch, InputNumber, Tabs, Space, Upload, Image, theme, type TabsProps, Select } from 'antd';
 import { SaveOutlined, ReloadOutlined, UploadOutlined } from '@ant-design/icons';
 import { paramsApi, SystemParam } from '../services/api';
 import SystemParamsModels from './SystemParamsModels';
@@ -44,10 +44,14 @@ export default function SystemParams() {
       });
       form.setFieldsValue(values);
 
-      // Load logo if exists
       const logoParam = response.data.data?.find((p: SystemParam) => p.param_key === 'app.logo');
       if (logoParam?.param_value) {
         setLogoBase64(logoParam.param_value);
+      }
+
+      const systemTypeParam = response.data.data?.find((p: SystemParam) => p.param_key === 'basic.system_type');
+      if (systemTypeParam?.param_value) {
+        localStorage.setItem('app.system_type', systemTypeParam.param_value);
       }
     } catch {
       message.error('获取参数失败');
@@ -77,6 +81,10 @@ export default function SystemParams() {
         }
 
         await paramsApi.update(param.param_key, paramValue);
+
+        if (param.param_key === 'basic.system_type') {
+          localStorage.setItem('app.system_type', paramValue);
+        }
       }
 
       message.success('保存成功');
@@ -135,6 +143,15 @@ export default function SystemParams() {
     const commonProps = {
       disabled: param.param_key === 'app.version',
     };
+
+    if (param.param_key === 'basic.system_type') {
+      return (
+        <Select {...commonProps} style={{ width: '100%' }}>
+          <Select.Option value="sap">SAP</Select.Option>
+          <Select.Option value="ragic">Ragic</Select.Option>
+        </Select>
+      );
+    }
 
     switch (param.param_type) {
       case 'boolean':

@@ -7,7 +7,7 @@
  */
 
 import { useState, useEffect, useMemo } from 'react';
-import { Table, Card, Typography, Tag, Space, Spin, Empty, Descriptions, Alert, Tabs, theme, Input, Segmented } from 'antd';
+import { Table, Card, Typography, Tag, Space, Spin, Empty, Descriptions, Alert, Tabs, theme, Input } from 'antd';
 import { DatabaseOutlined, TableOutlined, InfoCircleOutlined } from '@ant-design/icons';
 import { dataAgentApi, TableInfo, FieldInfo } from '../../services/dataAgentApi';
 
@@ -28,7 +28,9 @@ export default function DataLakePage() {
   const [tables, setTables] = useState<TableInfo[]>([]);
   const [loadingTables, setLoadingTables] = useState(false);
   const [searchText, setSearchText] = useState('');
-  const [dataSourceFilter, setDataSourceFilter] = useState<DataSourceType>('ALL');
+  const [dataSourceFilter] = useState<DataSourceType>(
+    () => (localStorage.getItem('app.system_type') as DataSourceType) || 'ALL'
+  );
   const [selectedTable, setSelectedTable] = useState<string | null>(null);
   const [tableInfo, setTableInfo] = useState<TableInfo | null>(null);
   const [fields, setFields] = useState<FieldInfo[]>([]);
@@ -256,18 +258,6 @@ export default function DataLakePage() {
             <span>資料表列表</span>
             <Tag>{filteredTables.length}</Tag>
           </Space>
-        }
-        extra={
-          <Segmented
-            value={dataSourceFilter}
-            onChange={(v) => setDataSourceFilter(v as DataSourceType)}
-            size="small"
-            options={[
-              { label: `全部 (${tables.filter(t => !t.data_source || t.data_source === 'sap' || t.data_source === 'ragic').length})`, value: 'ALL' },
-              { label: `SAP (${tables.filter(t => t.data_source === 'sap').length})`, value: 'sap' },
-              { label: `Ragic (${tables.filter(t => t.data_source === 'ragic').length})`, value: 'ragic' },
-            ]}
-          />
         }
         style={{ width: 300, flexShrink: 0 }}
         styles={{ body: { padding: 0 } }}
