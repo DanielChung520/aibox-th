@@ -56,6 +56,12 @@ async def validate_sql(
     errors: list[ValidationError] = []
     warnings: list[ValidationError] = []
 
+    # Ragic AQL bypass — AQL is not SQL, skip Layer 1 & 2 validation
+    if config.data_source == "ragic":
+        return ValidationResult(
+            is_valid=True, errors=[], warnings=[],
+        )
+
     # Layer 1: Regex blocklist
     l1_errors = _validate_regex(sql)
     errors.extend(l1_errors)

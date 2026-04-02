@@ -1,14 +1,16 @@
 """
-NL→SQL Pipeline - DuckDB Executor
+NL→SQL Pipeline - DuckDB Executor + ArangoDB AQL Executor
 
-Executes validated SQL queries against DuckDB with parquet data sources.
+Executes validated SQL queries against DuckDB with parquet data sources,
+or validated AQL queries against ArangoDB for Ragic data sources.
 SELECT-only enforcement at execution level as final safety net.
 
-# Last Update: 2026-04-02 20:30:00
+# Last Update: 2026-04-02 21:00:00
 # Author: Daniel Chung
-# Version: 2.0.0
+# Version: 3.0.0
 """
 
+import re
 import time
 import httpx
 
@@ -84,14 +86,47 @@ async def execute_sql(
         raise ExecutionError(f"DuckDB execution failed: {str(e)}")
 
 
+async def _fetch_ragic_field_mappings(
+    table_ids: list[str], config: PipelineConfig
+) -> dict[str, str]:
+    """Fetch field_id → field_name mappings for Ragic tables from ArangoDB."""
+    mappings: dict[str, str] = {}
+    if not table_ids:
+        return mappings
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        for table_id in table_ids:
+            resp = await client.post(
+                f"{config.arango_url}/_db/{config.arango_db}/_api/cursor",
+                json={
+                    "query": (
+                        "FOR f IN da_field_info_ragic "
+                        "FILTER f.table_id == @table_id "
+                        "RETURN {field_id: f.field_id, field_name: f.field_name}"
+                    ),
+                    "bindVars": {"table_id": table_id},
+                },
+                auth=(config.arango_user, config.arango_password),
+            )
+            resp.raise_for_status()
+            for f in resp.json().get("result", []):
+                fid = str(f.get("field_id", ""))
+                fname = str(f.get("field_name", ""))
+                if fid and fname:
+                    mappings[fid] = fname
+    return mappings
+
+
 async def execute_aql(
-    aql: str, config: PipelineConfig
+    aql: str, config: PipelineConfig,
+    field_mappings: dict[str, str] | None = None,
 ) -> SQLResult:
     """Execute an AQL query against ArangoDB (for Ragic data source).
 
     Args:
         aql: Validated ArangoDB AQL query.
         config: Pipeline configuration with ArangoDB credentials.
+        field_mappings: Optional dict of field_id → field_name for remapping.
+                        If not provided, fetched automatically from da_field_info_ragic.
 
     Returns:
         SQLResult with rows, columns, count, and timing.
@@ -105,11 +140,32 @@ async def execute_aql(
 
     start_ms = time.time() * 1000
 
+    if field_mappings is None:
+        table_id_match = re.search(r"d\.table_id\s*==\s*['\"]([^'\"]+)['\"]", aql)
+        if table_id_match:
+            field_mappings = await _fetch_ragic_field_mappings(
+                [table_id_match.group(1)], config
+            )
+        else:
+            field_mappings = {}
+
+    # Reverse mapping: field_name → field_id (for rewriting AQL)
+    reverse_map: dict[str, str] = {v: k for k, v in field_mappings.items()}
+
+    # Rewrite AQL: replace field names with field IDs in d["field_name"] accesses
+    aql_rewritten = aql
+    for field_name, field_id in reverse_map.items():
+        aql_rewritten = re.sub(
+            rf'd\[\{re.escape(repr(field_name))}\]',
+            f'd["{field_id}"]',
+            aql_rewritten,
+        )
+
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(
                 f"{config.arango_url}/_db/{config.arango_db}/_api/cursor",
-                json={"query": aql},
+                json={"query": aql_rewritten},
                 auth=(config.arango_user, config.arango_password),
             )
             response.raise_for_status()
@@ -122,8 +178,9 @@ async def execute_aql(
             row: dict[str, object] = {}
             for k, v in raw.items():
                 if k not in ("_key", "_id", "_rev", "_ragicId", "table_id", "created_at", "updated_at"):
-                    row[k] = v
-                    all_keys.add(k)
+                    mapped_key = field_mappings.get(k, k)
+                    row[mapped_key] = v
+                    all_keys.add(mapped_key)
             if row:
                 rows.append(row)
 

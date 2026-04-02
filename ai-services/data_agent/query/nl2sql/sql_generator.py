@@ -97,7 +97,7 @@ def _fill_template(
     template = template.replace("{po_number}", _extract_placeholder(plan, "po_number"))
     template = template.replace("{vendor_list}", _extract_placeholder(plan, "vendor_list"))
 
-    if "read_parquet" not in intent.sql_template:
+    if "read_parquet" not in intent.sql_template and config.data_source != "ragic":
         for table in plan.tables:
             module = table.split("_")[0].lower() if "_" in table else "mm"
             tbl_name = table.split("_")[-1].lower() if "_" in table else table.lower()
