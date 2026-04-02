@@ -23,6 +23,7 @@ DA_PARAM_KEYS = {
     "embedding_dimension": "da.embedding_dimension",
     "small_llm_model": "da.small_llm_model",
     "large_llm_model": "da.large_llm_model",
+    "data_source": "da.data_source",
 }
 
 _ENV_FALLBACKS: dict[str, tuple[str, str]] = {
@@ -30,6 +31,7 @@ _ENV_FALLBACKS: dict[str, tuple[str, str]] = {
     "da.embedding_dimension": ("EMBEDDING_DIM", "1024"),
     "da.small_llm_model": ("NL2SQL_SMALL_MODEL", "mistral-nemo:12b"),
     "da.large_llm_model": ("NL2SQL_LARGE_MODEL", "qwen3-coder:30b"),
+    "da.data_source": ("DA_DATA_SOURCE", "sap"),
 }
 
 
@@ -73,7 +75,6 @@ async def get_param(param_key: str) -> str:
 
 
 async def get_da_config() -> dict[str, str]:
-    """Fetch all 4 DA config values (embedding_model, embedding_dimension, small/large_llm_model)."""
     result: dict[str, str] = {}
     for local_key, param_key in DA_PARAM_KEYS.items():
         result[local_key] = await get_param(param_key)

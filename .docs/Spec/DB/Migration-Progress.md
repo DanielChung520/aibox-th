@@ -104,8 +104,8 @@ version: 1.1.0
 | Intent Classifier 新增 Ragic 範例 | T-005 | ✅ 完成 | 2026-04-02 |
 | Intent RAG Templates 新增 Ragic | T-006 | ✅ 完成 | 2026-04-02 |
 | Pipeline Models 更新 | T-007 | ✅ 完成 | 2026-04-02 |
-| Config Reader 更新 | T-008 | ⏳ | — |
-| Schema Retriever Collection Routing | T-009 | ⏳ | — |
+| Config Reader 更新 | T-008 | ✅ 完成 | 2026-04-02 |
+| Schema Retriever Collection Routing | T-009 | ✅ 完成 | 2026-04-02 |
 | 端到端測試 | T-010 | ⏳ | — |
 
 ---
@@ -159,4 +159,6 @@ version: 1.1.0
 | 2026-04-02 | Daniel Chung | T-004 完成：sql_generator.py 路徑由 `config.s3_bucket` 動態控制（_format_schema_brief 函式） |
 | 2026-04-02 | Daniel Chung | T-005+T-006 完成：seed_intent_catalog_ragic.py Groups A/B/C 更新為 Phase 1 實欄位（9 intents），Groups D/E/F 保留 Phase 2 placeholder，seed 執行成功 |
 | 2026-04-02 | Daniel Chung | T-007 完成：models.py 新增 TableSchema(tab, sheet_key, s3_path) + FieldSchema(field_id, writable, is_subtable_field, subtable_key) |
+| 2026-04-02 | Daniel Chung | T-008 完成：config_reader.py 新增 da.data_source 參數讀取 (DA_DATA_SOURCE env) |
+| 2026-04-02 | Daniel Chung | T-009 完成：schema_retriever 依 config.data_source 動態路由 collection；orchestrator intent ID 以「rgc_」前綴自動切換至 ragic |
 | 2026-03-31 | Daniel Chung | 初始版本 |

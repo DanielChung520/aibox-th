@@ -54,6 +54,7 @@ async def _build_config() -> PipelineConfig:
         arango_password=os.getenv("ARANGO_PASSWORD", "abc_desktop_2026"),
         s3_endpoint=os.getenv("S3_ENDPOINT", "http://localhost:8334"),
         s3_bucket=os.getenv("S3_BUCKET", "sap"),
+        data_source=await get_param("da.data_source"),
         s3_access_key=os.getenv("S3_ACCESS_KEY", "admin"),
         s3_secret_key=os.getenv("S3_SECRET_KEY", "admin123"),
         match_threshold=float(os.getenv("MATCH_THRESHOLD", "0.56")),
@@ -83,6 +84,9 @@ async def _classify_with_reranking(
 
     logger.info("Intent: %s (score=%.3f, strategy=%s)",
                 intent.intent_id, intent.score, intent.generation_strategy.value)
+    if intent.intent_id.startswith("rgc_"):
+        config.data_source = "ragic"
+        logger.info("Ragic intent matched, data_source=ragic")
     return intent, classify_ms
 
 

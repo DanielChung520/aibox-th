@@ -39,6 +39,7 @@ class PipelineConfig(BaseModel):
     arango_password: str = Field(default="abc_desktop_2026")
     s3_endpoint: str = Field(default="http://localhost:8334")
     s3_bucket: str = Field(default="sap")
+    data_source: str = Field(default="sap")
     s3_access_key: str = Field(default="")
     s3_secret_key: str = Field(default="")
     match_threshold: float = Field(default=0.58)

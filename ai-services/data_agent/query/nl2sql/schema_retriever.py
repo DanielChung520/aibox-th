@@ -28,10 +28,11 @@ async def retrieve_schema(
     """Retrieve pruned schema for specified tables from ArangoDB.
 
     Only fetches metadata for the requested tables, not the full schema.
+    Collection routing is controlled by config.data_source ('sap' or 'ragic').
 
     Args:
         tables: List of table names to retrieve schema for.
-        config: Pipeline configuration with ArangoDB credentials.
+        config: Pipeline configuration with ArangoDB credentials and data_source.
 
     Returns:
         SchemaContext with tables, fields, relations, and join graph.
@@ -66,10 +67,11 @@ async def retrieve_schema(
 async def _fetch_tables(
     tables: list[str], config: PipelineConfig
 ) -> list[TableSchema]:
-    """Fetch table metadata from da_table_info collection."""
+    ds = getattr(config, "data_source", "sap")
+    collection = f"da_table_info_{ds}"
     table_list = ", ".join(f'"{t}"' for t in tables)
     aql = (
-        f"FOR t IN da_table_info "
+        f"FOR t IN {collection} "
         f"FILTER t.table_name IN [{table_list}] "
         f"RETURN t"
     )
@@ -81,6 +83,9 @@ async def _fetch_tables(
             description=str(r.get("description", "")),
             row_count=int(r.get("row_count_estimate", 0)),
             module=str(r.get("module", "")),
+            tab=str(r.get("tab", "")),
+            sheet_key=str(r.get("sheet_key", "")),
+            s3_path=str(r.get("s3_path", "")),
         )
         for r in results
     ]
@@ -91,10 +96,11 @@ async def _fetch_fields(
     table_id_map: dict[str, str],
     config: PipelineConfig,
 ) -> list[FieldSchema]:
-    """Fetch field metadata from da_field_info collection."""
+    ds = getattr(config, "data_source", "sap")
+    collection = f"da_field_info_{ds}"
     id_list = ", ".join(f'"{tid}"' for tid in table_ids)
     aql = (
-        f"FOR f IN da_field_info "
+        f"FOR f IN {collection} "
         f"FILTER f.table_id IN [{id_list}] "
         f"RETURN f"
     )
@@ -111,6 +117,10 @@ async def _fetch_fields(
             data_type=str(r.get("field_type", "")),
             description=str(r.get("description", "")),
             is_key=bool(r.get("is_pk", False)),
+            field_id=str(r.get("field_id", "")),
+            writable=bool(r.get("writable", True)),
+            is_subtable_field=bool(r.get("is_subtable", False)),
+            subtable_key=str(r.get("subtable_key", "")),
         )
         for r in results
     ]
@@ -119,10 +129,11 @@ async def _fetch_fields(
 async def _fetch_relations(
     table_ids: list[str], config: PipelineConfig
 ) -> list[TableRelation]:
-    """Fetch table relations from da_table_relation collection."""
+    ds = getattr(config, "data_source", "sap")
+    collection = f"da_table_relation_{ds}"
     id_list = ", ".join(f'"{tid}"' for tid in table_ids)
     aql = (
-        f"FOR r IN da_table_relation "
+        f"FOR r IN {collection} "
         f"FILTER r.left_table IN [{id_list}] "
         f"OR r.right_table IN [{id_list}] "
         f"RETURN r"
