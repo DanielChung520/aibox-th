@@ -1,5 +1,5 @@
 ---
-lastUpdate: 2026-04-02 09:22:42
+lastUpdate: 2026-04-02 09:30:00
 author: Daniel Chung
 version: 1.1.0
 ---
@@ -128,10 +128,10 @@ version: 1.1.0
 ## Phase 5：規格文件更新
 
 | 任務 | 代碼 | 狀態 | 完成日期 |
-|------|------|------|---------|
-| 更新 data-agent-spec-v2.md | T4-1 | ⏳ | — |
-| 更新 API Specification.md | T4-2 | ⏳ | — |
-| 更新 RagicTableSchema.md | T4-3 | ⏳ | — |
+|------|------|------|------|---------|
+| 更新 data-agent-spec-v2.md | T4-1 | ✅ 完成 | 2026-04-02 |
+| 更新 API Specification.md | T4-2 | ✅ 完成 | 2026-04-02 |
+| 更新 RagicTableSchema.md | T4-3 | ✅ 完成 | 2026-04-02 |
 
 ---
 
@@ -141,10 +141,10 @@ version: 1.1.0
 |-------|---------|---------|------|
 | Phase 1：程式碼模組化 | 待估 | ~0.5 人天 | ✅ 完成 |
 | Phase 2：遷移計劃文件拆分 | 待估 | ~0.5 人天 | ✅ 完成 |
-| Phase 3：後端遷移實作 | 6 人天 | — | ⏳ |
-| Phase 4：前端遷移實作 | 2.5 人天 | — | ⏳ |
-| Phase 5：規格文件更新 | 0.5 人天 | — | ⏳ |
-| **合計** | **9+ 人天** | **~1 人天** | — |
+| Phase 3：後端遷移實作 | 6 人天 | ~3 人天 | ✅ 完成 |
+| Phase 4：前端遷移實作 | 2.5 人天 | ~1 人天 | ✅ 完成 |
+| Phase 5：規格文件更新 | 0.5 人天 | ~0.5 人天 | ✅ 完成 |
+| **合計** | **9+ 人天** | **~5.5 人天** | ✅ 全部完成 |
 
 ---
 
@@ -163,4 +163,5 @@ version: 1.1.0
 | 2026-04-02 | Daniel Chung | T-009 完成：schema_retriever 依 config.data_source 動態路由 collection；orchestrator intent ID 以「rgc_」前綴自動切換至 ragic |
 | 2026-04-02 | Daniel Chung | T-010 完成（靜態驗證）：完整 pipeline 鏈路驗證通過，intent 路由 → collection 動態選擇 → SQL 路徑動態化 |
 | 2026-04-02 | Daniel Chung | Phase 4 完成（T3-1~T3-8）：API Types 新增 data_source/tab/sheet_key/writable；SchemaPage Segmented SAP/Ragic 過濾、動態 Module Select、新增來源/Sheet Key 欄位；QueryPlayground 加入 Ragic 範例 |
+| 2026-04-02 | Daniel Chung | Phase 5 完成（T4-1~T4-3）：data-agent-spec-v2.md 更新（16 處修改：架構圖、JSON Schema、初始化資料、Collection 命名、AQL 範例、S3 權限）；API Specification.md 新增 Data Agent NL→SQL 端點說明與 DA 系統參數；RagicTableSchema.md header 新增 source schema 說明 |
 | 2026-03-31 | Daniel Chung | 初始版本 |

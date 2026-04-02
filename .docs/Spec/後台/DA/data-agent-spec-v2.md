@@ -106,6 +106,8 @@ DA v2.0 上線前，必須滿足以下前置條件：
 | 安全策略 | 無完整設計 | **只讀 SQL 白名單 + AST 驗證 + 參數綁定** |
 | 協議整合 | 未對齊 | **對齊 Top Orchestrator v2.0 schema_version=2.0** |
 | 前端維運頁 | 無 | **4 個 DA 管理頁完整規格** |
+| 資料來源 | SAP only | **Dual-source: SAP + Ragic (via DATA_SOURCE env var)** |
+| Intent 路由 | Static | **Dynamic routing via intent prefix (sap_/rgc_)** |
 | 錯誤碼 | 不完整 | **完整 DA_* 錯誤碼 + 重試/降級策略** |
 | 可觀測性 | 弱 | **全鏈路 audit + metrics + trace id** |
 
@@ -150,13 +152,14 @@ DA v2.0 上線前，必須滿足以下前置條件：
        │
        ▼
 ┌───────────────────────────────────────────┐
-│ DuckDB (in-memory, httpfs)               │
-│ read_parquet('s3://...') via S3 Secret   │
+│ DuckDB (in-memory, httpfs)                │
+│ read_parquet('s3://{data_source}/...') via S3 Secret │
 └──────────────────┬────────────────────────┘
                    ▼
           ┌──────────────────────┐
-          │ SeaWeedFS S3 DataLake│
-          │ SAP Parquet Files    │
+          │ Ragic / SeaWeedFS S3 DataLake │
+          │ Ragic Parquet Files  (s3://ragic/...) │
+          │ SAP Parquet Files    (s3://sap/...)  │
           └──────────────────────┘
 ```
 
@@ -187,10 +190,11 @@ DA v2.0 核心流程：
 
 | Component | Technology | Purpose |
 |-----------|------------|---------|
-| DA Service | Python FastAPI (port 8002) | Main service |
+| DA Service | Python FastAPI (port 8003) | Main service — dual-source (SAP + Ragic) |
 | SQL Engine | DuckDB (in-memory, httpfs extension) | Query S3 Parquet files |
 | Vector DB | Qdrant (port 6333) | Intent similarity matching |
 | Metadata DB | ArangoDB (port 8529) | Schema KB + Intent records |
+| Ragic API  | Ragic Cloud (ap15.ragic.com) | Phase 1 source (Employee, Item, Vendor, PO, etc.) |
 | Embedding Model | BGE-M3 via Ollama (1024 dims) | Intent vectorization |
 | Data Lake | SeaWeedFS S3 | SAP data (Parquet format) |
 
@@ -209,6 +213,10 @@ DA Schema 知識庫採三個核心 collection：
 1. `da_table_info`：資料表層級 metadata
 2. `da_field_info`：欄位層級 metadata
 3. `da_table_relation`：跨表關聯 metadata
+
+> **雙資料源設計**：Collection 名稱尾碼 `{data_source}`，由 `DA_DATA_SOURCE` 環境變數控制（如 `da_table_info_sap`、`da_table_info_ragic`）。Pipeline 依據意圖前綴動態切換：
+> - `sap_` → SAP collections（`da_table_info_sap` 等）
+> - `rgc_` → Ragic collections（`da_table_info_ragic` 等）
 
 #### 3.1.2 `da_table_info` JSON Schema
 
@@ -229,13 +237,14 @@ DA Schema 知識庫採三個核心 collection：
     "status",
     "version",
     "created_at",
-    "updated_at"
+    "updated_at",
+    "data_source"
   ],
   "properties": {
     "_key": { "type": "string", "minLength": 1 },
     "table_id": { "type": "string", "pattern": "^[A-Z0-9_]+$" },
     "table_name": { "type": "string", "minLength": 1 },
-    "module": { "type": "string", "enum": ["MM", "SD", "FI", "PP", "QM", "OTHER"] },
+    "module": { "type": "string", "enum": ["MM", "SD", "FI", "PP", "QM", "OTHER", "BASE", "PLM", "MFG", "PUR", "INV", "QA", "FORM", "SAL", "CRM", "FIN", "HR", "MES", "ADMIN", "AI"] },
     "description": { "type": "string", "minLength": 1 },
     "s3_path": { "type": "string", "pattern": "^s3://" },
     "primary_keys": {
@@ -253,174 +262,135 @@ DA Schema 知識庫採三個核心 collection：
     "version": { "type": "integer", "minimum": 1 },
     "created_at": { "type": "string", "format": "date-time" },
     "updated_at": { "type": "string", "format": "date-time" },
-    "updated_by": { "type": "string", "minLength": 1 }
+    "updated_by": { "type": "string", "minLength": 1 },
+    "data_source": { "type": "string", "enum": ["sap", "ragic"] },
+    "tab": { "type": ["string", "null"] },
+    "sheet_key": { "type": ["string", "null"] }
   },
   "additionalProperties": false
 }
 ```
 
-#### 3.1.3 `da_table_info` 初始化資料（10 個 SAP 表）
+#### 3.1.3 `da_table_info` 初始化資料（6 個 Ragic Phase 1 Sheets）
+
+Phase 1 涵蓋 6 張核心業務表單，覆蓋人事、庫存、採購三大領域。
+
+> 注意：SAP 資料（原 10 表）保留於 `da_table_info_sap` collection，見附錄章節 A（歷史文件）。
 
 ```json
 [
   {
-    "_key": "MM_MARA",
-    "table_id": "MM_MARA",
-    "table_name": "MARA",
-    "module": "MM",
-    "description": "物料主檔",
-    "s3_path": "s3://sap/mm/mara/",
-    "primary_keys": ["MATNR"],
-    "partition_keys": ["ERDAT_YEAR", "ERDAT_MONTH"],
-    "row_count_estimate": 250000,
+    "_key": "CFG7_EMPLOYEE",
+    "table_id": "CFG7_EMPLOYEE",
+    "table_name": "員工主檔",
+    "module": "BASE",
+    "description": "員工基本資料，包含編號、姓名、所屬部門",
+    "data_source": "ragic",
+    "tab": "員工管理",
+    "sheet_key": "configuration-file/7",
+    "s3_path": "s3://ragic/configuration-file/7/",
+    "primary_keys": ["1015428"],
+    "partition_keys": [],
+    "row_count_estimate": 500,
     "status": "enabled",
     "version": 1,
-    "created_at": "2026-03-22T00:00:00Z",
-    "updated_at": "2026-03-22T00:00:00Z",
+    "created_at": "2026-04-02T00:00:00Z",
+    "updated_at": "2026-04-02T00:00:00Z",
     "updated_by": "system"
   },
   {
-    "_key": "MM_LFA1",
-    "table_id": "MM_LFA1",
-    "table_name": "LFA1",
-    "module": "MM",
-    "description": "供應商主檔",
-    "s3_path": "s3://sap/mm/lfa1/",
-    "primary_keys": ["LIFNR"],
-    "partition_keys": ["LAND1"],
-    "row_count_estimate": 15000,
+    "_key": "CFG3_WAREHOUSE",
+    "table_id": "CFG3_WAREHOUSE",
+    "table_name": "倉儲位置主檔",
+    "module": "BASE",
+    "description": "倉庫與儲位資料，支援多倉庫管理",
+    "data_source": "ragic",
+    "tab": "倉儲位管理",
+    "sheet_key": "configuration-file/3",
+    "s3_path": "s3://ragic/configuration-file/3/",
+    "primary_keys": ["1015343"],
+    "partition_keys": [],
+    "row_count_estimate": 200,
     "status": "enabled",
     "version": 1,
-    "created_at": "2026-03-22T00:00:00Z",
-    "updated_at": "2026-03-22T00:00:00Z",
+    "created_at": "2026-04-02T00:00:00Z",
+    "updated_at": "2026-04-02T00:00:00Z",
     "updated_by": "system"
   },
   {
-    "_key": "MM_EKKO",
-    "table_id": "MM_EKKO",
-    "table_name": "EKKO",
-    "module": "MM",
-    "description": "採購文件表頭",
-    "s3_path": "s3://sap/mm/ekko/",
-    "primary_keys": ["EBELN"],
-    "partition_keys": ["AEDAT_YEAR", "AEDAT_MONTH"],
-    "row_count_estimate": 380000,
+    "_key": "CFG2_DEPT",
+    "table_id": "CFG2_DEPT",
+    "table_name": "組織部門主檔",
+    "module": "ADMIN",
+    "description": "組織部門階層結構",
+    "data_source": "ragic",
+    "tab": "組織部門",
+    "sheet_key": "configuration-file/2",
+    "s3_path": "s3://ragic/configuration-file/2/",
+    "primary_keys": ["1015308"],
+    "partition_keys": [],
+    "row_count_estimate": 50,
     "status": "enabled",
     "version": 1,
-    "created_at": "2026-03-22T00:00:00Z",
-    "updated_at": "2026-03-22T00:00:00Z",
+    "created_at": "2026-04-02T00:00:00Z",
+    "updated_at": "2026-04-02T00:00:00Z",
     "updated_by": "system"
   },
   {
-    "_key": "MM_EKPO",
-    "table_id": "MM_EKPO",
-    "table_name": "EKPO",
-    "module": "MM",
-    "description": "採購文件行項目",
-    "s3_path": "s3://sap/mm/ekpo/",
-    "primary_keys": ["EBELN", "EBELP"],
-    "partition_keys": ["AEDAT_YEAR", "AEDAT_MONTH"],
-    "row_count_estimate": 2400000,
+    "_key": "CFG9_ITEM",
+    "table_id": "CFG9_ITEM",
+    "table_name": "品項主檔",
+    "module": "PUR",
+    "description": "品項（物料）基本資料，含編碼、名稱、單位",
+    "data_source": "ragic",
+    "tab": "品項管理",
+    "sheet_key": "configuration-file/9",
+    "s3_path": "s3://ragic/configuration-file/9/",
+    "primary_keys": ["1015486"],
+    "partition_keys": [],
+    "row_count_estimate": 5000,
     "status": "enabled",
     "version": 1,
-    "created_at": "2026-03-22T00:00:00Z",
-    "updated_at": "2026-03-22T00:00:00Z",
+    "created_at": "2026-04-02T00:00:00Z",
+    "updated_at": "2026-04-02T00:00:00Z",
     "updated_by": "system"
   },
   {
-    "_key": "MM_MSEG",
-    "table_id": "MM_MSEG",
-    "table_name": "MSEG",
-    "module": "MM",
-    "description": "物料憑證行項目",
-    "s3_path": "s3://sap/mm/mseg/",
-    "primary_keys": ["MBLNR", "MJAHR", "ZEILE"],
-    "partition_keys": ["BUDAT_YEAR", "BUDAT_MONTH"],
-    "row_count_estimate": 8200000,
+    "_key": "CFG10_VENDOR",
+    "table_id": "CFG10_VENDOR",
+    "table_name": "交易對象主檔",
+    "module": "PUR",
+    "description": "供應商/客戶交易對象資料",
+    "data_source": "ragic",
+    "tab": "交易對象",
+    "sheet_key": "configuration-file/10",
+    "s3_path": "s3://ragic/configuration-file/10/",
+    "primary_keys": ["1015577"],
+    "partition_keys": [],
+    "row_count_estimate": 300,
     "status": "enabled",
     "version": 1,
-    "created_at": "2026-03-22T00:00:00Z",
-    "updated_at": "2026-03-22T00:00:00Z",
+    "created_at": "2026-04-02T00:00:00Z",
+    "updated_at": "2026-04-02T00:00:00Z",
     "updated_by": "system"
   },
   {
-    "_key": "SD_VBAK",
-    "table_id": "SD_VBAK",
-    "table_name": "VBAK",
-    "module": "SD",
-    "description": "銷售文件表頭",
-    "s3_path": "s3://sap/sd/vbak/",
-    "primary_keys": ["VBELN"],
-    "partition_keys": ["ERDAT_YEAR", "ERDAT_MONTH"],
-    "row_count_estimate": 460000,
+    "_key": "ERP48_PURCHASE_ORDER",
+    "table_id": "ERP48_PURCHASE_ORDER",
+    "table_name": "進貨單",
+    "module": "PUR",
+    "description": "採購進貨單，含表頭與明细行",
+    "data_source": "ragic",
+    "tab": "進貨單",
+    "sheet_key": "erp/48",
+    "s3_path": "s3://ragic/erp/48/",
+    "primary_keys": ["1023120"],
+    "partition_keys": [],
+    "row_count_estimate": 10000,
     "status": "enabled",
     "version": 1,
-    "created_at": "2026-03-22T00:00:00Z",
-    "updated_at": "2026-03-22T00:00:00Z",
-    "updated_by": "system"
-  },
-  {
-    "_key": "SD_VBAP",
-    "table_id": "SD_VBAP",
-    "table_name": "VBAP",
-    "module": "SD",
-    "description": "銷售文件行項目",
-    "s3_path": "s3://sap/sd/vbap/",
-    "primary_keys": ["VBELN", "POSNR"],
-    "partition_keys": ["ERDAT_YEAR", "ERDAT_MONTH"],
-    "row_count_estimate": 3200000,
-    "status": "enabled",
-    "version": 1,
-    "created_at": "2026-03-22T00:00:00Z",
-    "updated_at": "2026-03-22T00:00:00Z",
-    "updated_by": "system"
-  },
-  {
-    "_key": "SD_LIKP",
-    "table_id": "SD_LIKP",
-    "table_name": "LIKP",
-    "module": "SD",
-    "description": "交貨文件表頭",
-    "s3_path": "s3://sap/sd/likp/",
-    "primary_keys": ["VBELN"],
-    "partition_keys": ["WADAT_YEAR", "WADAT_MONTH"],
-    "row_count_estimate": 510000,
-    "status": "enabled",
-    "version": 1,
-    "created_at": "2026-03-22T00:00:00Z",
-    "updated_at": "2026-03-22T00:00:00Z",
-    "updated_by": "system"
-  },
-  {
-    "_key": "SD_LIPS",
-    "table_id": "SD_LIPS",
-    "table_name": "LIPS",
-    "module": "SD",
-    "description": "交貨文件行項目",
-    "s3_path": "s3://sap/sd/lips/",
-    "primary_keys": ["VBELN", "POSNR"],
-    "partition_keys": ["WADAT_YEAR", "WADAT_MONTH"],
-    "row_count_estimate": 3550000,
-    "status": "enabled",
-    "version": 1,
-    "created_at": "2026-03-22T00:00:00Z",
-    "updated_at": "2026-03-22T00:00:00Z",
-    "updated_by": "system"
-  },
-  {
-    "_key": "SD_RBKD",
-    "table_id": "SD_RBKD",
-    "table_name": "RBKD",
-    "module": "SD",
-    "description": "發票文件表頭",
-    "s3_path": "s3://sap/sd/rbkd/",
-    "primary_keys": ["BELNR", "GJAHR"],
-    "partition_keys": ["BUDAT_YEAR", "BUDAT_MONTH"],
-    "row_count_estimate": 780000,
-    "status": "enabled",
-    "version": 1,
-    "created_at": "2026-03-22T00:00:00Z",
-    "updated_at": "2026-03-22T00:00:00Z",
+    "created_at": "2026-04-02T00:00:00Z",
+    "updated_at": "2026-04-02T00:00:00Z",
     "updated_by": "system"
   }
 ]
@@ -444,6 +414,7 @@ DA Schema 知識庫採三個核心 collection：
     "is_pk",
     "is_fk",
     "status",
+    "writable",
     "created_at",
     "updated_at"
   ],
@@ -480,205 +451,194 @@ DA Schema 知識庫採三個核心 collection：
     "relation_field": { "type": ["string", "null"] },
     "status": { "type": "string", "enum": ["enabled", "disabled"] },
     "created_at": { "type": "string", "format": "date-time" },
-    "updated_at": { "type": "string", "format": "date-time" }
+    "updated_at": { "type": "string", "format": "date-time" },
+    "writable": { "type": "boolean" },
+    "is_subtable_field": { "type": "boolean" },
+    "subtable_key": { "type": ["string", "null"] }
   },
   "additionalProperties": false
 }
 ```
 
-#### 3.1.5 `da_field_info` 範例（EKKO、EKPO、MARA）
+#### 3.1.5 `da_field_info` 範例（CFG7_EMPLOYEE、CFG9_ITEM）
 
 ```json
 [
   {
-    "_key": "MM_EKKO_EBELN",
-    "table_id": "MM_EKKO",
-    "field_id": "EBELN",
-    "field_name": "EBELN",
+    "_key": "CFG7_EMPLOYEE_1015428",
+    "table_id": "CFG7_EMPLOYEE",
+    "field_id": "1015428",
+    "field_name": "員工編號",
     "field_type": "VARCHAR",
-    "length": 10,
+    "length": 50,
     "scale": 0,
     "nullable": false,
-    "description": "採購單號",
-    "business_aliases": ["採購單", "訂單號", "PO"],
+    "description": "員工編號",
+    "business_aliases": ["員工", "員工號", "編號"],
     "is_pk": true,
     "is_fk": false,
     "relation_table": null,
     "relation_field": null,
+    "writable": true,
+    "is_subtable_field": false,
+    "subtable_key": null,
     "status": "enabled",
-    "created_at": "2026-03-22T00:00:00Z",
-    "updated_at": "2026-03-22T00:00:00Z"
+    "created_at": "2026-04-02T00:00:00Z",
+    "updated_at": "2026-04-02T00:00:00Z"
   },
   {
-    "_key": "MM_EKKO_LIFNR",
-    "table_id": "MM_EKKO",
-    "field_id": "LIFNR",
-    "field_name": "LIFNR",
+    "_key": "CFG7_EMPLOYEE_1015429",
+    "table_id": "CFG7_EMPLOYEE",
+    "field_id": "1015429",
+    "field_name": "員工姓名",
     "field_type": "VARCHAR",
-    "length": 10,
+    "length": 100,
     "scale": 0,
     "nullable": false,
-    "description": "供應商代碼",
-    "business_aliases": ["供應商", "Vendor"],
+    "description": "員工姓名",
+    "business_aliases": ["姓名", "名字", "名稱"],
     "is_pk": false,
-    "is_fk": true,
-    "relation_table": "MM_LFA1",
-    "relation_field": "LIFNR",
+    "is_fk": false,
+    "relation_table": null,
+    "relation_field": null,
+    "writable": true,
+    "is_subtable_field": false,
+    "subtable_key": null,
     "status": "enabled",
-    "created_at": "2026-03-22T00:00:00Z",
-    "updated_at": "2026-03-22T00:00:00Z"
+    "created_at": "2026-04-02T00:00:00Z",
+    "updated_at": "2026-04-02T00:00:00Z"
   },
   {
-    "_key": "MM_EKKO_AEDAT",
-    "table_id": "MM_EKKO",
-    "field_id": "AEDAT",
-    "field_name": "AEDAT",
+    "_key": "CFG7_EMPLOYEE_1015495",
+    "table_id": "CFG7_EMPLOYEE",
+    "field_id": "1015495",
+    "field_name": "所屬部門編號",
+    "field_type": "VARCHAR",
+    "length": 50,
+    "scale": 0,
+    "nullable": true,
+    "description": "所屬部門編號",
+    "business_aliases": ["部門", "部門編號", "所屬部門"],
+    "is_pk": false,
+    "is_fk": true,
+    "relation_table": "CFG2_DEPT",
+    "relation_field": "1015308",
+    "writable": true,
+    "is_subtable_field": false,
+    "subtable_key": null,
+    "status": "enabled",
+    "created_at": "2026-04-02T00:00:00Z",
+    "updated_at": "2026-04-02T00:00:00Z"
+  },
+  {
+    "_key": "CFG9_ITEM_1015486",
+    "table_id": "CFG9_ITEM",
+    "field_id": "1015486",
+    "field_name": "品項編碼",
+    "field_type": "VARCHAR",
+    "length": 50,
+    "scale": 0,
+    "nullable": false,
+    "description": "品項唯一識別碼",
+    "business_aliases": ["品項", "品號", "編碼", "物料編號"],
+    "is_pk": true,
+    "is_fk": false,
+    "relation_table": null,
+    "relation_field": null,
+    "writable": true,
+    "is_subtable_field": false,
+    "subtable_key": null,
+    "status": "enabled",
+    "created_at": "2026-04-02T00:00:00Z",
+    "updated_at": "2026-04-02T00:00:00Z"
+  },
+  {
+    "_key": "CFG9_ITEM_1015483",
+    "table_id": "CFG9_ITEM",
+    "field_id": "1015483",
+    "field_name": "品項名稱",
+    "field_type": "VARCHAR",
+    "length": 200,
+    "scale": 0,
+    "nullable": false,
+    "description": "品項名稱",
+    "business_aliases": ["品名", "名稱", "品項名"],
+    "is_pk": false,
+    "is_fk": false,
+    "relation_table": null,
+    "relation_field": null,
+    "writable": true,
+    "is_subtable_field": false,
+    "subtable_key": null,
+    "status": "enabled",
+    "created_at": "2026-04-02T00:00:00Z",
+    "updated_at": "2026-04-02T00:00:00Z"
+  },
+  {
+    "_key": "ERP48_PO_1023120",
+    "table_id": "ERP48_PURCHASE_ORDER",
+    "field_id": "1023120",
+    "field_name": "進貨單號",
+    "field_type": "VARCHAR",
+    "length": 50,
+    "scale": 0,
+    "nullable": false,
+    "description": "進貨單唯一單號",
+    "business_aliases": ["進貨單", "單號", "PO", "採購單"],
+    "is_pk": true,
+    "is_fk": false,
+    "relation_table": null,
+    "relation_field": null,
+    "writable": true,
+    "is_subtable_field": false,
+    "subtable_key": null,
+    "status": "enabled",
+    "created_at": "2026-04-02T00:00:00Z",
+    "updated_at": "2026-04-02T00:00:00Z"
+  },
+  {
+    "_key": "ERP48_PO_1023123",
+    "table_id": "ERP48_PURCHASE_ORDER",
+    "field_id": "1023123",
+    "field_name": "日期",
     "field_type": "DATE",
     "length": 8,
     "scale": 0,
     "nullable": false,
-    "description": "最後變更日期",
-    "business_aliases": ["日期", "修改日"],
+    "description": "進貨日期",
+    "business_aliases": ["日期", "進貨日期", "單據日期"],
     "is_pk": false,
     "is_fk": false,
     "relation_table": null,
     "relation_field": null,
+    "writable": true,
+    "is_subtable_field": false,
+    "subtable_key": null,
     "status": "enabled",
-    "created_at": "2026-03-22T00:00:00Z",
-    "updated_at": "2026-03-22T00:00:00Z"
+    "created_at": "2026-04-02T00:00:00Z",
+    "updated_at": "2026-04-02T00:00:00Z"
   },
   {
-    "_key": "MM_EKPO_EBELN",
-    "table_id": "MM_EKPO",
-    "field_id": "EBELN",
-    "field_name": "EBELN",
+    "_key": "ERP48_PO_1023122",
+    "table_id": "ERP48_PURCHASE_ORDER",
+    "field_id": "1023122",
+    "field_name": "供應商名稱",
     "field_type": "VARCHAR",
-    "length": 10,
-    "scale": 0,
-    "nullable": false,
-    "description": "採購單號",
-    "business_aliases": ["採購單", "PO"],
-    "is_pk": true,
-    "is_fk": true,
-    "relation_table": "MM_EKKO",
-    "relation_field": "EBELN",
-    "status": "enabled",
-    "created_at": "2026-03-22T00:00:00Z",
-    "updated_at": "2026-03-22T00:00:00Z"
-  },
-  {
-    "_key": "MM_EKPO_EBELP",
-    "table_id": "MM_EKPO",
-    "field_id": "EBELP",
-    "field_name": "EBELP",
-    "field_type": "VARCHAR",
-    "length": 5,
-    "scale": 0,
-    "nullable": false,
-    "description": "採購單行號",
-    "business_aliases": ["行項目", "Line Item"],
-    "is_pk": true,
-    "is_fk": false,
-    "relation_table": null,
-    "relation_field": null,
-    "status": "enabled",
-    "created_at": "2026-03-22T00:00:00Z",
-    "updated_at": "2026-03-22T00:00:00Z"
-  },
-  {
-    "_key": "MM_EKPO_MATNR",
-    "table_id": "MM_EKPO",
-    "field_id": "MATNR",
-    "field_name": "MATNR",
-    "field_type": "VARCHAR",
-    "length": 18,
+    "length": 200,
     "scale": 0,
     "nullable": true,
-    "description": "物料編號",
-    "business_aliases": ["料號", "物料"],
-    "is_pk": false,
-    "is_fk": true,
-    "relation_table": "MM_MARA",
-    "relation_field": "MATNR",
-    "status": "enabled",
-    "created_at": "2026-03-22T00:00:00Z",
-    "updated_at": "2026-03-22T00:00:00Z"
-  },
-  {
-    "_key": "MM_EKPO_NETPR",
-    "table_id": "MM_EKPO",
-    "field_id": "NETPR",
-    "field_name": "NETPR",
-    "field_type": "DECIMAL",
-    "length": 15,
-    "scale": 2,
-    "nullable": false,
-    "description": "淨價",
-    "business_aliases": ["單價", "價格"],
+    "description": "供應商名稱",
+    "business_aliases": ["供應商", "廠商", "Vendor"],
     "is_pk": false,
     "is_fk": false,
-    "relation_table": null,
-    "relation_field": null,
+    "relation_table": "CFG10_VENDOR",
+    "relation_field": "1015577",
+    "writable": true,
+    "is_subtable_field": false,
+    "subtable_key": null,
     "status": "enabled",
-    "created_at": "2026-03-22T00:00:00Z",
-    "updated_at": "2026-03-22T00:00:00Z"
-  },
-  {
-    "_key": "MM_MARA_MATNR",
-    "table_id": "MM_MARA",
-    "field_id": "MATNR",
-    "field_name": "MATNR",
-    "field_type": "VARCHAR",
-    "length": 18,
-    "scale": 0,
-    "nullable": false,
-    "description": "物料編號",
-    "business_aliases": ["物料", "料號"],
-    "is_pk": true,
-    "is_fk": false,
-    "relation_table": null,
-    "relation_field": null,
-    "status": "enabled",
-    "created_at": "2026-03-22T00:00:00Z",
-    "updated_at": "2026-03-22T00:00:00Z"
-  },
-  {
-    "_key": "MM_MARA_MTART",
-    "table_id": "MM_MARA",
-    "field_id": "MTART",
-    "field_name": "MTART",
-    "field_type": "VARCHAR",
-    "length": 4,
-    "scale": 0,
-    "nullable": false,
-    "description": "物料類型",
-    "business_aliases": ["料類"],
-    "is_pk": false,
-    "is_fk": false,
-    "relation_table": null,
-    "relation_field": null,
-    "status": "enabled",
-    "created_at": "2026-03-22T00:00:00Z",
-    "updated_at": "2026-03-22T00:00:00Z"
-  },
-  {
-    "_key": "MM_MARA_MATKL",
-    "table_id": "MM_MARA",
-    "field_id": "MATKL",
-    "field_name": "MATKL",
-    "field_type": "VARCHAR",
-    "length": 9,
-    "scale": 0,
-    "nullable": true,
-    "description": "物料群組",
-    "business_aliases": ["群組"],
-    "is_pk": false,
-    "is_fk": false,
-    "relation_table": null,
-    "relation_field": null,
-    "status": "enabled",
-    "created_at": "2026-03-22T00:00:00Z",
-    "updated_at": "2026-03-22T00:00:00Z"
+    "created_at": "2026-04-02T00:00:00Z",
+    "updated_at": "2026-04-02T00:00:00Z"
   }
 ]
 ```
@@ -721,51 +681,39 @@ DA Schema 知識庫採三個核心 collection：
 }
 ```
 
-#### 3.1.7 `da_table_relation` 典型資料
+#### 3.1.7 `da_table_relation` 典型資料（Ragic Phase 1）
+
+> SAP 關聯（原 EKKO↔EKPO 等）見附錄章節 A（歷史文件）。
 
 ```json
 [
   {
-    "_key": "REL_MM_EKKO_EKPO_EBELN",
-    "relation_id": "REL_MM_EKKO_EKPO_EBELN",
-    "left_table": "MM_EKKO",
-    "left_field": "EBELN",
-    "right_table": "MM_EKPO",
-    "right_field": "EBELN",
-    "join_type": "INNER",
-    "cardinality": "1:N",
-    "confidence": 1.0,
-    "status": "enabled",
-    "created_at": "2026-03-22T00:00:00Z",
-    "updated_at": "2026-03-22T00:00:00Z"
-  },
-  {
-    "_key": "REL_MM_EKPO_MARA_MATNR",
-    "relation_id": "REL_MM_EKPO_MARA_MATNR",
-    "left_table": "MM_EKPO",
-    "left_field": "MATNR",
-    "right_table": "MM_MARA",
-    "right_field": "MATNR",
-    "join_type": "LEFT",
-    "cardinality": "N:1",
-    "confidence": 0.95,
-    "status": "enabled",
-    "created_at": "2026-03-22T00:00:00Z",
-    "updated_at": "2026-03-22T00:00:00Z"
-  },
-  {
-    "_key": "REL_MM_EKKO_LFA1_LIFNR",
-    "relation_id": "REL_MM_EKKO_LFA1_LIFNR",
-    "left_table": "MM_EKKO",
-    "left_field": "LIFNR",
-    "right_table": "MM_LFA1",
-    "right_field": "LIFNR",
+    "_key": "REL_EMP_DEPT_1015495_1015308",
+    "relation_id": "REL_EMP_DEPT",
+    "left_table": "CFG7_EMPLOYEE",
+    "left_field": "1015495",
+    "right_table": "CFG2_DEPT",
+    "right_field": "1015308",
     "join_type": "LEFT",
     "cardinality": "N:1",
     "confidence": 1.0,
     "status": "enabled",
-    "created_at": "2026-03-22T00:00:00Z",
-    "updated_at": "2026-03-22T00:00:00Z"
+    "created_at": "2026-04-02T00:00:00Z",
+    "updated_at": "2026-04-02T00:00:00Z"
+  },
+  {
+    "_key": "REL_PO_VENDOR_1023122_1015577",
+    "relation_id": "REL_PO_VENDOR",
+    "left_table": "ERP48_PURCHASE_ORDER",
+    "left_field": "1023122",
+    "right_table": "CFG10_VENDOR",
+    "right_field": "1015577",
+    "join_type": "LEFT",
+    "cardinality": "N:1",
+    "confidence": 0.9,
+    "status": "enabled",
+    "created_at": "2026-04-02T00:00:00Z",
+    "updated_at": "2026-04-02T00:00:00Z"
   }
 ]
 ```
@@ -773,25 +721,39 @@ DA Schema 知識庫採三個核心 collection：
 #### 3.1.8 ArangoDB 索引策略
 
 ```aql
-// da_table_info
-db.da_table_info.ensureIndex({ type: "persistent", fields: ["table_id"], unique: true })
-db.da_table_info.ensureIndex({ type: "persistent", fields: ["module", "status"] })
+// da_table_info_sap
+db.da_table_info_sap.ensureIndex({ type: "persistent", fields: ["table_id"], unique: true })
+db.da_table_info_sap.ensureIndex({ type: "persistent", fields: ["module", "status"] })
 
-// da_field_info
-db.da_field_info.ensureIndex({ type: "persistent", fields: ["table_id", "field_id"], unique: true })
-db.da_field_info.ensureIndex({ type: "persistent", fields: ["field_name"] })
-db.da_field_info.ensureIndex({ type: "persistent", fields: ["business_aliases[*]"], sparse: true })
+// da_table_info_ragic
+db.da_table_info_ragic.ensureIndex({ type: "persistent", fields: ["table_id"], unique: true })
+db.da_table_info_ragic.ensureIndex({ type: "persistent", fields: ["module", "status"] })
+db.da_table_info_ragic.ensureIndex({ type: "persistent", fields: ["sheet_key"], unique: true })
 
-// da_table_relation
-db.da_table_relation.ensureIndex({ type: "persistent", fields: ["left_table", "right_table"] })
-db.da_table_relation.ensureIndex({ type: "persistent", fields: ["left_table", "left_field", "right_table", "right_field"], unique: true })
+// da_field_info_sap
+db.da_field_info_sap.ensureIndex({ type: "persistent", fields: ["table_id", "field_id"], unique: true })
+db.da_field_info_sap.ensureIndex({ type: "persistent", fields: ["field_name"] })
+db.da_field_info_sap.ensureIndex({ type: "persistent", fields: ["business_aliases[*]"], sparse: true })
+
+// da_field_info_ragic
+db.da_field_info_ragic.ensureIndex({ type: "persistent", fields: ["table_id", "field_id"], unique: true })
+db.da_field_info_ragic.ensureIndex({ type: "persistent", fields: ["field_name"] })
+db.da_field_info_ragic.ensureIndex({ type: "persistent", fields: ["business_aliases[*]"], sparse: true })
+
+// da_table_relation_sap
+db.da_table_relation_sap.ensureIndex({ type: "persistent", fields: ["left_table", "right_table"] })
+db.da_table_relation_sap.ensureIndex({ type: "persistent", fields: ["left_table", "left_field", "right_table", "right_field"], unique: true })
+
+// da_table_relation_ragic
+db.da_table_relation_ragic.ensureIndex({ type: "persistent", fields: ["left_table", "right_table"] })
+db.da_table_relation_ragic.ensureIndex({ type: "persistent", fields: ["left_table", "left_field", "right_table", "right_field"], unique: true })
 ```
 
 #### 3.1.9 AQL 查詢範例
 
 ```aql
-// 查詢 MM 模組啟用中的資料表
-FOR t IN da_table_info
+// 查詢指定模組啟用中的資料表（SAP）
+FOR t IN da_table_info_sap
   FILTER t.module == @module
   FILTER t.status == "enabled"
   SORT t.table_id ASC
@@ -800,7 +762,7 @@ FOR t IN da_table_info
 
 ```aql
 // 依使用者詞彙查欄位（別名含「金額」）
-FOR f IN da_field_info
+FOR f IN da_field_info_sap
   FILTER @keyword IN f.business_aliases OR CONTAINS(f.description, @keyword)
   FILTER f.status == "enabled"
   RETURN {
@@ -812,7 +774,7 @@ FOR f IN da_field_info
 
 ```aql
 // 檢查兩表是否存在可用關聯
-FOR r IN da_table_relation
+FOR r IN da_table_relation_sap
   FILTER r.left_table == @left_table
   FILTER r.right_table == @right_table
   FILTER r.status == "enabled"
@@ -837,6 +799,19 @@ RETURN {
   table: table_doc,
   fields: field_docs
 }
+```
+
+// 查詢 Ragic Phase 1 所有資料表（sheets）
+FOR t IN da_table_info_ragic
+  FILTER t.status == "enabled"
+  SORT t.table_id ASC
+  RETURN {
+    table_id: t.table_id,
+    table_name: t.table_name,
+    sheet_key: t.sheet_key,
+    tab: t.tab,
+    s3_path: t.s3_path
+  }
 ```
 
 ### 3.2 意圖識別模組（Intent Recognition）
@@ -1484,15 +1459,16 @@ def execute_duckdb_query(sql: str, params: list[object]) -> QueryExecutionResult
 
 ```text
 User NL Query
+  → Dynamic Routing (Prefix: sap_ or rgc_)
   → §3.2 Intent Recognition (LLM)
-  → §3.3 Schema Binding (ArangoDB lookup)
+  → §3.3 Schema Binding (ArangoDB lookup via {data_source} suffix)
   → §3.4 Vector Match (Qdrant)
   → [Cache Hit?]
     → YES: §3.5a Template Reuse
     → NO:  §3.5b LLM SQL Generation
-  → §3.6 DuckDB Execution (S3 Parquet)
+  → §3.6 DuckDB Execution (read_parquet from s3://{data_source}/...)
   → Result Formatting
-  → Response to Caller
+  → Response to Caller (inc. data_source metadata)
 ```
 
 ### 4.2 詳細步驟與時間預期
@@ -1681,13 +1657,14 @@ BPA(:8005)         DA(:8002)         ArangoDB(:8529)      Qdrant(:6333)       Ol
 
 ### 6.1 ArangoDB Collections
 
-DA v2.0 使用以下 collections：
+DA v2.0 使用以下 collections（名稱尾碼 `{data_source}` 為動態，如 `_sap` 或 `_ragic`）：
 
-1. `da_table_info` — table metadata
-2. `da_field_info` — field metadata
-3. `da_table_relation` — table relationships
-4. `da_intent_records` — intent history
-5. `da_sql_templates` — reusable SQL templates
+1. `da_table_info_{data_source}` — table metadata
+2. `da_field_info_{data_source}` — field metadata
+3. `da_table_relation_{data_source}` — table relationships
+4. `da_intent_records` — intent history (global)
+5. `da_sql_templates` — reusable SQL templates (global)
+6. `da_intent_cache` (Qdrant) — vector cache (global)
 
 #### 6.1.1 `da_intent_records` JSON Schema
 
@@ -1907,7 +1884,7 @@ DA 僅允許 `SELECT` 查詢；以下全部封鎖：
 ### 7.4 S3 權限控制
 
 1. SeaWeedFS 憑證採唯讀金鑰。
-2. 僅允許 `s3://sap/` 前綴讀取。
+2. 僅允許 `s3://sap/` 與 `s3://ragic/` 前綴讀取。
 3. 禁止列舉非白名單 bucket。
 4. 密鑰不寫死，改由環境變數注入。
 
@@ -1915,8 +1892,10 @@ DA 僅允許 `SELECT` 查詢；以下全部封鎖：
 
 權限檢查維度：
 
-1. 使用者角色（role）對 SAP 模組權限（MM、SD）。
-2. 資料域（data domain）限制（如銷售區域、公司代碼）。
+1. 使用者角色（role）對資料源模組權限：
+   - SAP: MM, SD, FI, PP, QM
+   - Ragic: BASE, PUR, ADMIN, HR, INV
+2. 資料域（data domain）限制（如銷售區域、公司代碼、部門編號）。
 
 授權上下文範例：
 
@@ -2815,9 +2794,19 @@ class QueryResponse(BaseModel):
 4. cache hit ratio（穩定期）> 40%
 5. 重大故障可於 10 分鐘內切換降級模式
 
+### 11.13 雙資料源播種（Seeding）說明
+
+1. **SAP 資料**：目前採手動 AQL 播種（見 §11.1 歷史文件或 `seed_sap_schema.py`），提供 10 張核心表。
+2. **Ragic 資料**：採 `seed_ragic_schema.py` 自動化工具，透過 Ragic HTTP API 抓取 Metadata 並轉換為 DA Schema。目前 Phase 1 已完成 6 張表。
+3. **資料來源切換**：透過 `DATA_SOURCE` 環境變數（`sap` 或 `ragic`）或查詢意圖中的 prefix（`sap_` 或 `rgc_`）動態路由至對應的 `da_table_info_{source}`。
+
 ---
 
 ## 附加章節 A：`da_table_info` 全量初始化腳本（AQL）
+
+> **注意**：本附錄為 SAP 資料的歷史初始化腳本（10 張表），已迁移至 `da_table_info_sap` collection。
+> Ragic Phase 1 初始化請使用 `seed_ragic_schema.py`（`ai-services/datalake/`）。
+> 見 `.docs/Spec/DB/RagicTableSchema.md`（本機，不在 Git）。
 
 ```aql
 LET docs = [

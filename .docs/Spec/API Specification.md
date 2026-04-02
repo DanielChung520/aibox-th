@@ -248,6 +248,16 @@ curl http://localhost:6500/api/v1/users \
 }
 ```
 
+**常見 DA 系統參數**：
+
+| 參數 Key | 類型 | 說明 |
+|----------|------|------|
+| `da.data_source` | string | 預設資料源：`sap` 或 `ragic` |
+| `da.llm_model` | string | SQL 生成 LLM 模型 |
+| `da.vector_threshold` | number | Qdrant 向量匹配門檻（預設 0.85） |
+
+> **注意**：`da.data_source` 為 Pipeline 預設值，查詢時可透過 `data_source` 請求參數或意圖前綴（`sap_`/`rgc_`）動態覆寫。
+
 ---
 
 ### 功能管理 (Functions)
@@ -296,6 +306,75 @@ curl http://localhost:6500/api/v1/users \
   }
 }
 ```
+
+---
+
+### Data Agent 自然語言查詢 (NL→SQL)
+
+Data Agent 服務（Python FastAPI，port 8003）透過 API Gateway 的 `/api/v1/ai/query` 端點提供自然語言轉 SQL 查詢功能。
+
+> **雙資料源架構**：Data Agent 支援 SAP + Ragic 兩種資料源，透過 `data_source` 參數或意圖前綴動態路由：
+> - `sap_` 前綴 → `da_table_info_sap` 等 collections（`s3://sap/` 路徑）
+> - `rgc_` 前綴 → `da_table_info_ragic` 等 collections（`s3://ragic/` 路徑）
+>
+> 完整 Pipeline 規格見 [data-agent-spec-v2.md](./Spec/後台/DA/data-agent-spec-v2.md)。
+
+#### POST /api/v1/ai/query
+
+**請求**:
+```json
+{
+  "message": "查詢所有員工",
+  "data_source": "ragic",
+  "user_context": {
+    "user_id": "admin",
+    "roles": ["admin"]
+  }
+}
+```
+
+**回應**:
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "sql": "SELECT * FROM read_parquet('s3://ragic/configuration-file/7/*.parquet') LIMIT 100",
+    "intent": {
+      "intent_id": "rgc_employee_list",
+      "data_source": "ragic",
+      "table_id": "CFG7_EMPLOYEE"
+    },
+    "binding": {
+      "table_id": "CFG7_EMPLOYEE",
+      "fields": ["1015428", "1015429", "1015495"]
+    },
+    "execution": {
+      "duration_ms": 234,
+      "row_count": 42
+    }
+  }
+}
+```
+
+**請求欄位說明**：
+
+| 欄位 | 類型 | 必填 | 說明 |
+|------|------|------|------|
+| `message` | String | 是 | 自然語言查詢 |
+| `data_source` | String | 否 | 資料源：`sap` 或 `ragic`（預設由意圖前綴推斷） |
+| `user_context` | Object | 是 | 使用者上下文（JWT 解碼） |
+
+**錯誤碼**：
+
+| 狀態碼 | 說明 | 常見原因 |
+|--------|------|----------|
+| 400 | 無效查詢 | 無法識別意圖 |
+| 404 | Schema 未找到 | 指定的 table 不存在 |
+| 422 | SQL 生成失敗 | LLM 無法生成有效 SQL |
+| 500 | 執行錯誤 | DuckDB/S3 連線失敗 |
+
+> **ETL 說明**：Data Agent 的 ETL（SAP/Ragic → S3 Parquet）屬於獨立專案，不在本系統範圍內。
 
 ---
 
