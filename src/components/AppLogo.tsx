@@ -11,7 +11,7 @@ interface AppLogoProps {
 
 export default function AppLogo({ logo, collapsed }: AppLogoProps) {
   const navigate = useNavigate();
-  const src = (logo && logo.length > 0) ? logo : undefined;
+  const imgSrc = collapsed ? logoIcon : (logo || logoFull);
 
   return (
     <div
@@ -26,7 +26,7 @@ export default function AppLogo({ logo, collapsed }: AppLogoProps) {
       onClick={() => navigate('/app/home')}
     >
       <img
-        src={src ?? (collapsed ? logoIcon : logoFull)}
+        src={imgSrc}
         alt="EDGE logo"
         style={{
           height: collapsed ? 32 : 28,
