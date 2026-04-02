@@ -7,7 +7,7 @@
  */
 
 import { useState, useEffect, useMemo } from 'react';
-import { Table, Card, Typography, Tag, Space, Spin, Empty, Descriptions, Alert, Tabs, theme, Input } from 'antd';
+import { Table, Card, Typography, Tag, Space, Spin, Empty, Descriptions, Alert, Tabs, theme, Input, Switch } from 'antd';
 import { DatabaseOutlined, TableOutlined, InfoCircleOutlined } from '@ant-design/icons';
 import { dataAgentApi, TableInfo, FieldInfo } from '../../services/dataAgentApi';
 
@@ -28,6 +28,7 @@ export default function DataLakePage() {
   const [tables, setTables] = useState<TableInfo[]>([]);
   const [loadingTables, setLoadingTables] = useState(false);
   const [searchText, setSearchText] = useState('');
+  const [showDisabled, setShowDisabled] = useState(false);
   const [dataSourceFilter] = useState<DataSourceType>(
     () => (localStorage.getItem('app.system_type') as DataSourceType) || 'ALL'
   );
@@ -60,9 +61,15 @@ export default function DataLakePage() {
   }, []);
 
   const filteredTables = useMemo(() => {
-    if (dataSourceFilter === 'ALL') return tables;
-    return tables.filter(t => t.data_source === dataSourceFilter);
-  }, [tables, dataSourceFilter]);
+    let result = tables;
+    if (dataSourceFilter !== 'ALL') {
+      result = result.filter(t => t.data_source === dataSourceFilter);
+    }
+    if (!showDisabled) {
+      result = result.filter(t => t.status === 'enabled');
+    }
+    return result;
+  }, [tables, dataSourceFilter, showDisabled]);
 
   const loadTableData = async (tableName: string, page = 1, size = 20) => {
     const isNewTable = tableName !== selectedTable;
@@ -259,6 +266,15 @@ export default function DataLakePage() {
             <Tag>{filteredTables.length}</Tag>
           </Space>
         }
+        extra={
+          <Switch
+            checkedChildren="全部"
+            unCheckedChildren="已啟用"
+            checked={showDisabled}
+            onChange={setShowDisabled}
+            size="small"
+          />
+        }
         style={{ width: 300, flexShrink: 0 }}
         styles={{ body: { padding: 0 } }}
       >
@@ -286,6 +302,7 @@ export default function DataLakePage() {
               onClick: () => loadTableData(t.table_id, 1, pageSize),
               style: {
                 cursor: 'pointer',
+                opacity: t.status === 'disabled' ? 0.45 : 1,
                 background: selectedTable === t.table_id ? token.controlItemBgActive : 'transparent',
               },
             })}
@@ -304,6 +321,9 @@ export default function DataLakePage() {
                         <Tag color={t.data_source === 'sap' ? 'blue' : 'green'} style={{ fontSize: 10 }}>
                           {t.data_source.toUpperCase()}
                         </Tag>
+                      )}
+                      {t.status === 'disabled' && (
+                        <Tag color="default" style={{ fontSize: 10 }}>停用</Tag>
                       )}
                     </Space>
                     <Text type="secondary" style={{ fontSize: 10 }}>
