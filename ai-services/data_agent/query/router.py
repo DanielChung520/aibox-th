@@ -176,50 +176,51 @@ async def preview_table_data(
     limit: int = 20,
 ) -> dict[str, object]:
     try:
-        aql_info = """
-            FOR t IN da_table_info
-            FILTER t.table_name == @table_name
-            LIMIT 1
-            RETURN t
-        """
+        table_info: dict[str, object] = {}
+        data_source = "sap"
+
         async with httpx.AsyncClient(timeout=15.0) as client:
-            info_resp = await client.post(
-                f"{ARANGO_URL}/_db/{ARANGO_DB}/_api/cursor",
-                json={"query": aql_info, "bindVars": {"table_name": table_name}},
-                auth=(ARANGO_USER, ARANGO_PASSWORD),
-            )
-            info_resp.raise_for_status()
-            info_data = info_resp.json()
-            table_info = (
-                info_data.get("result", [{}])[0] if info_data.get("result") else {}
-            )
+            for collection, source in [("da_table_info", "sap"), ("da_table_info_ragic", "ragic")]:
+                info_resp = await client.post(
+                    f"{ARANGO_URL}/_db/{ARANGO_DB}/_api/cursor",
+                    json={
+                        "query": f"FOR t IN {collection} FILTER t.table_id == @table_name LIMIT 1 RETURN t",
+                        "bindVars": {"table_name": table_name},
+                    },
+                    auth=(ARANGO_USER, ARANGO_PASSWORD),
+                )
+                info_resp.raise_for_status()
+                info_data = info_resp.json()
+                if info_data.get("result"):
+                    table_info = info_data["result"][0]
+                    data_source = source
+                    break
 
         if not table_info:
-            raise HTTPException(status_code=404, detail=f"Table '{table_name}' not found in da_table_info")
+            raise HTTPException(status_code=404, detail=f"Table '{table_name}' not found")
 
         table_id = table_info.get("table_id", table_name)
-        s3_path = table_info.get("s3_path", "")
 
-        if not s3_path:
-            raise HTTPException(status_code=404, detail=f"No s3_path configured for table '{table_name}'")
-
-        aql_fields = """
-            FOR f IN da_field_info
-            FILTER f.table_id == @table_id
-            SORT f.field_name ASC
-            RETURN f
-        """
+        field_col = "da_field_info" if data_source == "sap" else "da_field_info_ragic"
         async with httpx.AsyncClient(timeout=15.0) as client:
             fields_resp = await client.post(
                 f"{ARANGO_URL}/_db/{ARANGO_DB}/_api/cursor",
-                json={"query": aql_fields, "bindVars": {"table_id": table_id}},
+                json={
+                    "query": f"FOR f IN {field_col} FILTER f.table_id == @table_id SORT f.field_name ASC RETURN f",
+                    "bindVars": {"table_id": table_id},
+                },
                 auth=(ARANGO_USER, ARANGO_PASSWORD),
             )
             fields_resp.raise_for_status()
-            fields_data = fields_resp.json()
-            fields = fields_data.get("result", [])
+            fields = fields_resp.json().get("result", [])
 
-        total, rows = _query_parquet_preview(s3_path, offset, limit)
+        if data_source == "sap":
+            s3_path = table_info.get("s3_path", "")
+            if not s3_path:
+                raise HTTPException(status_code=404, detail=f"No s3_path configured for table '{table_name}'")
+            total, rows = _query_parquet_preview(s3_path, offset, limit)
+        else:
+            total, rows = await _query_arangodb_preview(table_id, offset, limit, fields)
 
         return {
             "table_name": table_name,
@@ -238,6 +239,47 @@ async def preview_table_data(
         raise HTTPException(status_code=404, detail="Table not found")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+async def _query_arangodb_preview(
+    table_id: str,
+    offset: int,
+    limit: int,
+    fields: list[dict[str, object]],
+) -> tuple[int, list[dict[str, object]]]:
+    field_map = {str(f["field_id"]): f["field_name"] for f in fields if f.get("field_id")}
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        count_resp = await client.post(
+            f"{ARANGO_URL}/_db/{ARANGO_DB}/_api/cursor",
+            json={
+                "query": "RETURN LENGTH(FOR d IN da_table_data_ragic FILTER d.table_id == @table_id RETURN d)",
+                "bindVars": {"table_id": table_id},
+            },
+            auth=(ARANGO_USER, ARANGO_PASSWORD),
+        )
+        count_resp.raise_for_status()
+        total = count_resp.json().get("result", [0])[0] or 0
+
+        rows_resp = await client.post(
+            f"{ARANGO_URL}/_db/{ARANGO_DB}/_api/cursor",
+            json={
+                "query": "FOR d IN da_table_data_ragic FILTER d.table_id == @table_id SORT d._key ASC LIMIT @offset, @limit RETURN d",
+                "bindVars": {"table_id": table_id, "limit": limit, "offset": offset},
+            },
+            auth=(ARANGO_USER, ARANGO_PASSWORD),
+        )
+        rows_resp.raise_for_status()
+        rows_raw = rows_resp.json().get("result", [])
+        rows = []
+        for raw in rows_raw:
+            row: dict[str, object] = {}
+            for key, value in raw.items():
+                if key in ("_key", "_id", "_rev", "_ragicId", "table_id", "created_at", "updated_at"):
+                    continue
+                name = field_map.get(key, key)
+                row[name] = value
+            rows.append(row)
+        return total, rows
 
 
 def _query_parquet_preview(
