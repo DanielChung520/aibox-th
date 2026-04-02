@@ -1,19 +1,21 @@
 #!/usr/bin/env python3
 """
 @file        seed_intent_catalog_ragic.py
-@description Ragic data intents (Groups A-F) with placeholder intent definitions.
-             During Phase 2 migration (T-006), these templates will be populated with
-             actual Ragic table structures and semantics.
-@lastUpdate  2026-03-29 02:42:47
+@description Ragic data intents (Groups A-C: Phase 1 with real field IDs; Groups D-F: Phase 2 placeholders).
+              Phase 1 (Groups A-C) implemented with actual Ragic table structures:
+              - Group A: CFG7_EMPLOYEE, CFG2_DEPT (Employee & Department)
+              - Group B: CFG9_ITEM, CFG3_WAREHOUSE (Items & Warehouses)
+              - Group C: ERP48_PURCHASE_ORDER, CFG10_VENDOR (Purchase Orders & Vendors)
+              Phase 2 (Groups D-F) remain as placeholders for future migration.
+@lastUpdate  2026-04-02 10:57:30
 @author      Daniel Chung
-@version     1.0.0
+@version     2.0.0
 """
 
 from .seed_intent_catalog_shared import make_doc, make_orch_doc, DA
 
 # ===========================================================================
 # Group A — 員工與部門 CFG7_EMPLOYEE / CFG2_DEPT (3 intents)
-# TODO: Add Ragic intents during migration Phase 2 (T-006)
 # ===========================================================================
 
 GROUP_A = [
@@ -21,201 +23,204 @@ GROUP_A = [
         "rgc_a01",
         DA,
         name="員工基本資料查詢",
-        description="查詢 Ragic 員工表中的基本資料，包含編號、姓名、部門等",
+        description="查詢 Ragic 員工表中的基本資料，包含編號、姓名、部門、聯絡方式等",
         intent_type="filter",
         group="員工管理",
         tables=["CFG7_EMPLOYEE"],
         generation_strategy="template",
         sql_template=(
-            "SELECT emp_id, emp_name, dept_id, email, hire_date "
+            'SELECT "1015428", "1015429", "1015495", "1015439", "1015444" '
             "FROM read_parquet('s3://ragic/employees/*.parquet') "
-            "WHERE emp_id = '{employee_id}' LIMIT 1"
+            "WHERE \"1015428\" = '{employee_id}' LIMIT 1"
         ),
-        core_fields=["emp_id", "emp_name", "dept_id", "email"],
+        core_fields=["1015428", "1015429", "1015495", "1015439"],
         nl_examples=[
             "查詢員工 E001 的資料",
-            "員工 E050 的部門是什麼",
+            "員工李明的部門和聯絡方式",
+            "查詢王美玲的基本資訊",
         ],
     ),
     make_doc(
         "rgc_a02",
         DA,
         name="部門人員統計",
-        description="依部門統計員工人數及相關信息",
+        description="依部門統計員工人數及任職狀態分佈",
         intent_type="aggregate",
         group="員工管理",
         tables=["CFG7_EMPLOYEE", "CFG2_DEPT"],
         generation_strategy="template",
         sql_template=(
-            "SELECT d.dept_id, d.dept_name, COUNT(e.emp_id) AS emp_count "
-            "FROM read_parquet('s3://ragic/departments/*.parquet') AS d "
-            "LEFT JOIN read_parquet('s3://ragic/employees/*.parquet') AS e "
-            "ON d.dept_id = e.dept_id "
-            "GROUP BY d.dept_id, d.dept_name"
+            'SELECT "1015495", COUNT(*) AS emp_count, COUNT(CASE WHEN "1015443" = \'在職\' THEN 1 END) AS active_count '
+            "FROM read_parquet('s3://ragic/employees/*.parquet') "
+            'GROUP BY "1015495" ORDER BY emp_count DESC'
         ),
-        core_fields=["dept_id", "dept_name", "emp_count"],
+        core_fields=["1015495", "emp_count", "active_count"],
         nl_examples=[
-            "各部門的人員數量",
-            "部門 D001 有多少員工",
+            "各部門有多少員工",
+            "銷售部的人數統計",
+            "每個部門的在職人數",
         ],
     ),
     make_doc(
         "rgc_a03",
         DA,
         name="新入職員工查詢",
-        description="查詢指定期間新入職的員工清單",
+        description="查詢指定期間新到職的員工清單",
         intent_type="filter",
         group="員工管理",
         tables=["CFG7_EMPLOYEE"],
         generation_strategy="template",
         sql_template=(
-            "SELECT emp_id, emp_name, hire_date, dept_id "
+            'SELECT "1015428", "1015429", "1015444", "1015495", "1015496" '
             "FROM read_parquet('s3://ragic/employees/*.parquet') "
-            "WHERE hire_date >= '{start_date}' AND hire_date <= '{end_date}' "
-            "ORDER BY hire_date DESC LIMIT {limit}"
+            "WHERE \"1015444\" >= '{start_date}' AND \"1015444\" <= '{end_date}' "
+            'ORDER BY "1015444" DESC LIMIT {limit}'
         ),
-        core_fields=["emp_id", "emp_name", "hire_date"],
+        core_fields=["1015428", "1015429", "1015444", "1015495"],
         nl_examples=[
             "這個月新入職的員工",
-            "上季新招聘的人員",
+            "上季新招聘的人員名單",
+            "2026年3月入職的員工",
         ],
     ),
 ]
 
 # ===========================================================================
-# Group B — 物料與倉庫 CFG8_ITEM / CFG3_WAREHOUSE (3 intents)
-# TODO: Add Ragic intents during migration Phase 2 (T-006)
+# Group B — 物料與倉庫 CFG9_ITEM / CFG3_WAREHOUSE (3 intents)
 # ===========================================================================
 
 GROUP_B = [
     make_doc(
         "rgc_b01",
         DA,
-        name="Ragic 物料清單查詢",
-        description="查詢 Ragic 物料表中的基本資訊",
+        name="品項基本資料查詢",
+        description="查詢 Ragic 品項表中的編碼、名稱、分類、規格及庫存等資訊",
         intent_type="filter",
         group="物料管理",
-        tables=["CFG8_ITEM"],
+        tables=["CFG9_ITEM"],
         generation_strategy="template",
         sql_template=(
-            "SELECT item_id, item_name, item_category, unit_price "
+            'SELECT "1015486", "1015483", "1018425", "1018426", "1018434", "1018430" '
             "FROM read_parquet('s3://ragic/items/*.parquet') "
-            "WHERE item_id = '{item_id}' LIMIT 1"
+            "WHERE \"1015486\" = '{item_code}' LIMIT 1"
         ),
-        core_fields=["item_id", "item_name", "item_category", "unit_price"],
+        core_fields=["1015486", "1015483", "1018425", "1018434"],
         nl_examples=[
-            "查詢物料 IT001 的資料",
-            "物料 IT050 的單價是多少",
+            "查詢品項 IT001 的資料",
+            "品項白鐵不鏽鋼螺絲的規格和單價",
+            "查詢品項編碼 KIT-2024-001",
         ],
     ),
     make_doc(
         "rgc_b02",
         DA,
-        name="倉庫庫存統計",
-        description="依倉庫統計物料庫存量",
-        intent_type="aggregate",
+        name="倉庫儲位庫存查詢",
+        description="查詢倉庫及儲位的庫存分佈情況",
+        intent_type="filter",
         group="物料管理",
         tables=["CFG3_WAREHOUSE"],
         generation_strategy="template",
         sql_template=(
-            "SELECT warehouse_id, warehouse_name, SUM(stock_qty) AS total_stock "
+            'SELECT "1015398", "1015397", "1015403", "1015406", "1015402" '
             "FROM read_parquet('s3://ragic/warehouses/*.parquet') "
-            "GROUP BY warehouse_id, warehouse_name"
+            "WHERE \"1015398\" = '{warehouse_code}' LIMIT {limit}"
         ),
-        core_fields=["warehouse_id", "warehouse_name", "total_stock"],
+        core_fields=["1015398", "1015397", "1015403", "1015406"],
         nl_examples=[
-            "各倉庫的庫存總量",
-            "倉庫 W001 的庫存",
+            "查詢倉庫 WH-001 的儲位清單",
+            "主倉庫的所有儲位",
+            "料架 A-01 下有哪些儲位",
         ],
     ),
     make_doc(
         "rgc_b03",
         DA,
-        name="物料類別統計",
-        description="按物料類別統計物料數量",
+        name="品項分類及採購成本統計",
+        description="按主副類別統計品項數量及採購成本",
         intent_type="aggregate",
         group="物料管理",
-        tables=["CFG8_ITEM"],
+        tables=["CFG9_ITEM"],
         generation_strategy="template",
         sql_template=(
-            "SELECT item_category, COUNT(*) AS item_count "
+            'SELECT "1018425", "1018426", COUNT(*) AS item_count, AVG("1018432") AS avg_cost '
             "FROM read_parquet('s3://ragic/items/*.parquet') "
-            "GROUP BY item_category"
+            'GROUP BY "1018425", "1018426" ORDER BY "1018425"'
         ),
-        core_fields=["item_category", "item_count"],
+        core_fields=["1018425", "1018426", "item_count", "avg_cost"],
         nl_examples=[
-            "各物料類別有多少件",
-            "物料分類統計",
+            "各主類別的品項數量統計",
+            "電子類品項的平均採購成本",
+            "按分類統計品項和成本",
         ],
     ),
 ]
 
 # ===========================================================================
-# Group C — 供應商與採購 ERP48_PURCHASE_ORDER / CFG9_VENDOR (3 intents)
-# TODO: Add Ragic intents during migration Phase 2 (T-006)
+# Group C — 供應商與採購 ERP48_PURCHASE_ORDER / CFG10_VENDOR (3 intents)
 # ===========================================================================
 
 GROUP_C = [
     make_doc(
         "rgc_c01",
         DA,
-        name="採購訂單查詢",
-        description="查詢 Ragic 採購訂單表中的訂單資訊",
+        name="進貨訂單查詢",
+        description="查詢 Ragic 進貨訂單表中的訂單編號、日期、供應商、金額等關鍵資訊",
         intent_type="filter",
         group="採購管理",
         tables=["ERP48_PURCHASE_ORDER"],
         generation_strategy="template",
         sql_template=(
-            "SELECT po_id, po_date, vendor_id, po_amount, status "
+            'SELECT "1023120", "1023123", "1023121", "1023122", "1023148" '
             "FROM read_parquet('s3://ragic/purchase_orders/*.parquet') "
-            "WHERE po_id = '{po_id}' LIMIT 1"
+            "WHERE \"1023120\" = '{po_number}' LIMIT 1"
         ),
-        core_fields=["po_id", "po_date", "vendor_id", "po_amount"],
+        core_fields=["1023120", "1023123", "1023121", "1023148"],
         nl_examples=[
-            "查詢採購單 PO001 的資料",
-            "採購訂單 PO050 的狀態",
+            "查詢進貨單 PO2026001 的資料",
+            "進貨單編號 PO2026-003 的詳細內容",
+            "查詢供應商ABC公司的進貨訂單",
         ],
     ),
     make_doc(
         "rgc_c02",
         DA,
         name="供應商採購金額統計",
-        description="依供應商統計採購金額",
+        description="依供應商統計採購總額、訂單數及平均採購金額",
         intent_type="aggregate",
         group="採購管理",
-        tables=["ERP48_PURCHASE_ORDER", "CFG9_VENDOR"],
+        tables=["ERP48_PURCHASE_ORDER", "CFG10_VENDOR"],
         generation_strategy="template",
         sql_template=(
-            "SELECT v.vendor_id, v.vendor_name, SUM(po.po_amount) AS total_amount "
-            "FROM read_parquet('s3://ragic/purchase_orders/*.parquet') AS po "
-            "LEFT JOIN read_parquet('s3://ragic/vendors/*.parquet') AS v "
-            "ON po.vendor_id = v.vendor_id "
-            "GROUP BY v.vendor_id, v.vendor_name"
+            'SELECT "1023122", COUNT(*) AS po_count, SUM("1023148") AS total_amount, AVG("1023148") AS avg_amount '
+            "FROM read_parquet('s3://ragic/purchase_orders/*.parquet') "
+            'GROUP BY "1023122" ORDER BY total_amount DESC'
         ),
-        core_fields=["vendor_id", "vendor_name", "total_amount"],
+        core_fields=["1023122", "po_count", "total_amount", "avg_amount"],
         nl_examples=[
-            "各供應商的採購金額",
-            "供應商 V001 的採購總額",
+            "各供應商的採購金額統計",
+            "與供應商ABC的採購金額",
+            "採購金額排名前10的供應商",
         ],
     ),
     make_doc(
         "rgc_c03",
         DA,
-        name="採購訂單狀態統計",
-        description="按訂單狀態統計採購訂單數量",
+        name="進貨訂單明細及收貨統計",
+        description="按進貨訂單匯總明細品項、採購數量、收貨數量及退貨情況",
         intent_type="aggregate",
         group="採購管理",
         tables=["ERP48_PURCHASE_ORDER"],
         generation_strategy="template",
         sql_template=(
-            "SELECT status, COUNT(*) AS po_count, SUM(po_amount) AS total_amount "
+            'SELECT "1023120", "1023129", SUM("1023130") AS total_qty, SUM("1023131") AS received_qty, SUM("1023154") AS return_qty '
             "FROM read_parquet('s3://ragic/purchase_orders/*.parquet') "
-            "GROUP BY status"
+            'GROUP BY "1023120", "1023129" ORDER BY "1023120"'
         ),
-        core_fields=["status", "po_count", "total_amount"],
+        core_fields=["1023120", "1023129", "total_qty", "received_qty", "return_qty"],
         nl_examples=[
-            "採購訂單狀態統計",
-            "待確認的訂單有多少",
+            "進貨訂單的採購數量和收貨情況",
+            "未全部收貨的進貨訂單",
+            "有退貨的進貨訂單明細",
         ],
     ),
 ]
