@@ -145,7 +145,7 @@ async def _generate_sql_with_llm(
     system_prompt: str,
     previous_error: str = "",
 ) -> str:
-    schema_desc = _format_schema_brief(schema)
+    schema_desc = _format_schema_brief(schema, config)
     plan_json = plan.model_dump_json(indent=2)
     few_shot_block = _build_few_shot_block(intent)
 
@@ -234,7 +234,7 @@ def _build_few_shot_block(intent: IntentMatch) -> str:
     return "\n".join(lines)
 
 
-def _format_schema_brief(schema: SchemaContext) -> str:
+def _format_schema_brief(schema: SchemaContext, config: PipelineConfig) -> str:
     lines: list[str] = []
     alias_map: dict[str, str] = {}
     master_tables = {"mara", "lfa1", "mard", "mchb", "t024", "t001", "t024e"}
@@ -244,7 +244,7 @@ def _format_schema_brief(schema: SchemaContext) -> str:
         module = tbl.module.lower() if tbl.module else "mm"
         tbl_lower = tbl.table_name.lower()
         suffix = "all.parquet" if tbl_lower in master_tables else "*.parquet"
-        pq = f"read_parquet('s3://sap/{module}/{tbl_lower}/{suffix}')"
+        pq = f"read_parquet('s3://{config.s3_bucket}/{module}/{tbl_lower}/{suffix}')"
         alias = tbl_lower[0]
         if alias in alias_map.values():
             alias = tbl_lower[:2]

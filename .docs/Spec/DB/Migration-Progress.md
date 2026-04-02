@@ -100,7 +100,7 @@ version: 1.1.0
 | 建立 Ragic Schema Seed Script | T-001 | ✅ 完成 | 2026-04-02 |
 | 建立 _ragic Collections | T-002 | ✅ 完成 | 2026-04-02 |
 | 執行 Phase 1 Schema Seed | T-003 | ✅ 完成 | 2026-04-02 |
-| SQL Generator 路徑動態化 | T-004 | ⏳ | — |
+| SQL Generator 路徑動態化 | T-004 | ✅ 完成 | 2026-04-02 |
 | Intent Classifier 新增 Ragic 範例 | T-005 | ⏳ | — |
 | Intent RAG Templates 新增 Ragic | T-006 | ⏳ | — |
 | Pipeline Models 更新 | T-007 | ⏳ | — |
@@ -156,4 +156,5 @@ version: 1.1.0
 | 2026-04-02 | Daniel Chung | T-001 完成：建立 seed_ragic_schema.py (717 行)，含 6 張 Ragic Phase1 表格、202 個欄位、8 個關聯 |
 | 2026-04-02 | Daniel Chung | T-002 完成：建立 da_table_info_ragic, da_field_info_ragic, da_table_relation_ragic 三個 Collections |
 | 2026-04-02 | Daniel Chung | T-003 完成：執行 seed_ragic_schema.py，6 表 / 202 欄位 / 8 關聯寫入 ArangoDB |
+| 2026-04-02 | Daniel Chung | T-004 完成：sql_generator.py 路徑由 `config.s3_bucket` 動態控制（_format_schema_brief 函式） |
 | 2026-03-31 | Daniel Chung | 初始版本 |
