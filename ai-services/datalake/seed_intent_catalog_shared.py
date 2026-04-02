@@ -1,0 +1,149 @@
+#!/usr/bin/env python3
+"""
+@file        seed_intent_catalog_shared.py
+@description Shared utilities for intent catalog seeding: constants, helper functions,
+             and document builders used by SAP and Ragic intent modules.
+@lastUpdate  2026-03-29 02:42:47
+@author      Daniel Chung
+@version     1.0.0
+"""
+
+import json
+import subprocess
+
+ARANGO_URL = "http://localhost:8529"
+DB = "abc_desktop"
+AUTH = "root:abc_desktop_2026"
+COLLECTION = "intent_catalog"
+TS = "2026-03-29T00:00:00Z"
+
+DA = "data_agent"
+ORCH = "orchestrator"
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def curl_post_doc(docs: list) -> list:
+    """Bulk upsert via ArangoDB document API (overwriteMode=replace)."""
+    payload = json.dumps(docs)
+    r = subprocess.run(
+        [
+            "curl",
+            "-s",
+            "-u",
+            AUTH,
+            f"{ARANGO_URL}/_db/{DB}/_api/document/{COLLECTION}?overwriteMode=replace",
+            "-X",
+            "POST",
+            "-H",
+            "Content-Type: application/json",
+            "-d",
+            payload,
+        ],
+        capture_output=True,
+        text=True,
+    )
+    return json.loads(r.stdout)
+
+
+def insert_batch(docs: list, label: str) -> None:
+    result = curl_post_doc(docs)
+    errors = 0
+    if isinstance(result, list):
+        for i, r in enumerate(result):
+            if r.get("error"):
+                print(f"  ERROR [{docs[i]['_key']}]: {r.get('errorMessage', r)}")
+                errors += 1
+    elif isinstance(result, dict) and result.get("error"):
+        print(f"  Batch error for {label}: {result}")
+        errors += 1
+    ok = len(docs) - errors
+    print(f"  ✓ {label}: {ok}/{len(docs)} inserted/updated")
+
+
+def make_doc(
+    intent_id: str,
+    agent_scope: str,
+    name: str,
+    description: str,
+    intent_type: str,
+    group: str,
+    tables: list,
+    generation_strategy: str,
+    sql_template: str,
+    core_fields: list,
+    nl_examples: list,
+    example_sqls: list | None = None,
+    tool_name: str = "",
+) -> dict:
+    return {
+        "_key": intent_id,
+        "intent_id": intent_id,
+        "agent_scope": agent_scope,
+        "name": name,
+        "description": description,
+        "intent_type": intent_type,
+        "group": group,
+        "tables": tables,
+        "generation_strategy": generation_strategy,
+        "sql_template": sql_template,
+        "core_fields": core_fields,
+        "nl_examples": nl_examples,
+        "example_sqls": example_sqls or [],
+        "tool_name": tool_name,
+        "status": "enabled",
+        "created_at": TS,
+        "updated_at": TS,
+        "updated_by": "system",
+    }
+
+
+def make_orch_doc(
+    intent_id: str,
+    name: str,
+    description: str,
+    intent_type: str,  # "chat" | "task"
+    domain: str,  # "general" | "order" | "material" | "finance" | "data_query"
+    bpa_id: str | None,
+    capabilities: list[str],
+    nl_examples: list[str],
+    task_type: str = "",  # "query" | "action" | "workflow"（task 才填）
+    confidence_threshold: float = 0.7,
+    priority: int = 0,
+    response_strategy: str = "",  # "direct_llm" | "handoff_bpa" | "confirm_then_execute" | "clarify_first"
+) -> dict:
+    """Build an orchestrator intent document (BPA routing model v2).
+
+    response_strategy 語義：
+      direct_llm           - 直接由 LLM 回覆，不路由到任何 BPA（用於 chat）
+      handoff_bpa          - 直接 handoff 給 BPA 執行，不需用戶確認（純查詢）
+      confirm_then_execute - 展示計劃給用戶確認後再執行（寫入/操作類）
+      clarify_first        - 先反問用戶釐清意圖（信心度低、意圖模糊時）
+    """
+    doc: dict = {
+        "_key": intent_id,
+        "intent_id": intent_id,
+        "agent_scope": ORCH,
+        "name": name,
+        "description": description,
+        "intent_type": intent_type,
+        "domain": domain,
+        "capabilities": capabilities,
+        "nl_examples": nl_examples,
+        "confidence_threshold": confidence_threshold,
+        "priority": priority,
+        "status": "enabled",
+        "created_at": TS,
+        "updated_at": TS,
+        "updated_by": "system",
+    }
+    if bpa_id:
+        doc["bpa_id"] = bpa_id
+    if task_type:
+        doc["task_type"] = task_type
+    if response_strategy:
+        doc["response_strategy"] = response_strategy
+    return doc
