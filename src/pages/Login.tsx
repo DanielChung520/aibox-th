@@ -6,9 +6,10 @@
  * @version     1.0.0
  */
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Form, Input, Button, Checkbox, Typography, App } from 'antd';
+import type { InputRef } from 'antd';
 import { UserOutlined, LockOutlined } from '@ant-design/icons';
 import { authApi } from '../services/api';
 import { authStore } from '../stores/auth';
@@ -32,9 +33,19 @@ export default function Login() {
   const textColor = contentTokens.colorTextBase;
   const secondaryColor = contentTokens.textSecondary;
 
+  const passwordRef = useRef<InputRef>(null);
+
+  const savedUsername = localStorage.getItem('remembered_username') || '';
+  const [initialUsername] = useState(savedUsername);
+
   const onFinish = async (values: { username: string; password: string; remember: boolean }) => {
     setLoading(true);
     try {
+      if (values.remember) {
+        localStorage.setItem('remembered_username', values.username);
+      } else {
+        localStorage.removeItem('remembered_username');
+      }
       const response = await authApi.login(values);
       if (response.data.code === 200) {
         const { user, token } = response.data.data;
@@ -72,8 +83,8 @@ export default function Login() {
               src={logoSrc}
               alt="logo"
               style={{
-                width: 80,
-                height: 80,
+                width: 200,
+                height: 50,
                 objectFit: 'contain',
                 marginBottom: 16,
                 borderRadius: 8,
@@ -93,10 +104,17 @@ export default function Login() {
           <Form.Item
             name="username"
             rules={[{ required: true, message: '请输入用户名' }]}
+            initialValue={initialUsername}
           >
-            <Input 
-              prefix={<UserOutlined />} 
-              placeholder="用户名" 
+            <Input
+              prefix={<UserOutlined />}
+              placeholder="用户名"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  passwordRef.current?.input?.focus();
+                }
+              }}
             />
           </Form.Item>
 
@@ -107,23 +125,24 @@ export default function Login() {
               { min: 6, message: '密码至少6位' }
             ]}
           >
-            <Input.Password 
-              prefix={<LockOutlined />} 
-              placeholder="密码" 
+            <Input.Password
+              ref={passwordRef}
+              prefix={<LockOutlined />}
+              placeholder="密码"
             />
           </Form.Item>
 
-          <Form.Item name="remember" valuePropName="checked">
-            <Checkbox>记住密码</Checkbox>
+          <Form.Item name="remember" valuePropName="checked" initialValue={!!savedUsername}>
+            <Checkbox>记住账户</Checkbox>
           </Form.Item>
 
           <Form.Item>
-            <Button 
-              type="primary" 
-              htmlType="submit" 
+            <Button
+              type="primary"
+              htmlType="submit"
               loading={loading}
               block
-              style={{ 
+              style={{
                 background: `linear-gradient(135deg, ${contentTokens.colorPrimary} 0%, ${contentTokens.colorInfo} 100%)`,
                 border: 'none',
               }}
