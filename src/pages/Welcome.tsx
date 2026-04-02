@@ -12,8 +12,8 @@ import { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, Typography, theme } from 'antd';
 import { useContentTokens, useEffectiveTheme } from '../contexts/AppThemeProvider';
-import logoLight from '../assets/logo-light.png';
-import logoDark from '../assets/logo.png';
+import logoDark from '../assets/EDGE-logo-icon.png';
+import logoLight from '../assets/EDGE-logo-dark.png';
 
 const { Title, Text } = Typography;
 

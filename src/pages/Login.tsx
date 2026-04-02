@@ -13,8 +13,8 @@ import { UserOutlined, LockOutlined } from '@ant-design/icons';
 import { authApi } from '../services/api';
 import { authStore } from '../stores/auth';
 import { useEffectiveTheme, useContentTokens } from '../contexts/AppThemeProvider';
-import logoLight from '../assets/logo-light.png';
-import logoDark from '../assets/logo.png';
+import logoDark from '../assets/EDGE-logo-icon.png';
+import logoLight from '../assets/EDGE-logo-dark.png';
 
 const { Title, Text } = Typography;
 

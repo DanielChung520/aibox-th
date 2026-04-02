@@ -1,6 +1,6 @@
 import { useContentTokens, useEffectiveTheme } from '../contexts/AppThemeProvider';
-import logoLight from '../assets/logo-light.png';
-import logoDark from '../assets/logo.png';
+import logoDark from '../assets/EDGE-logo-icon.png';
+import logoLight from '../assets/EDGE-logo-dark.png';
 
 export default function Home() {
   const contentTokens = useContentTokens();
