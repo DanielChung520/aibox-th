@@ -151,36 +151,14 @@ async def execute_aql(
         else:
             field_mappings = {}
 
-    # Fetch a sample record to get actual data field IDs (needed because
-    # da_field_info_ragic may have duplicate field names mapping to different IDs)
-    sample_keys: set[str] = set()
-    try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            table_id_match2 = re.search(r"d\.table_id\s*==\s*['\"]([^'\"]+)['\"]", aql)
-            if table_id_match2:
-                sample_resp = await client.post(
-                    f"{config.arango_url}/_db/{config.arango_db}/_api/cursor",
-                    json={
-                        "query": (
-                            "FOR d IN da_table_data_ragic "
-                            f"FILTER d.table_id == '{table_id_match2.group(1)}' "
-                            "LIMIT 1 RETURN ATTRIBUTES(d)"
-                        ),
-                    },
-                    auth=(config.arango_user, config.arango_password),
-                )
-                sample_resp.raise_for_status()
-                raw_keys = sample_resp.json().get("result", [[]])[0] or []
-                sample_keys = {str(k) for k in raw_keys
-                               if k not in ("_key","_id","_rev","_ragicId","table_id","created_at","updated_at")}
-    except Exception:
-        pass
-
-    # Build name→ID mapping using ONLY field IDs that exist in the sample data
-    # (prevents duplicate schema field names from overwriting correct IDs)
+    # Build name→ID mapping from all schema field mappings.
+    # The "fname not in reverse_map" guard prevents duplicate field names
+    # from overwriting earlier (correct) entries in the dict.
+    # We no longer restrict to sample_keys because a field may exist in the
+    # schema but be NULL/empty in the first sample row (e.g. 1018437 "品項名稱").
     reverse_map: dict[str, str] = {}
     for fid, fname in field_mappings.items():
-        if fid in sample_keys and fname not in reverse_map:
+        if fname not in reverse_map:
             reverse_map[fname] = fid
 
     aql_rewritten = aql
