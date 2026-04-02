@@ -17,7 +17,7 @@ import time
 from data_agent.config_reader import get_param
 from data_agent.query.nl2sql.error_explainer import explain_error
 from data_agent.query.nl2sql.exceptions import PipelineError
-from data_agent.query.nl2sql.executor import execute_sql
+from data_agent.query.nl2sql.executor import execute_aql, execute_sql
 from data_agent.query.nl2sql.intent_classifier import (
     classify_intent,
     classify_intent_candidates,
@@ -139,7 +139,10 @@ async def _generate_and_execute(
 
         t0 = time.time() * 1000
         try:
-            result = await execute_sql(generated_sql, config)
+            if getattr(config, "data_source", "sap") == "ragic":
+                result = await execute_aql(generated_sql, config)
+            else:
+                result = await execute_sql(generated_sql, config)
             phases.append(PipelinePhaseResult(phase="execution",
                                               duration_ms=round(time.time() * 1000 - t0, 2)))
             return PipelineResult(success=True, query=query, matched_intent=intent,
