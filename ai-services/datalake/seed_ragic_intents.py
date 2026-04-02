@@ -2,8 +2,6 @@
 """Seed Ragic Data Agent Intents into ArangoDB intent_catalog."""
 
 import os
-import time
-import uuid
 import httpx
 
 ARANGO_URL = os.getenv("ARANGO_URL", "http://localhost:8529")

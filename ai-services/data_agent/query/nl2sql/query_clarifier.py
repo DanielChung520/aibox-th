@@ -32,6 +32,7 @@ _BUSINESS_KEYWORDS: set[str] = {
     "金額", "數量", "價格", "成本", "排名", "統計", "彙總", "明細",
     "vendor", "material", "purchase", "inventory", "stock", "order",
     "MAKT", "MCHB", "T001", "EBAN",
+    "倉庫", "料架", "品項", "交易對象",
 }
 
 _KEYWORD_PATTERN = re.compile(

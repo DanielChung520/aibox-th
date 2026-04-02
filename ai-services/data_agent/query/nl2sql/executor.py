@@ -10,6 +10,8 @@ SELECT-only enforcement at execution level as final safety net.
 # Version: 3.0.0
 """
 
+import codecs
+import json
 import re
 import time
 import httpx
@@ -149,17 +151,57 @@ async def execute_aql(
         else:
             field_mappings = {}
 
-    # Reverse mapping: field_name → field_id (for rewriting AQL)
-    reverse_map: dict[str, str] = {v: k for k, v in field_mappings.items()}
+    # Fetch a sample record to get actual data field IDs (needed because
+    # da_field_info_ragic may have duplicate field names mapping to different IDs)
+    sample_keys: set[str] = set()
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            table_id_match2 = re.search(r"d\.table_id\s*==\s*['\"]([^'\"]+)['\"]", aql)
+            if table_id_match2:
+                sample_resp = await client.post(
+                    f"{config.arango_url}/_db/{config.arango_db}/_api/cursor",
+                    json={
+                        "query": (
+                            "FOR d IN da_table_data_ragic "
+                            f"FILTER d.table_id == '{table_id_match2.group(1)}' "
+                            "LIMIT 1 RETURN ATTRIBUTES(d)"
+                        ),
+                    },
+                    auth=(config.arango_user, config.arango_password),
+                )
+                sample_resp.raise_for_status()
+                raw_keys = sample_resp.json().get("result", [[]])[0] or []
+                sample_keys = {str(k) for k in raw_keys
+                               if k not in ("_key","_id","_rev","_ragicId","table_id","created_at","updated_at")}
+    except Exception:
+        pass
 
-    # Rewrite AQL: replace field names with field IDs in d["field_name"] accesses
+    # Build name→ID mapping using ONLY field IDs that exist in the sample data
+    # (prevents duplicate schema field names from overwriting correct IDs)
+    reverse_map: dict[str, str] = {}
+    for fid, fname in field_mappings.items():
+        if fid in sample_keys and fname not in reverse_map:
+            reverse_map[fname] = fid
+
     aql_rewritten = aql
     for field_name, field_id in reverse_map.items():
-        aql_rewritten = re.sub(
-            rf'd\[\{re.escape(repr(field_name))}\]',
-            f'd["{field_id}"]',
-            aql_rewritten,
-        )
+        aql_rewritten = aql_rewritten.replace(f"d['{field_name}']", f'd["{field_id}"]')
+
+    def _fix_return_object(m: re.Match) -> str:
+        inner = m.group(1)
+        if inner.startswith("{"):
+            inner = inner[1:]
+        if inner.endswith("}"):
+            inner = inner[:-1]
+
+        def _esc_key(km: re.Match) -> str:
+            decoded = codecs.decode(json.dumps(km.group(1))[1:-1], "unicode_escape")
+            return '"' + decoded + '": '
+
+        fixed_inner = re.sub(r"'([^']+)':\s*", _esc_key, inner)
+        return "RETURN {" + fixed_inner + "}"
+
+    aql_rewritten = re.sub(r"RETURN\s*\{([^}]+)\}", _fix_return_object, aql_rewritten)
 
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
