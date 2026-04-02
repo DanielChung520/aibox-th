@@ -342,26 +342,24 @@ function OrchestratorPanel() {
               label: '基本資訊',
               children: (
                 <Descriptions bordered column={1} size="small">
-                  <Descriptions.Item label="Intent ID"><Text code>{currentIntent.intent_id}</Text></Descriptions.Item>
-                  <Descriptions.Item label="名稱">{currentIntent.name}</Descriptions.Item>
-                  <Descriptions.Item label="說明">{currentIntent.description}</Descriptions.Item>
-                  <Descriptions.Item label="狀態"><Tag color={currentIntent.status === 'enabled' ? 'green' : 'default'}>{currentIntent.status}</Tag></Descriptions.Item>
-                  <Descriptions.Item label="優先度">{currentIntent.priority}</Descriptions.Item>
-                  <Descriptions.Item label="類型"><Tag color={currentIntent.intent_type === 'chat' ? 'blue' : 'green'}>{currentIntent.intent_type || '-'}</Tag></Descriptions.Item>
-                  <Descriptions.Item label="Domain"><Tag>{currentIntent.domain || '-'}</Tag></Descriptions.Item>
-                  <Descriptions.Item label="BPA ID">{currentIntent.bpa_id ? <Tag color="geekblue">{currentIntent.bpa_id}</Tag> : '-'}</Descriptions.Item>
-                  {currentIntent.intent_type === 'task' && (
-                    <Descriptions.Item label="Task Type"><Tag color="purple">{currentIntent.task_type || '-'}</Tag></Descriptions.Item>
-                  )}
-                  <Descriptions.Item label="Response Strategy">
+                  <Descriptions.Item label="Intent ID" span={1}><Text code>{currentIntent.intent_id}</Text></Descriptions.Item>
+                  <Descriptions.Item label="名稱" span={1}>{currentIntent.name}</Descriptions.Item>
+                  <Descriptions.Item label="說明" span={1}>{currentIntent.description}</Descriptions.Item>
+                  <Descriptions.Item label="狀態" span={1}><Tag color={currentIntent.status === 'enabled' ? 'green' : 'default'}>{currentIntent.status}</Tag></Descriptions.Item>
+                  <Descriptions.Item label="優先度" span={1}>{currentIntent.priority}</Descriptions.Item>
+                  <Descriptions.Item label="類型" span={1}><Tag color={currentIntent.intent_type === 'chat' ? 'blue' : 'green'}>{currentIntent.intent_type || '-'}</Tag></Descriptions.Item>
+                  <Descriptions.Item label="Domain" span={1}><Tag>{currentIntent.domain || '-'}</Tag></Descriptions.Item>
+                  <Descriptions.Item label="BPA ID" span={1}>{currentIntent.bpa_id ? <Tag color="geekblue">{currentIntent.bpa_id}</Tag> : '-'}</Descriptions.Item>
+                  <Descriptions.Item label="Task Type" span={1}><Tag color="purple">{currentIntent.intent_type === 'task' ? (currentIntent.task_type || '-') : '-'}</Tag></Descriptions.Item>
+                  <Descriptions.Item label="Response Strategy" span={1}>
                     {currentIntent.response_strategy
                       ? <Tag color={STRATEGY_COLORS[currentIntent.response_strategy] || 'default'}>{currentIntent.response_strategy}</Tag>
                       : '-'}
                   </Descriptions.Item>
-                  <Descriptions.Item label="Capabilities">
+                  <Descriptions.Item label="Capabilities" span={1}>
                     {currentIntent.capabilities?.length ? currentIntent.capabilities.map((c: string) => <Tag key={c}>{c}</Tag>) : '-'}
                   </Descriptions.Item>
-                  <Descriptions.Item label="信賴度">{currentIntent.confidence_threshold != null ? `${(currentIntent.confidence_threshold * 100).toFixed(0)}%` : '-'}</Descriptions.Item>
+                  <Descriptions.Item label="信賴度" span={1}>{currentIntent.confidence_threshold != null ? `${(currentIntent.confidence_threshold * 100).toFixed(0)}%` : '-'}</Descriptions.Item>
                 </Descriptions>
               )
             },
@@ -483,7 +481,7 @@ function OrchestratorPanel() {
       </Modal>
 
       <Drawer title="Orchestrator 設定" styles={{ wrapper: { width: '480px' } }} open={settingsVisible} onClose={() => setSettingsVisible(false)} extra={<Button type="primary" onClick={handleSaveSettings}>儲存設定</Button>}>
-        <Alert message="變更提醒" description="修改 Embedding 模型或維度後，必須重新執行「同步到 Qdrant」，否則查詢可能失效。" type="warning" showIcon style={{ marginBottom: 16 }} />
+        <Alert title="變更提醒" description="修改 Embedding 模型或維度後，必須重新執行「同步到 Qdrant」，否則查詢可能失效。" type="warning" showIcon style={{ marginBottom: 16 }} />
         <Form form={settingsForm} layout="vertical">
           <Form.Item name="embeddingModel" label="Embedding 模型" rules={[{ required: true }]}>
             <Input />
@@ -630,8 +628,8 @@ function DataAgentPanel() {
         title: '確認儲存設定變更？',
         content: (
           <div>
-            {isEmbeddingChanged && <Alert message="Embedding 變更" description={`模型: ${settings.embeddingModel} -> ${vals.embeddingModel}`} type="warning" showIcon style={{ marginBottom: 8 }} />}
-            {isLlmChanged && <Alert message="LLM 變更" description={`Small: ${settings.smallLlmModel} -> ${vals.smallLlmModel}`} type="info" showIcon />}
+            {isEmbeddingChanged && <Alert title="Embedding 變更" description={`模型: ${settings.embeddingModel} -> ${vals.embeddingModel}`} type="warning" showIcon style={{ marginBottom: 8 }} />}
+            {isLlmChanged && <Alert title="LLM 變更" description={`Small: ${settings.smallLlmModel} -> ${vals.smallLlmModel}`} type="info" showIcon />}
           </div>
         ),
         onOk: async () => {
@@ -824,18 +822,18 @@ function DataAgentPanel() {
               label: '基本資訊',
               children: (
                 <Descriptions bordered column={1} size="small">
-                  <Descriptions.Item label="Intent ID"><Text code>{currentIntent.intent_id}</Text></Descriptions.Item>
-                   <Descriptions.Item label="Domain Intent">{currentIntent.bpa_domain_intent || '-'}</Descriptions.Item>
-                   <Descriptions.Item label="說明">{currentIntent.description}</Descriptions.Item>
-                   <Descriptions.Item label="查詢類型"><Tag>{currentIntent.intent_type || '-'}</Tag></Descriptions.Item>
-                   <Descriptions.Item label="群組"><Tag>{currentIntent.group || '-'}</Tag></Descriptions.Item>
-                   <Descriptions.Item label="生成策略"><Tag>{currentIntent.generation_strategy || '-'}</Tag></Descriptions.Item>
-                   <Descriptions.Item label="Is Template">{currentIntent.generation_strategy === 'template' ? 'Yes' : 'No'}</Descriptions.Item>
-                   <Descriptions.Item label="關聯表">
-                     {Array.isArray(currentIntent.tables) ? currentIntent.tables.map((t: string) => <Tag key={t}>{t}</Tag>) : '-'}
+                  <Descriptions.Item label="Intent ID" span={1}><Text code>{currentIntent.intent_id}</Text></Descriptions.Item>
+                   <Descriptions.Item label="Domain Intent" span={1}>{currentIntent.bpa_domain_intent || '-'}</Descriptions.Item>
+                   <Descriptions.Item label="說明" span={1}>{currentIntent.description}</Descriptions.Item>
+                   <Descriptions.Item label="查詢類型" span={1}><Tag>{currentIntent.intent_type || '-'}</Tag></Descriptions.Item>
+                   <Descriptions.Item label="群組" span={1}><Tag>{currentIntent.group || '-'}</Tag></Descriptions.Item>
+                   <Descriptions.Item label="生成策略" span={1}><Tag>{currentIntent.generation_strategy || '-'}</Tag></Descriptions.Item>
+                   <Descriptions.Item label="Is Template" span={1}>{currentIntent.generation_strategy === 'template' ? 'Yes' : 'No'}</Descriptions.Item>
+                   <Descriptions.Item label="關聯表" span={1}>
+                      {Array.isArray(currentIntent.tables) ? currentIntent.tables.map((t: string) => <Tag key={t}>{t}</Tag>) : '-'}
                    </Descriptions.Item>
-                   <Descriptions.Item label="核心欄位">
-                     {Array.isArray(currentIntent.core_fields) ? currentIntent.core_fields.map((f: string) => <Tag key={f}>{f}</Tag>) : '-'}
+                   <Descriptions.Item label="核心欄位" span={1}>
+                      {Array.isArray(currentIntent.core_fields) ? currentIntent.core_fields.map((f: string) => <Tag key={f}>{f}</Tag>) : '-'}
                    </Descriptions.Item>
                 </Descriptions>
               )
@@ -958,7 +956,7 @@ function DataAgentPanel() {
 
       <Drawer title="DataAgent 設定" styles={{ wrapper: { width: '480px' } }} open={settingsVisible} onClose={() => setSettingsVisible(false)} extra={<Button type="primary" onClick={handleSaveSettings}>儲存設定</Button>}>
         <Divider >Embedding 向量模型</Divider>
-        <Alert message="變更提醒" description="修改 Embedding 模型或維度後，必須重新執行「同步到 Qdrant」。" type="warning" showIcon style={{ marginBottom: 16 }} />
+        <Alert title="變更提醒" description="修改 Embedding 模型或維度後，必須重新執行「同步到 Qdrant」。" type="warning" showIcon style={{ marginBottom: 16 }} />
         <Form form={settingsForm} layout="vertical">
           <Form.Item name="embeddingModel" label="Embedding 模型" rules={[{ required: true }]}>
             <Select options={models.map(m => ({ label: m, value: m }))} />
@@ -968,7 +966,7 @@ function DataAgentPanel() {
           </Form.Item>
           
           <Divider >SQL 生成 LLM</Divider>
-          <Alert message="變更提醒" description="修改 LLM 模型將影響 DataAgent 生成 SQL 的結果與品質。" type="info" showIcon style={{ marginBottom: 16 }} />
+          <Alert title="變更提醒" description="修改 LLM 模型將影響 DataAgent 生成 SQL 的結果與品質。" type="info" showIcon style={{ marginBottom: 16 }} />
           <Form.Item name="smallLlmModel" label="小型 LLM 模型 (small_llm)" rules={[{ required: true }]}>
             <Select options={models.map(m => ({ label: m, value: m }))} />
           </Form.Item>
