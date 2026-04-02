@@ -250,9 +250,14 @@ export default function QueryPlayground() {
     { label: '採購訂單查詢', query: '查詢上個月的採購訂單', module: 'MM' },
     { label: '供應商列表', query: '列出所有供應商', module: 'MM' },
     { label: '銷售訂單', query: '查詢本月銷售訂單', module: 'SD' },
+    { label: '員工清單', query: '查詢所有員工', module: 'BASE' },
+    { label: '進貨單查詢', query: '查詢近30天進貨單', module: 'PUR' },
   ];
-  const quickTemplatesSql = ['查詢上個月的採購訂單', '列出所有供應商', '各供應商的採購金額排名', '查詢庫存異動記錄', '本月物料入庫總量']
-    .map(q => ({ label: q, query: q, module: 'MM' }));
+  const quickTemplatesSql = [
+    ...(['查詢上個月的採購訂單', '列出所有供應商', '各供應商的採購金額排名', '查詢庫存異動記錄', '本月物料入庫總量']
+      .map(q => ({ label: q, query: q, module: 'MM' }))),
+    ...(['查詢近30天各供應商的進貨明細', '各部門的員工人數', '查詢在職中的員工清單', '查詢品項的基本資訊'].map(q => ({ label: q, query: q, module: 'BASE' }))),
+  ];
   const templatesToUse = queryMode === 'SQL' ? quickTemplatesSql : quickTemplatesAql;
 
 const renderResultTabs = () => {

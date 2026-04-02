@@ -114,14 +114,14 @@ version: 1.1.0
 
 | 任務 | 代碼 | 狀態 | 完成日期 |
 |------|------|------|---------|
-| API Types 更新 | T3-1 | ⏳ | — |
-| SchemaPage 資料來源過濾 | T3-2 | ⏳ | — |
-| Tab Filter UI | T3-3 | ⏳ | — |
-| Module Select 動態化 | T3-4 | ⏳ | — |
-| Table Columns 新增欄位 | T3-5 | ⏳ | — |
-| 新增資料表 Modal | T3-6 | ⏳ | — |
-| 欄位 Modal Writable 標記 | T3-7 | ⏳ | — |
-| QueryPlayground 更新 | T3-8 | ⏳ | — |
+| API Types 更新 | T3-1 | ✅ 完成 | 2026-04-02 |
+| SchemaPage 資料來源過濾 | T3-2 | ✅ 完成 | 2026-04-02 |
+| Tab Filter UI | T3-3 | ✅ 完成 | 2026-04-02 |
+| Module Select 動態化 | T3-4 | ✅ 完成 | 2026-04-02 |
+| Table Columns 新增欄位 | T3-5 | ✅ 完成 | 2026-04-02 |
+| 新增資料表 Modal | T3-6 | ✅ 完成 | 2026-04-02 |
+| 欄位 Modal Writable 標記 | T3-7 | ✅ 完成 | 2026-04-02 |
+| QueryPlayground 更新 | T3-8 | ✅ 完成 | 2026-04-02 |
 
 ---
 
@@ -162,4 +162,5 @@ version: 1.1.0
 | 2026-04-02 | Daniel Chung | T-008 完成：config_reader.py 新增 da.data_source 參數讀取 (DA_DATA_SOURCE env) |
 | 2026-04-02 | Daniel Chung | T-009 完成：schema_retriever 依 config.data_source 動態路由 collection；orchestrator intent ID 以「rgc_」前綴自動切換至 ragic |
 | 2026-04-02 | Daniel Chung | T-010 完成（靜態驗證）：完整 pipeline 鏈路驗證通過，intent 路由 → collection 動態選擇 → SQL 路徑動態化 |
+| 2026-04-02 | Daniel Chung | Phase 4 完成（T3-1~T3-8）：API Types 新增 data_source/tab/sheet_key/writable；SchemaPage Segmented SAP/Ragic 過濾、動態 Module Select、新增來源/Sheet Key 欄位；QueryPlayground 加入 Ragic 範例 |
 | 2026-03-31 | Daniel Chung | 初始版本 |

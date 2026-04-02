@@ -8,7 +8,7 @@
 export interface TableInfo {
   table_id: string;
   table_name: string;
-  module: 'MM' | 'SD' | 'FI' | 'PP' | 'QM' | 'OTHER';
+  module: string;
   description: string;
   s3_path: string;
   primary_keys: string[];
@@ -19,6 +19,9 @@ export interface TableInfo {
   version: number;
   created_at: string;
   updated_at: string;
+  data_source?: 'sap' | 'ragic';
+  tab?: string;
+  sheet_key?: string;
 }
 
 export interface FieldInfo {
@@ -36,6 +39,9 @@ export interface FieldInfo {
   relation_table?: string;
   relation_field?: string;
   status: string;
+  writable?: boolean;
+  is_subtable_field?: boolean;
+  subtable_key?: string;
 }
 
 export interface TableRelation {

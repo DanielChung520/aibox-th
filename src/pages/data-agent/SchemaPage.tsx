@@ -8,7 +8,8 @@
 import { useState, useEffect } from 'react';
 import { 
   Card, Table, Button, Modal, Form, Input, Select, Tabs, 
-  Tag, Space, App, Popconfirm, Typography, Row, Col, Statistic, theme
+  Tag, Space, App, Popconfirm, Typography, Row, Col, Statistic, theme,
+  Segmented
 } from 'antd';
 import { 
   PlusOutlined, EditOutlined, DeleteOutlined, 
@@ -20,7 +21,11 @@ import { dataAgentApi, TableInfo, FieldInfo, TableRelation } from '../../service
 const { Title, Text } = Typography;
 const { Option } = Select;
 
-type ModuleType = 'MM' | 'SD' | 'FI' | 'PP' | 'QM' | 'OTHER';
+type DataSourceType = 'sap' | 'ragic' | 'ALL';
+type ModuleType = string;
+
+const SAP_MODULES = ['MM', 'SD', 'FI', 'PP', 'QM'];
+const RAGIC_MODULES = ['BASE', 'PLM', 'MFG', 'PUR', 'INV', 'QA', 'FORM', 'SAL', 'CRM', 'FIN', 'HR', 'MES', 'ADMIN', 'AI'];
 
 export default function SchemaPage() {
   const { message } = App.useApp();
@@ -38,6 +43,7 @@ export default function SchemaPage() {
   const [editingField, setEditingField] = useState<Partial<FieldInfo> | null>(null);
   const [editingRelation, setEditingRelation] = useState<Partial<TableRelation> | null>(null);
   const [moduleFilter, setModuleFilter] = useState<ModuleType | 'ALL'>('ALL');
+  const [dataSourceFilter, setDataSourceFilter] = useState<DataSourceType>('ALL');
   const [form] = Form.useForm();
   const [fieldForm] = Form.useForm();
   const [relationForm] = Form.useForm();
@@ -95,28 +101,37 @@ export default function SchemaPage() {
 
   // 資料表欄位
   const tableColumns = [
-    { title: 'Table ID', dataIndex: 'table_id', key: 'table_id', width: 120 },
-    { title: 'Table Name', dataIndex: 'table_name', key: 'table_name', width: 120 },
+    { 
+      title: '來源', dataIndex: 'data_source', key: 'data_source', width: 80,
+      render: (ds: 'sap' | 'ragic' | undefined) => (
+        <Tag color={ds === 'ragic' ? 'green' : ds === 'sap' ? 'blue' : 'default'}>
+          {ds?.toUpperCase() || 'N/A'}
+        </Tag>
+      )
+    },
+    { title: 'Table ID', dataIndex: 'table_id', key: 'table_id', width: 130 },
+    { title: 'Table Name', dataIndex: 'table_name', key: 'table_name', width: 130 },
     { 
       title: 'Module', 
       dataIndex: 'module', 
       key: 'module',
       width: 80,
-      render: (module: ModuleType) => {
-        const colors: Record<ModuleType, string> = {
+      render: (module: string) => {
+        const colors: Record<string, string> = {
           'MM': 'blue', 'SD': 'green', 'FI': 'orange', 
-          'PP': 'purple', 'QM': 'red', 'OTHER': 'default'
+          'PP': 'purple', 'QM': 'red', 'BASE': 'cyan', 
+          'PUR': 'volcano', 'INV': 'gold', 'MFG': 'magenta',
+          'HR': 'lime', 'FIN': 'purple', 'SAL': 'geekblue',
         };
-        return <Tag color={colors[module]}>{module}</Tag>;
+        return <Tag color={colors[module] || 'default'}>{module}</Tag>;
       }
     },
-    { title: 'Description', dataIndex: 'description', key: 'description' },
-    { title: 'S3 Path', dataIndex: 's3_path', key: 's3_path', width: 200, ellipsis: true },
-    { title: 'Primary Keys', dataIndex: 'primary_keys', key: 'primary_keys', 
-      render: (keys: string[]) => keys?.join(', ') || '-' 
-    },
+    { title: 'Tab', dataIndex: 'tab', key: 'tab', width: 140, ellipsis: true },
+    { title: 'Sheet Key', dataIndex: 'sheet_key', key: 'sheet_key', width: 130 },
+    { title: 'Description', dataIndex: 'description', key: 'description', ellipsis: true },
+    { title: 'S3 Path', dataIndex: 's3_path', key: 's3_path', width: 160, ellipsis: true },
     { 
-      title: 'Status', dataIndex: 'status', key: 'status', width: 100,
+      title: 'Status', dataIndex: 'status', key: 'status', width: 90,
       render: (status: string) => (
         <Tag color={status === 'enabled' ? 'success' : 'default'}>
           {status}
@@ -124,7 +139,7 @@ export default function SchemaPage() {
       )
     },
     {
-      title: 'Actions', key: 'actions', width: 120,
+      title: 'Actions', key: 'actions', width: 100,
       render: (_: any, record: TableInfo) => (
         <Space>
           <Button 
@@ -161,6 +176,10 @@ export default function SchemaPage() {
     { 
       title: 'FK', dataIndex: 'is_fk', key: 'is_fk', width: 60,
       render: (fk: boolean) => fk ? <Tag color="blue">FK</Tag> : null
+    },
+    { 
+      title: 'W', dataIndex: 'writable', key: 'writable', width: 50,
+      render: (w: boolean | undefined) => w === false ? <Tag color="orange">R</Tag> : <Tag color="success">RW</Tag>
     },
     { 
       title: 'Nullable', dataIndex: 'nullable', key: 'nullable', width: 90,
@@ -321,9 +340,11 @@ export default function SchemaPage() {
     }
   };
 
-  const filteredTables = moduleFilter === 'ALL' 
-    ? tables 
-    : tables.filter(t => t.module === moduleFilter);
+  const filteredTables = tables.filter(t => {
+    if (dataSourceFilter !== 'ALL' && t.data_source !== dataSourceFilter) return false;
+    if (moduleFilter !== 'ALL' && t.module !== moduleFilter) return false;
+    return true;
+  });
 
   const tableItems = [
     {
@@ -333,49 +354,63 @@ export default function SchemaPage() {
       ),
       children: (
         <div>
-          <Row gutter={16} style={{ marginBottom: 16 }}>
-            <Col span={4}>
-              <Statistic 
-                title="總資料表" 
-                value={tables.length} 
-                prefix={<DatabaseOutlined />} 
-              />
-            </Col>
+           <Row gutter={16} style={{ marginBottom: 16 }}>
              <Col span={4}>
                <Statistic 
-                 title="MM 模組" 
-                 value={tables.filter(t => t.module === 'MM').length} 
+                 title="總資料表" 
+                 value={tables.length} 
+                 prefix={<DatabaseOutlined />} 
+               />
+             </Col>
+              <Col span={4}>
+               <Statistic 
+                 title="SAP" 
+                 value={tables.filter(t => t.data_source === 'sap').length} 
                  styles={{ content: { color: token.colorInfo } }}
                />
              </Col>
              <Col span={4}>
                <Statistic 
-                 title="SD 模組" 
-                 value={tables.filter(t => t.module === 'SD').length} 
+                 title="Ragic" 
+                 value={tables.filter(t => t.data_source === 'ragic').length} 
                  styles={{ content: { color: token.colorSuccess } }}
                />
              </Col>
              <Col span={4}>
                <Statistic 
-                 title="FI 模組" 
-                 value={tables.filter(t => t.module === 'FI').length} 
+                 title="已過濾" 
+                 value={filteredTables.length} 
                  styles={{ content: { color: token.colorWarning } }}
                />
              </Col>
-          </Row>
+           </Row>
+           
+           <Space style={{ marginBottom: 12, width: '100%' }} direction="vertical">
+             <Segmented
+               value={dataSourceFilter}
+               onChange={(v) => { setDataSourceFilter(v as DataSourceType); setModuleFilter('ALL'); }}
+               options={[
+                 { label: `全部 (${tables.length})`, value: 'ALL' },
+                 { label: `SAP (${tables.filter(t => t.data_source === 'sap').length})`, value: 'sap' },
+                 { label: `Ragic (${tables.filter(t => t.data_source === 'ragic').length})`, value: 'ragic' },
+               ]}
+               block
+             />
+           </Space>
           
           <Space style={{ marginBottom: 16 }}>
             <Select 
               value={moduleFilter} 
               onChange={setModuleFilter}
-              style={{ width: 150 }}
+              style={{ width: 180 }}
             >
               <Option value="ALL">全部模組</Option>
-              <Option value="MM">MM</Option>
-              <Option value="SD">SD</Option>
-              <Option value="FI">FI</Option>
-              <Option value="PP">PP</Option>
-              <Option value="QM">QM</Option>
+              {(dataSourceFilter === 'ALL' || dataSourceFilter === 'sap') &&
+                SAP_MODULES.map(m => <Option key={m} value={m}>{m}</Option>)
+              }
+              {(dataSourceFilter === 'ALL' || dataSourceFilter === 'ragic') &&
+                RAGIC_MODULES.map(m => <Option key={m} value={m}>{m}</Option>)
+              }
             </Select>
             <Button 
               icon={<PlusOutlined />} 
@@ -533,14 +568,33 @@ export default function SchemaPage() {
               <Option value="PP">PP - 生产计划</Option>
               <Option value="QM">QM - 质量管理</Option>
               <Option value="OTHER">OTHER - 其他</Option>
+              <Option value="BASE">BASE - 基礎資料</Option>
+              <Option value="PUR">PUR - 採購</Option>
+              <Option value="INV">INV - 庫存/倉儲</Option>
+              <Option value="MFG">MFG - 製造</Option>
+              <Option value="HR">HR - 人力資源</Option>
+              <Option value="FIN">FIN - 財務</Option>
+              <Option value="SAL">SAL - 銷售</Option>
             </Select>
+          </Form.Item>
+          <Form.Item name="data_source" label="資料來源" rules={[{ required: true }]}>
+            <Select placeholder="選擇資料來源">
+              <Option value="sap">SAP</Option>
+              <Option value="ragic">Ragic</Option>
+            </Select>
+          </Form.Item>
+          <Form.Item name="tab" label="Ragic Tab">
+            <Input placeholder="如: configuration-file/7" />
+          </Form.Item>
+          <Form.Item name="sheet_key" label="Ragic Sheet Key">
+            <Input placeholder="如: CFG7_EMPLOYEE" />
           </Form.Item>
           <Form.Item name="description" label="Description" rules={[{ required: true }]}>
             <Input.TextArea rows={2} />
           </Form.Item>
-          <Form.Item name="s3_path" label="S3 Path" rules={[{ required: true }]}>
-            <Input placeholder="s3://sap/mm/ekko/" />
-          </Form.Item>
+           <Form.Item name="s3_path" label="S3 Path" rules={[{ required: true }]}>
+             <Input placeholder="s3://sap/mm/ekko/ 或 s3://ragic/employees/" />
+           </Form.Item>
           <Form.Item name="primary_keys" label="Primary Keys">
             <Select mode="tags" placeholder="輸入主鍵欄位" />
           </Form.Item>
@@ -607,11 +661,20 @@ export default function SchemaPage() {
           <Form.Item name="is_fk" label="Foreign Key" valuePropName="checked">
             <Input type="checkbox" />
           </Form.Item>
-          <Form.Item name="nullable" label="Nullable" valuePropName="checked" initialValue>
-            <Input type="checkbox" />
-          </Form.Item>
-        </Form>
-      </Modal>
+           <Form.Item name="nullable" label="Nullable" valuePropName="checked" initialValue>
+             <Input type="checkbox" />
+           </Form.Item>
+           <Form.Item name="writable" label="可寫入 (Ragic)" valuePropName="checked" initialValue={true}>
+             <Input type="checkbox" />
+           </Form.Item>
+           <Form.Item name="is_subtable_field" label="子表格欄位 (Ragic)" valuePropName="checked">
+             <Input type="checkbox" />
+           </Form.Item>
+           <Form.Item name="subtable_key" label="子表格 Key (Ragic)">
+             <Input placeholder="如: 1015530" />
+           </Form.Item>
+         </Form>
+       </Modal>
 
        {/* 關聯 Modal */}
        <Modal
