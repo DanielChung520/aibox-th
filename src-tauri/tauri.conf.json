@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "ABC\u7ba1\u7406\u7cfb\u7edf",
+  "productName": "Edge Enterprise AI",
   "version": "1.0.4",
   "identifier": "com.abc.desktop",
   "build": {
@@ -13,7 +13,7 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "title": "ABC\u7ba1\u7406\u7cfb\u7edf",
+        "title": "Edge Enterprise AI",
         "width": 1200,
         "height": 800,
         "minWidth": 800,
