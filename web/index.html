@@ -1,0 +1,1009 @@
+<!doctype html>
+<html lang="zh-TW">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="EEA - Edge Enterprise AI 企業智能代理服務平台，以企業主權資料為核心，打造可解釋、可控制、全自動化的企業 AI 平台" />
+    <title>EEA - Edge Enterprise AI | 企業智能代理服務平台</title>
+    <link rel="preconnect" href="https://fonts.googleapis.cn" crossorigin>
+    <link rel="preconnect" href="https://fonts.gstatic.cn" crossorigin>
+    <link href="https://fonts.googleapis.cn/css2?family=Noto+Sans+TC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/styles/main.css" />
+    <link rel="icon" type="image/png" href="/assets/favicon.png" />
+  </head>
+  <body>
+    <!-- Navigation -->
+    <nav class="navbar">
+      <div class="nav-container">
+        <a href="#" class="nav-logo" onclick="navigateTo('home')">
+          <img src="/assets/EDGE-logo-dark.png" alt="EEA Logo" class="logo-image">
+        </a>
+        <button class="nav-toggle" onclick="toggleMobileMenu()" aria-label="Toggle menu">
+          <span></span>
+          <span></span>
+          <span></span>
+        </button>
+        <ul class="nav-menu" id="navMenu">
+          <li><a href="#" class="nav-link active" onclick="navigateTo('home')">首頁</a></li>
+          <li><a href="#" class="nav-link" onclick="navigateTo('features')">功能介紹</a></li>
+          <li><a href="#" class="nav-link" onclick="navigateTo('about')">關於 EEA</a></li>
+          <li><a href="#" class="nav-link" onclick="navigateTo('contact')">聯絡我們</a></li>
+        </ul>
+      </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main id="mainContent">
+      <!-- Home Page -->
+      <section id="home" class="page active">
+        <!-- Hero Section -->
+        <div class="hero-section">
+          <div class="hero-bg-pattern"></div>
+          <div class="hero-container">
+            <div class="hero-content">
+              <h1 class="hero-title">
+                <span class="title-highlight">Edge Enterprise AI</span>
+                <span class="title-sub">企業智能代理服務平台</span>
+              </h1>
+              <p class="hero-tagline">
+                企業主權資料 × 混合智能 × 流程自動化
+              </p>
+              <p class="hero-description">
+                以企業自有資料為核心，融合本地化大模型與雲端模型，<br/>
+                打造可解釋、可控制、全自動化的企業 AI 平台
+              </p>
+              <div class="hero-actions">
+                <button class="btn btn-primary" onclick="navigateTo('features')">
+                  探索功能
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M5 12h14M12 5l7 7-7 7"/>
+                  </svg>
+                </button>
+                <button class="btn btn-secondary" onclick="navigateTo('contact')">
+                  聯絡我們
+                </button>
+              </div>
+            </div>
+            <div class="hero-visual">
+              <div class="hero-illustration">
+                <div class="illustration-node node-center">
+                  <svg viewBox="0 0 60 60" fill="none">
+                    <circle cx="30" cy="30" r="28" fill="#1E3A5F"/>
+                    <circle cx="30" cy="30" r="12" fill="#3B82F6"/>
+                  </svg>
+                </div>
+                <div class="illustration-node node-1">
+                  <svg viewBox="0 0 40 40" fill="none">
+                    <circle cx="20" cy="20" r="18" fill="#10B981"/>
+                  </svg>
+                </div>
+                <div class="illustration-node node-2">
+                  <svg viewBox="0 0 40 40" fill="none">
+                    <circle cx="20" cy="20" r="18" fill="#3B82F6"/>
+                  </svg>
+                </div>
+                <div class="illustration-node node-3">
+                  <svg viewBox="0 0 40 40" fill="none">
+                    <circle cx="20" cy="20" r="18" fill="#8B5CF6"/>
+                  </svg>
+                </div>
+                <div class="illustration-line line-1"></div>
+                <div class="illustration-line line-2"></div>
+                <div class="illustration-line line-3"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Stats Section -->
+        <div class="stats-section">
+          <div class="container">
+            <div class="stats-grid">
+              <div class="stat-item">
+                <div class="stat-number">6+</div>
+                <div class="stat-label">核心功能模組</div>
+              </div>
+              <div class="stat-item">
+                <div class="stat-number">100%</div>
+                <div class="stat-label">資料主權保障</div>
+              </div>
+              <div class="stat-item">
+                <div class="stat-number">Hybrid</div>
+                <div class="stat-label">混合模型架構</div>
+              </div>
+              <div class="stat-item">
+                <div class="stat-number">低幻覺</div>
+                <div class="stat-label">雙軌 RAG 技術</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Features Highlight -->
+        <div class="features-highlight-section">
+          <div class="container">
+            <div class="section-header">
+              <h2 class="section-title">核心能力</h2>
+              <p class="section-subtitle">六大核心模組，全方位企業 AI 解決方案</p>
+            </div>
+            <div class="features-grid">
+              <div class="feature-card" onclick="navigateTo('features')">
+                <div class="feature-icon">
+                  <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" width="56" height="56">
+                    <rect x="6" y="6" width="16" height="16" rx="2" stroke="#3B82F6" stroke-width="2"/>
+                    <rect x="26" y="6" width="16" height="16" rx="2" stroke="#3B82F6" stroke-width="2"/>
+                    <rect x="6" y="26" width="16" height="16" rx="2" stroke="#3B82F6" stroke-width="2"/>
+                    <rect x="26" y="26" width="16" height="16" rx="2" stroke="#3B82F6" stroke-width="2"/>
+                  </svg>
+                </div>
+                <h3 class="feature-title">混合模型架構</h3>
+                <p class="feature-desc">同時接入本地與雲端大模型，依資料敏感度靈活選擇部署位置</p>
+              </div>
+              <div class="feature-card" onclick="navigateTo('features')">
+                <div class="feature-icon">
+                  <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" width="56" height="56">
+                    <path d="M24 4L4 14V34L24 44L44 34V14L24 4Z" stroke="#10B981" stroke-width="2"/>
+                    <circle cx="24" cy="24" r="8" stroke="#10B981" stroke-width="2"/>
+                    <path d="M24 8V16" stroke="#10B981" stroke-width="2"/>
+                    <path d="M24 32V40" stroke="#10B981" stroke-width="2"/>
+                    <path d="M8 14L16 18" stroke="#10B981" stroke-width="2"/>
+                    <path d="M32 30L40 34" stroke="#10B981" stroke-width="2"/>
+                  </svg>
+                </div>
+                <h3 class="feature-title">知識庫管理</h3>
+                <p class="feature-desc">智能化文件攝取、索引與檢索，自動建構企業知識圖譜</p>
+              </div>
+              <div class="feature-card" onclick="navigateTo('features')">
+                <div class="feature-icon">
+                  <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" width="56" height="56">
+                    <path d="M8 24H18L22 16L26 32L30 24H40" stroke="#8B5CF6" stroke-width="2" stroke-linecap="round"/>
+                    <rect x="4" y="8" width="40" height="32" rx="2" stroke="#8B5CF6" stroke-width="2"/>
+                  </svg>
+                </div>
+                <h3 class="feature-title">Hybrid RAG</h3>
+                <p class="feature-desc">結合向量檢索與圖譜檢索，大幅降低 AI 幻覺</p>
+              </div>
+              <div class="feature-card" onclick="navigateTo('features')">
+                <div class="feature-icon">
+                  <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" width="56" height="56">
+                    <circle cx="24" cy="24" r="12" stroke="#F59E0B" stroke-width="2"/>
+                    <path d="M24 12V4" stroke="#F59E0B" stroke-width="2"/>
+                    <path d="M24 44V36" stroke="#F59E0B" stroke-width="2"/>
+                    <path d="M36 24H44" stroke="#F59E0B" stroke-width="2"/>
+                    <path d="M4 24H12" stroke="#F59E0B" stroke-width="2"/>
+                    <circle cx="24" cy="24" r="4" fill="#F59E0B"/>
+                  </svg>
+                </div>
+                <h3 class="feature-title">Data Agent</h3>
+                <p class="feature-desc">自然語言轉 SQL，無需技術門檻即可查詢企業資料</p>
+              </div>
+              <div class="feature-card" onclick="navigateTo('features')">
+                <div class="feature-icon">
+                  <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" width="56" height="56">
+                    <rect x="8" y="8" width="32" height="8" rx="2" stroke="#EF4444" stroke-width="2"/>
+                    <rect x="8" y="20" width="32" height="8" rx="2" stroke="#EF4444" stroke-width="2"/>
+                    <rect x="8" y="32" width="32" height="8" rx="2" stroke="#EF4444" stroke-width="2"/>
+                    <circle cx="14" cy="12" r="2" fill="#EF4444"/>
+                    <circle cx="14" cy="24" r="2" fill="#EF4444"/>
+                    <circle cx="14" cy="36" r="2" fill="#EF4444"/>
+                  </svg>
+                </div>
+                <h3 class="feature-title">MCP Tools</h3>
+                <p class="feature-desc">可擴展的工具註冊與執行框架，動態呼叫企業工具</p>
+              </div>
+              <div class="feature-card" onclick="navigateTo('features')">
+                <div class="feature-icon">
+                  <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" width="56" height="56">
+                    <path d="M24 4V14" stroke="#06B6D4" stroke-width="2"/>
+                    <path d="M24 34V44" stroke="#06B6D4" stroke-width="2"/>
+                    <path d="M4 24H14" stroke="#06B6D4" stroke-width="2"/>
+                    <path d="M34 24H44" stroke="#06B6D4" stroke-width="2"/>
+                    <circle cx="24" cy="24" r="10" stroke="#06B6D4" stroke-width="2"/>
+                    <path d="M18 24L22 28L30 20" stroke="#06B6D4" stroke-width="2"/>
+                  </svg>
+                </div>
+                <h3 class="feature-title">BPA 流程自動化</h3>
+                <p class="feature-desc">自動化複雜企業流程，提升營運效率</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Target Audience Section -->
+        <div class="audience-section">
+          <div class="container">
+            <div class="section-header">
+              <h2 class="section-title">為誰而設計</h2>
+              <p class="section-subtitle">解決不同角色的核心痛點</p>
+            </div>
+            <div class="audience-grid">
+              <div class="audience-card">
+                <div class="audience-icon">👔</div>
+                <h3 class="audience-title">企業決策者</h3>
+                <p class="audience-pain">資料孤島、AI 幻覺、資料外洩疑慮</p>
+                <p class="audience-solution">本地化部署，資料不出防火牆</p>
+              </div>
+              <div class="audience-card">
+                <div class="audience-icon">💻</div>
+                <h3 class="audience-title">IT 主管</h3>
+                <p class="audience-pain">多系統整合困難、維運複雜</p>
+                <p class="audience-solution">多 Agent 框架 + 標準 API</p>
+              </div>
+              <div class="audience-card">
+                <div class="audience-icon">📊</div>
+                <h3 class="audience-title">資料分析師</h3>
+                <p class="audience-pain">SQL 門檻高、查詢效率低</p>
+                <p class="audience-solution">自然語言驅動，零學習曲線</p>
+              </div>
+              <div class="audience-card">
+                <div class="audience-icon">🔄</div>
+                <h3 class="audience-title">流程管理者</h3>
+                <p class="audience-pain">重複性作業多、審核流程繁瑣</p>
+                <p class="audience-solution">BPA 自動化 + MCP 工具鏈</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- CTA Section -->
+        <div class="cta-section">
+          <div class="container">
+            <div class="cta-content">
+              <h2 class="cta-title">準備好開始了嗎？</h2>
+              <p class="cta-description">讓 EEA 成為您企業數位轉型的最佳夥伴</p>
+              <button class="btn btn-primary btn-large" onclick="navigateTo('contact')">
+                立即諮詢
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M5 12h14M12 5l7 7-7 7"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Features Page -->
+      <section id="features" class="page">
+        <div class="page-header features-header">
+          <div class="container">
+            <h1 class="page-title">功能介紹</h1>
+            <p class="page-subtitle">六大核心功能模組，全方位企業 AI 解決方案</p>
+          </div>
+        </div>
+
+        <div class="feature-detail-section">
+          <div class="container">
+            <!-- Feature 1 -->
+            <div class="feature-detail-card">
+              <div class="feature-detail-content">
+                <div class="feature-detail-number">01</div>
+                <h2 class="feature-detail-title">混合模型架構<br/>Hybrid Model Hub</h2>
+                <p class="feature-detail-desc">
+                  同時接入本地 Ollama / LM Studio 與雲端大模型（OpenAI、阿里 DashScope 等），
+                  企業可依資料敏感度選擇模型部署位置，實現靈活的 AI 策略。
+                </p>
+                <div class="feature-detail-table">
+                  <div class="table-row">
+                    <div class="table-cell table-header">模型類型</div>
+                    <div class="table-cell table-header">部署位置</div>
+                    <div class="table-cell table-header">適用場景</div>
+                  </div>
+                  <div class="table-row">
+                    <div class="table-cell">本地模型</div>
+                    <div class="table-cell">企業機房 / VPC</div>
+                    <div class="table-cell">高敏感資料、內部流程</div>
+                  </div>
+                  <div class="table-row">
+                    <div class="table-cell">雲端模型</div>
+                    <div class="table-cell">公有雲</div>
+                    <div class="table-cell">通用對話、創意生成</div>
+                  </div>
+                </div>
+              </div>
+              <div class="feature-detail-visual">
+                <div class="screenshot-wrapper">
+                  <img src="/assets/home.png" alt="EEA 系統主介面" class="screenshot-image">
+                  <div class="screenshot-caption">EEA 系統主介面</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Feature 2 -->
+            <div class="feature-detail-card reverse">
+              <div class="feature-detail-content">
+                <div class="feature-detail-number">02</div>
+                <h2 class="feature-detail-title">知識庫管理<br/>Knowledge Hub</h2>
+                <p class="feature-detail-desc">
+                  企業文件的智能化攝取、索引與檢索系統。支援多種格式文件，
+                  自動進行 Chunk 分割、向量嵌入與圖譜抽取，構建完整的企業知識體系。
+                </p>
+                <ul class="feature-detail-list">
+                  <li>文件上傳 → 自動 Chunk → Embedding → 雙軌索引</li>
+                  <li>支援 PDF、Word、Excel、Markdown、TXT 等格式</li>
+                  <li>向量索引（Qdrant）+ 結構化圖譜索引（ArangoDB）同步維護</li>
+                  <li>圖譜抽取：自動識別實體與關係，構成企業知識圖譜</li>
+                </ul>
+              </div>
+              <div class="feature-detail-visual">
+                <div class="screenshot-wrapper">
+                  <img src="/assets/知識圖譜.png" alt="知識圖譜視覺化介面" class="screenshot-image">
+                  <div class="screenshot-caption">知識圖譜視覺化介面</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Feature 3 -->
+            <div class="feature-detail-card">
+              <div class="feature-detail-content">
+                <div class="feature-detail-number">03</div>
+                <h2 class="feature-detail-title">Hybrid RAG<br/>雙軌檢索增強生成</h2>
+                <p class="feature-detail-desc">
+                  結合向量語意檢索（Vector RAG）與知識圖譜檢索（Graph RAG），
+                  大幅降低 AI 幻覺，提升回答精確性與可解釋性。
+                </p>
+                <div class="rag-comparison">
+                  <div class="rag-track track-a">
+                    <div class="track-label">軌道 A：向量檢索</div>
+                    <div class="track-content">抓取最相關文本片段，提供語意豐富的回答素材</div>
+                  </div>
+                  <div class="rag-track track-b">
+                    <div class="track-label">軌道 B：圖譜檢索</div>
+                    <div class="track-content">結構化事實查詢，提供可溯源、精確的資料支撐</div>
+                  </div>
+                </div>
+              </div>
+              <div class="feature-detail-visual">
+                <div class="screenshot-wrapper">
+                  <img src="/assets/AI數據湖.png" alt="AI 數據湖視覺化" class="screenshot-image">
+                  <div class="screenshot-caption">AI 數據湖管理介面</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Feature 4 -->
+            <div class="feature-detail-card reverse">
+              <div class="feature-detail-content">
+                <div class="feature-detail-number">04</div>
+                <h2 class="feature-detail-title">Data Agent<br/>自然語言資料查詢</h2>
+                <p class="feature-detail-desc">
+                  將使用者的自然語言轉換為 SQL 查詢，直接對接企業資料庫，
+                  無需 SQL 知識即可輕鬆查詢資料。
+                </p>
+                <div class="pipeline-flow">
+                  <div class="flow-step">自然語言查詢</div>
+                  <div class="flow-arrow">↓</div>
+                  <div class="flow-step">意圖分類</div>
+                  <div class="flow-arrow">↓</div>
+                  <div class="flow-step">Schema 還原</div>
+                  <div class="flow-arrow">↓</div>
+                  <div class="flow-step">NL→SQL 生成</div>
+                  <div class="flow-arrow">↓</div>
+                  <div class="flow-step">安全驗證</div>
+                  <div class="flow-arrow">↓</div>
+                  <div class="flow-step highlight">執行查詢</div>
+                </div>
+              </div>
+              <div class="feature-detail-visual">
+                <div class="screenshot-wrapper">
+                  <img src="/assets/意圖分析.png" alt="意圖分析系統" class="screenshot-image">
+                  <div class="screenshot-caption">意圖分析與查詢介面</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Feature 5 -->
+            <div class="feature-detail-card">
+              <div class="feature-detail-content">
+                <div class="feature-detail-number">05</div>
+                <h2 class="feature-detail-title">MCP Tools<br/>微能力工具平台</h2>
+                <p class="feature-detail-desc">
+                  Micro Capability Platform — 可擴展的工具註冊與執行框架，
+                  讓 Agent 能動態呼叫企業內外部工具，實現無縫整合。
+                </p>
+                <div class="tool-categories">
+                  <div class="tool-category">
+                    <div class="category-icon">⚙️</div>
+                    <div class="category-name">系統工具</div>
+                    <div class="category-examples">檔案操作、系統指令</div>
+                  </div>
+                  <div class="tool-category">
+                    <div class="category-icon">🌐</div>
+                    <div class="category-name">Web 工具</div>
+                    <div class="category-examples">網頁搜尋、API 呼叫</div>
+                  </div>
+                  <div class="tool-category">
+                    <div class="category-icon">🏢</div>
+                    <div class="category-name">企業工具</div>
+                    <div class="category-examples">ERP、CRM、資料庫查詢</div>
+                  </div>
+                  <div class="tool-category">
+                    <div class="category-icon">🔧</div>
+                    <div class="category-name">自定義工具</div>
+                    <div class="category-examples">企業自建 API、微服務</div>
+                  </div>
+                </div>
+              </div>
+              <div class="feature-detail-visual">
+                <div class="screenshot-wrapper">
+                  <img src="/assets/login.png" alt="MCP 工具管理" class="screenshot-image">
+                  <div class="screenshot-caption">系統登入與工具管理</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Feature 6 -->
+            <div class="feature-detail-card reverse">
+              <div class="feature-detail-content">
+                <div class="feature-detail-number">06</div>
+                <h2 class="feature-detail-title">BPA<br/>企業流程自動化</h2>
+                <p class="feature-detail-desc">
+                  Business Process Automation — 將複雜的企業流程自動化執行，
+                  如物料管理、審批流程、資料同步等，大幅提升營運效率。
+                </p>
+                <ul class="feature-detail-list">
+                  <li>物料管理 BPA Agent：自動化物料查詢、入庫、出庫、庫存預警流程</li>
+                  <li>可串接 MCP Tools 呼叫外部系統</li>
+                  <li>LLM 輔助決策：自動生成審批意見、流程摘要</li>
+                  <li>支援自定義流程節點與條件分支</li>
+                </ul>
+              </div>
+              <div class="feature-detail-visual">
+                <div class="screenshot-wrapper">
+                  <img src="/assets/業務代理展示區.png" alt="業務代理展示區" class="screenshot-image">
+                  <div class="screenshot-caption">業務代理自動化展示</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Download Section -->
+        <div class="download-section">
+          <div class="container">
+            <div class="section-header">
+              <h2 class="section-title">立即下載體驗</h2>
+              <p class="section-subtitle">支援 macOS 與 Windows，跨平台無縫使用</p>
+            </div>
+
+            <div id="downloadLocked" class="download-grid" style="display:none;">
+              <div class="download-card">
+                <div class="download-icon">
+                  <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" width="56" height="56">
+                    <rect x="10" y="20" width="28" height="22" rx="3" stroke="#94a3b8" stroke-width="2"/>
+                    <path d="M16 20V14a8 8 0 0 1 16 0v6" stroke="#94a3b8" stroke-width="2" fill="none"/>
+                    <circle cx="24" cy="31" r="2" fill="#94a3b8"/>
+                  </svg>
+                </div>
+                <h3>下載功能已鎖定</h3>
+                <p class="download-subtitle">填寫聯絡表單，待審核通過後即可下載</p>
+                <button class="btn btn-primary" onclick="navigateTo('contact')">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+                  </svg>
+                  填寫表單申請
+                </button>
+              </div>
+            </div>
+
+            <div id="downloadUnlocked" class="download-grid">
+              <div class="download-card">
+                <div class="download-icon">
+                  <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" width="56" height="56">
+                    <path d="M24 4L8 12V22C8 33.1 15.2 43.3 24 46C32.8 43.3 40 33.1 40 22V12L24 4Z" stroke="#3B82F6" stroke-width="2" fill="none"/>
+                    <path d="M17 22L22 27L31 18" stroke="#3B82F6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </div>
+                <h3>macOS Apple Silicon</h3>
+                <p class="download-subtitle">M1 / M2 / M3 / M4</p>
+                <p class="download-version">v1.0.4 · Universal</p>
+                <a href="https://github.com/DanielChung520/aibox/releases/latest/download/ABC%E7%AE%A1%E7%90%86%E7%B3%BB%E7%BB%9F_1.0.4_aarch64.app.tar.gz" class="btn btn-primary" target="_blank" rel="noopener">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+                  </svg>
+                  下載 .app.tar.gz
+                </a>
+              </div>
+              <div class="download-card">
+                <div class="download-icon">
+                  <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" width="56" height="56">
+                    <path d="M24 4L8 12V22C8 33.1 15.2 43.3 24 46C32.8 43.3 40 33.1 40 22V12L24 4Z" stroke="#8B5CF6" stroke-width="2" fill="none"/>
+                    <path d="M17 22L22 27L31 18" stroke="#8B5CF6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </div>
+                <h3>macOS Intel</h3>
+                <p class="download-subtitle">macOS 10.15 以上</p>
+                <p class="download-version">v1.0.4 · x64</p>
+                <a href="https://github.com/DanielChung520/aibox/releases/latest/download/ABC%E7%AE%A1%E7%90%86%E7%B3%BB%E7%BB%9F_1.0.4_x64.app.tar.gz" class="btn btn-primary" target="_blank" rel="noopener">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+                  </svg>
+                  下載 .app.tar.gz
+                </a>
+              </div>
+              <div class="download-card">
+                <div class="download-icon">
+                  <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" width="56" height="56">
+                    <rect x="6" y="8" width="36" height="28" rx="3" stroke="#10B981" stroke-width="2"/>
+                    <path d="M16 20h16M16 26h8" stroke="#10B981" stroke-width="2" stroke-linecap="round"/>
+                  </svg>
+                </div>
+                <h3>Windows</h3>
+                <p class="download-subtitle">Windows 11 以上</p>
+                <p class="download-version">v1.0.4 · x64</p>
+                <a href="https://github.com/DanielChung520/aibox/releases/latest/download/ABC%E7%AE%A1%E7%90%86%E7%B3%BB%E7%BB%9F_1.0.4_x64-setup.exe" class="btn btn-primary" target="_blank" rel="noopener">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+                  </svg>
+                  下載 .exe 安裝檔
+                </a>
+              </div>
+            </div>
+
+            <p class="download-note">macOS 使用方式：下載 .app.tar.gz → 雙擊解壓縮 → 將 App 拖入「應用程式」資料夾。Windows：執行 .exe 安裝檔即可。</p>
+          </div>
+        </div>
+
+        <!-- Security Section -->
+        <div class="security-section">
+          <div class="container">
+            <div class="section-header">
+              <h2 class="section-title">企業資料主權保障</h2>
+              <p class="section-subtitle">核心原則：企業資料為企業自有</p>
+            </div>
+            <div class="security-grid">
+              <div class="security-item">
+                <div class="security-icon">🔒</div>
+                <h3>資料隔離</h3>
+                <p>全本地化部署，零資料外流</p>
+              </div>
+              <div class="security-item">
+                <div class="security-icon">🔐</div>
+                <h3>傳輸加密</h3>
+                <p>HTTPS / WSS 全端 TLS</p>
+              </div>
+              <div class="security-item">
+                <div class="security-icon">👤</div>
+                <h3>存取控制</h3>
+                <p>JWT + RBAC 角色權限管理</p>
+              </div>
+              <div class="security-item">
+                <div class="security-icon">✅</div>
+                <h3>AI 輸出審查</h3>
+                <p>Knowledge Agent + Data Agent 雙重授權把關</p>
+              </div>
+              <div class="security-item">
+                <div class="security-icon">📋</div>
+                <h3>審計追蹤</h3>
+                <p>所有資料操作均留存日誌</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- About Page -->
+      <section id="about" class="page">
+        <div class="page-header about-header">
+          <div class="container">
+            <h1 class="page-title">關於 EEA</h1>
+            <p class="page-subtitle">企業主權資料 × 混合智能 × 流程自動化</p>
+          </div>
+        </div>
+
+        <div class="about-section">
+          <div class="container">
+            <div class="about-block">
+              <h2 class="about-title">產品理念</h2>
+              <div class="about-content">
+                <p class="about-lead">
+                  在 AI 時代，企業面臨著前所未有的機遇與挑戰。如何在擁抱 AI 技術的同時，
+                  確保企業核心資料的安全與主權？這正是 EEA 誕生的初衷。
+                </p>
+                <p>
+                  EEA（Edge Enterprise AI）是一款專門為企業打造的智能代理服務平台。
+                  我們堅信：企業的資料是企業最珍貴的資產，應該由企業完全掌控。
+                  因此，EEA 以「企業主權資料」為核心設計理念，讓企業能夠：
+                </p>
+                <ul class="about-list">
+                  <li><strong>完全掌控</strong>：資料不出防火牆，本地化部署確保資料安全</li>
+                  <li><strong>靈活選擇</strong>：混合模型架構，依敏感度選擇部署位置</li>
+                  <li><strong>可信賴的 AI</strong>：雙軌 RAG 技術，大幅降低 AI 幻覺</li>
+                  <li><strong>無縫整合</strong>：多 Agent 框架，串接企業既有系統</li>
+                </ul>
+              </div>
+            </div>
+
+            <div class="about-block">
+              <h2 class="about-title">技術架構</h2>
+              <div class="architecture-diagram">
+                <div class="arch-layer layer-client">
+                  <div class="layer-title">客戶端層</div>
+                  <div class="layer-components">
+                    <div class="arch-component">Web 介面</div>
+                    <div class="arch-component">Tauri 桌面端</div>
+                    <div class="arch-component">API 接口</div>
+                  </div>
+                </div>
+                <div class="arch-arrow">↓</div>
+                <div class="arch-layer layer-agent">
+                  <div class="layer-title">Agent 服務層</div>
+                  <div class="layer-components">
+                    <div class="arch-component">Knowledge Agent</div>
+                    <div class="arch-component">Data Agent</div>
+                    <div class="arch-component">BPA Agent</div>
+                    <div class="arch-component">MCP Tools</div>
+                  </div>
+                </div>
+                <div class="arch-arrow">↓</div>
+                <div class="arch-layer layer-ai">
+                  <div class="layer-title">AI 核心層</div>
+                  <div class="layer-components">
+                    <div class="arch-component">Hybrid RAG</div>
+                    <div class="arch-component">LLM Router</div>
+                    <div class="arch-component">Embedder</div>
+                  </div>
+                </div>
+                <div class="arch-arrow">↓</div>
+                <div class="arch-layer layer-data">
+                  <div class="layer-title">資料層</div>
+                  <div class="layer-components">
+                    <div class="arch-component">Qdrant (向量庫)</div>
+                    <div class="arch-component">ArangoDB (圖譜+文檔)</div>
+                    <div class="arch-component">企業資料庫</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="about-block">
+              <h2 class="about-title">完整技術文件</h2>
+              <div class="about-content">
+                <p>
+                  想深入了解 EEA 的設計理念、系統架構與實作細節？歡迎查閱我們的完整技術文件。
+                </p>
+                <a href="https://gamma.app/docs/Edge-Enterprise-AI-o63npsyf1kqd49f?mode=doc" class="btn btn-primary" target="_blank" rel="noopener" style="display: inline-flex; align-items: center; gap: 8px; margin-top: 16px;">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/>
+                  </svg>
+                  前往技術文件
+                </a>
+              </div>
+            </div>
+
+            <div class="about-block">
+              <h2 class="about-title">技術棧</h2>
+              <div class="tech-stack-grid">
+                <div class="tech-category">
+                  <h3>前端技術</h3>
+                  <div class="tech-tags">
+                    <span class="tech-tag">React</span>
+                    <span class="tech-tag">TypeScript</span>
+                    <span class="tech-tag">Tauri</span>
+                    <span class="tech-tag">Tailwind CSS</span>
+                  </div>
+                </div>
+                <div class="tech-category">
+                  <h3>後端技術</h3>
+                  <div class="tech-tags">
+                    <span class="tech-tag">Python</span>
+                    <span class="tech-tag">FastAPI</span>
+                    <span class="tech-tag">Rust</span>
+                    <span class="tech-tag">Celery</span>
+                  </div>
+                </div>
+                <div class="tech-category">
+                  <h3>AI / ML</h3>
+                  <div class="tech-tags">
+                    <span class="tech-tag">LangChain</span>
+                    <span class="tech-tag">Ollama</span>
+                    <span class="tech-tag">OpenAI API</span>
+                    <span class="tech-tag">Sentence Transformers</span>
+                  </div>
+                </div>
+                <div class="tech-category">
+                  <h3>資料庫</h3>
+                  <div class="tech-tags">
+                    <span class="tech-tag">Qdrant</span>
+                    <span class="tech-tag">ArangoDB</span>
+                    <span class="tech-tag">PostgreSQL</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Contact Page -->
+      <section id="contact" class="page">
+        <div class="page-header">
+          <div class="container">
+            <h1 class="page-title">聯絡我們</h1>
+            <p class="page-subtitle">有任何問題或合作意向，歡迎與我們聯繫</p>
+          </div>
+        </div>
+
+        <div class="contact-section">
+          <div class="container">
+            <div class="contact-grid">
+              <!-- Contact Form -->
+              <div class="contact-form-wrapper">
+                <h2 class="contact-form-title">填寫表單</h2>
+                <form class="contact-form" id="contactForm" onsubmit="handleSubmit(event)">
+                  <div class="form-group">
+                    <label for="name">姓名 <span class="required">*</span></label>
+                    <input type="text" id="name" name="name" required placeholder="請輸入您的姓名">
+                  </div>
+                  <div class="form-group">
+                    <label for="company">公司名稱 <span class="required">*</span></label>
+                    <input type="text" id="company" name="company" required placeholder="請輸入公司名稱">
+                  </div>
+                  <div class="form-group">
+                    <label for="email">電子郵件 <span class="required">*</span></label>
+                    <input type="email" id="email" name="email" required placeholder="請輸入電子郵件">
+                  </div>
+                  <div class="form-group">
+                    <label for="phone">聯絡電話</label>
+                    <input type="tel" id="phone" name="phone" placeholder="請輸入聯絡電話">
+                  </div>
+
+                  <div class="form-group">
+                    <label for="github">GitHub 帳號</label>
+                    <input type="text" id="github" name="github" placeholder="選填，例：octocat">
+                  </div>
+
+                  <div class="form-group">
+                    <label for="budget">預估預算</label>
+                    <select id="budget" name="budget">
+                      <option value="">請選擇預算範圍</option>
+                      <option value="0-100000">NT$0 - NT$100,000</option>
+                      <option value="100000-300000">NT$100,000 - NT$300,000</option>
+                      <option value="300000-500000">NT$300,000 - NT$500,000</option>
+                      <option value="500000+">NT$500,000 以上</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label for="message">訊息內容 <span class="required">*</span></label>
+                    <textarea id="message" name="message" rows="5" required placeholder="請描述您的需求或問題"></textarea>
+                  </div>
+                  <button type="submit" class="btn btn-primary btn-full">
+                    送出表單
+                  </button>
+                </form>
+                <div id="formSuccess" class="form-success" style="display: none;">
+                  <div class="success-icon">✓</div>
+                  <h3>感謝您的來信</h3>
+                  <p>我們將在 1-2 個工作天內與您聯繫</p>
+                </div>
+              </div>
+
+              <!-- Contact Info -->
+              <div class="contact-info-wrapper">
+                <h2 class="contact-info-title">聯絡資訊</h2>
+                <div class="contact-info-list">
+                  <div class="contact-info-item">
+                    <div class="info-icon">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                        <polyline points="22,6 12,13 2,6"/>
+                      </svg>
+                    </div>
+                    <div class="info-content">
+                      <h3>技術支援</h3>
+                      <p>daniel@ent4i.com</p>
+                    </div>
+                  </div>
+                  <div class="contact-info-item">
+                    <div class="info-icon">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                        <polyline points="22,6 12,13 2,6"/>
+                      </svg>
+                    </div>
+                    <div class="info-content">
+                      <h3>商務合作</h3>
+                      <p>daniel@ent4i.com</p>
+                    </div>
+                  </div>
+                  <div class="contact-info-item">
+                    <div class="info-icon">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
+                      </svg>
+                    </div>
+                    <div class="info-content">
+                      <h3>聯絡電話</h3>
+                      <p>+886 905298080</p>
+                    </div>
+                  </div>
+                  <div class="contact-info-item">
+                    <div class="info-icon">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/>
+                      </svg>
+                    </div>
+                    <div class="info-content">
+                      <h3>GitHub</h3>
+                      <p>github.com/DanielChung520/aibox</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="contact-cta">
+                  <h3>立即體驗</h3>
+                  <p>想要親自體驗 EEA 的強大功能？</p>
+                  <button class="btn btn-outline" onclick="window.open('https://github.com/DanielChung520/aibox', '_blank')">
+                    前往 GitHub
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                      <polyline points="15 3 21 3 21 9"/>
+                      <line x1="10" y1="14" x2="21" y2="3"/>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <div class="container">
+        <div class="footer-content">
+          <div class="footer-brand">
+            <a href="#" class="footer-logo" onclick="navigateTo('home')">
+              <img src="/assets/EDGE-logo-dark.png" alt="EEA Logo" class="footer-logo-img">
+            </a>
+            <p class="footer-tagline">Edge Enterprise AI<br/>企業智能代理服務平台</p>
+          </div>
+          <div class="footer-links">
+            <div class="footer-column">
+              <h4>產品</h4>
+              <a href="#" onclick="navigateTo('features')">功能介紹</a>
+              <a href="#" onclick="navigateTo('about')">關於 EEA</a>
+            </div>
+            <div class="footer-column">
+              <h4>資源</h4>
+              <a href="https://github.com/DanielChung520/aibox" target="_blank">GitHub</a>
+              <a href="#" onclick="navigateTo('contact')">技術文件</a>
+            </div>
+            <div class="footer-column">
+              <h4>聯絡</h4>
+              <a href="#" onclick="navigateTo('contact')">聯絡我們</a>
+              <a href="mailto:daniel@ent4i.com">daniel@ent4i.com</a>
+              <span>+886 905298080</span>
+            </div>
+          </div>
+        </div>
+        <div class="footer-bottom">
+          <p>&copy; 2024 Edge Enterprise AI. All rights reserved.</p>
+        </div>
+      </div>
+    </footer>
+
+    <script>
+      // Page Navigation
+      function navigateTo(pageId) {
+        // Hide all pages
+        document.querySelectorAll('.page').forEach(page => {
+          page.classList.remove('active');
+        });
+        
+        // Show target page
+        document.getElementById(pageId).classList.add('active');
+        
+        // Update nav links
+        document.querySelectorAll('.nav-link').forEach(link => {
+          link.classList.remove('active');
+        });
+        event.target.classList.add('active');
+        
+        // Close mobile menu
+        document.getElementById('navMenu').classList.remove('active');
+        
+        // Scroll to top
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+
+      // Mobile Menu Toggle
+      function toggleMobileMenu() {
+        document.getElementById('navMenu').classList.toggle('active');
+      }
+
+      // Form Submit Handler
+      async function handleSubmit(event) {
+        event.preventDefault();
+        const form = event.target;
+        const submitBtn = form.querySelector('button[type="submit"]');
+        submitBtn.disabled = true;
+        submitBtn.textContent = '傳送中...';
+
+        const formData = new FormData(form);
+        const data = {
+          name: formData.get('name'),
+          company: formData.get('company'),
+          email: formData.get('email'),
+          phone: formData.get('phone') || null,
+          budget: formData.get('budget') || null,
+          message: formData.get('message') || null,
+          github: formData.get('github') || null,
+        };
+
+        try {
+          const resp = await fetch('https://abcapi.k84.org/api/v1/leads', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data),
+          });
+          const result = await resp.json();
+          if (resp.ok) {
+            localStorage.setItem('eea_lead_email', data.email);
+            document.getElementById('contactForm').style.display = 'none';
+            document.getElementById('formSuccess').style.display = 'block';
+            initDownloadSection();
+          } else {
+            alert(result.message || '送出失敗，請稍後再試');
+            submitBtn.disabled = false;
+            submitBtn.textContent = '送出表單';
+          }
+        } catch (e) {
+          alert('網路錯誤，請稍後再試');
+          submitBtn.disabled = false;
+          submitBtn.textContent = '送出表單';
+        }
+      }
+
+      // Download section approval check
+      async function initDownloadSection() {
+        const email = localStorage.getItem('eea_lead_email');
+        const lockedSection = document.getElementById('downloadLocked');
+        const unlockedSection = document.getElementById('downloadUnlocked');
+        if (!lockedSection || !unlockedSection) return;
+
+        if (!email) {
+          lockedSection.style.display = '';
+          unlockedSection.style.display = 'none';
+          return;
+        }
+
+        try {
+          const resp = await fetch(`https://abcapi.k84.org/api/v1/leads/check?email=${encodeURIComponent(email)}`);
+          const data = await resp.json();
+          if (data.approved) {
+            lockedSection.style.display = 'none';
+            unlockedSection.style.display = '';
+          } else {
+            lockedSection.style.display = '';
+            unlockedSection.style.display = 'none';
+          }
+        } catch {
+          lockedSection.style.display = '';
+          unlockedSection.style.display = 'none';
+        }
+      }
+
+      // Run on page load
+      document.addEventListener('DOMContentLoaded', initDownloadSection);
+
+      // Smooth scroll for anchor links
+      document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+        anchor.addEventListener('click', function (e) {
+          e.preventDefault();
+        });
+      });
+
+      // Add scroll effect to navbar
+      window.addEventListener('scroll', function() {
+        const navbar = document.querySelector('.navbar');
+        if (window.scrollY > 50) {
+          navbar.classList.add('scrolled');
+        } else {
+          navbar.classList.remove('scrolled');
+        }
+      });
+    </script>
+  </body>
+</html>
