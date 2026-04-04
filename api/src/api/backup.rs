@@ -7,7 +7,6 @@
 //! # Author: Daniel Chung
 //! # Version: 1.0.0
 
-use crate::config::CONFIG;
 use axum::{
     extract::{Path, State},
     http::StatusCode,
@@ -44,7 +43,7 @@ pub fn create_backup_router() -> Router {
             get(proxy_arangodb_disk),
         )
         .route(
-            "/api/v1/backup/arangodb/:backup_id",
+            "/api/v1/backup/arangodb/{backup_id}",
             delete(delete_arangodb_backup),
         )
         .route("/api/v1/backup/qdrant", post(proxy_qdrant_backup))
@@ -52,7 +51,7 @@ pub fn create_backup_router() -> Router {
         .route("/api/v1/backup/qdrant/restore", post(proxy_qdrant_restore))
         .route("/api/v1/backup/qdrant/disk-usage", get(proxy_qdrant_disk))
         .route(
-            "/api/v1/backup/qdrant/:backup_id",
+            "/api/v1/backup/qdrant/{backup_id}",
             delete(delete_qdrant_backup),
         )
         .route("/api/v1/backup/status", get(proxy_backup_status))

@@ -31,7 +31,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(backup_router, prefix="/backup")
+app.include_router(backup_router)
 
 
 @app.get("/")
