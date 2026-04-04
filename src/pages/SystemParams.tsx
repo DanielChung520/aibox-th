@@ -13,6 +13,7 @@ import { paramsApi, SystemParam } from '../services/api';
 import SystemParamsModels from './SystemParamsModels';
 import ThemeTemplateManagement from './ThemeTemplateManagement';
 import SystemParamsBasicTools from './SystemParamsBasicTools';
+import DatabaseBackupPanel from './backup/DatabaseBackupPanel';
 
 interface ParamFormValues {
   [key: string]: any;
@@ -294,6 +295,11 @@ export default function SystemParams() {
       key: 'basic-tools',
       label: '基礎工具',
       children: <SystemParamsBasicTools />,
+    },
+    {
+      key: 'backup',
+      label: '備份管理',
+      children: <DatabaseBackupPanel />,
     },
     ...Object.entries(groupedParams).map(([category, categoryParams]) =>
       buildCategoryTab(category, categoryParams)

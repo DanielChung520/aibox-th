@@ -46,6 +46,7 @@ export interface User {
   name: string;
   role_keys: string[];
   status: string;
+  tier?: string;
   created_at: string;
 }
 
@@ -93,6 +94,7 @@ export interface LoginResponse {
     name: string;
     role_key: string;
     role_name: string;
+    tier?: string;
   };
 }
 
@@ -396,12 +398,14 @@ export const jobsApi = {
       '/api/v1/jobs',
       status ? { params: { status } } : undefined,
     ),
+  listStuck: () =>
+    api.get<{ code: number; data: KbJobFile[] }>('/api/v1/jobs/stuck'),
   clear: (status: 'failed' | 'completed') =>
     api.delete<{ code: number; message: string }>('/api/v1/jobs/clear', {
       params: { status },
     }),
   abort: (fileKey: string) =>
-    api.post<{ code: number; data: { status: string; revoked: string[] } }>(
+    api.post<{ code: number; data: { file_id: string; revoked_tasks: string[] } }>(
       `/api/v1/jobs/${fileKey}/abort`,
     ),
   deleteJob: (fileKey: string) =>
@@ -621,6 +625,9 @@ export interface KnowledgeFile {
   vector_status: 'pending' | 'processing' | 'queued' | 'completed' | 'failed';
   graph_status: 'pending' | 'processing' | 'queued' | 'completed' | 'failed';
   knowledge_root_id: string;
+  document_type?: string[];
+  document_summary?: string;
+  ontology_major?: string;
 }
 
 export interface VectorChunk {
@@ -727,6 +734,122 @@ export const downloadFile = async (fileId: string): Promise<Blob> => {
     throw new Error(detail || `下載失敗 (${resp.status})`);
   }
   return resp.blob();
+};
+
+export interface Lead {
+  _key: string;
+  name: string;
+  company: string;
+  email: string;
+  phone: string | null;
+  budget: string | null;
+  message: string | null;
+  github: string | null;
+  status: 'pending' | 'approved' | 'rejected';
+  note: string | null;
+  can_download: boolean;
+  open_github: boolean;
+  created_at: string;
+  updated_at: string | null;
+  approved_at: string | null;
+  approved_by: string | null;
+}
+
+export interface LeadListResponse {
+  leads: Lead[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export const leadApi = {
+  list: (params?: { status?: string; page?: number; page_size?: number }) =>
+    api.get<{ code: number; message: string; data: LeadListResponse }>('/api/v1/leads/admin/list', { params }),
+  get: (key: string) =>
+    api.get<{ code: number; message: string; data: Lead }>(`/api/v1/leads/admin/${key}`),
+  update: (key: string, data: Partial<Lead>) =>
+    api.put(`/api/v1/leads/admin/${key}`, data),
+  approve: (key: string, data: { note?: string; can_download?: boolean; open_github?: boolean }) =>
+    api.put(`/api/v1/leads/admin/${key}/approve`, data),
+  reject: (key: string, data: { note?: string }) =>
+    api.put(`/api/v1/leads/admin/${key}/reject`, data),
+  delete: (key: string) =>
+    api.delete(`/api/v1/leads/admin/${key}`),
+};
+
+// ─── Backup ─────────────────────────────────────────────────────────────────────
+
+export interface BackupSnapshot {
+  collection: string;
+  snapshot_id: string;
+  snapshot_name: string;
+  size_bytes: number;
+  size_mb: number;
+}
+
+export interface BackupRecord {
+  backup_id: string;
+  backup_name: string;
+  backup_path: string;
+  size_mb: number;
+  size_bytes: number;
+  status: string;
+  duration_seconds: number;
+  strategy: string;
+  collections_count?: number;
+  collections?: string[];
+  snapshots?: BackupSnapshot[];
+  created_at: string;
+  error?: string;
+}
+
+export interface DiskUsage {
+  total_gb: number;
+  used_gb: number;
+  free_gb: number;
+  usage_percent: number;
+}
+
+export interface DeleteResult {
+  backup_id: string;
+  deleted: string[];
+  errors: string[];
+  status: string;
+}
+
+export interface BackupStatus {
+  arangodb: DiskUsage & { backup_count: number };
+  qdrant: DiskUsage & { backup_count: number };
+}
+
+export const backupApi = {
+  // ArangoDB
+  backupArango: (data: { backup_path?: string; retention?: number }) =>
+    api.post<ApiResponse<BackupRecord>>('/api/v1/backup/arangodb', data),
+  restoreArango: (backup_id: string) =>
+    api.post<ApiResponse<BackupRecord>>('/api/v1/backup/arangodb/restore', { backup_id }),
+  arangoHistory: () =>
+    api.get<ApiResponse<BackupRecord[]>>('/api/v1/backup/arangodb/history'),
+  deleteArangoBackup: (backup_id: string) =>
+    api.delete<ApiResponse<DeleteResult>>(`/api/v1/backup/arangodb/${backup_id}`),
+  arangoDiskUsage: () =>
+    api.get<ApiResponse<DiskUsage>>('/api/v1/backup/arangodb/disk-usage'),
+
+  // Qdrant
+  backupQdrant: (data: { backup_path?: string; retention?: number; collections?: string[] }) =>
+    api.post<ApiResponse<BackupRecord>>('/api/v1/backup/qdrant', data),
+  restoreQdrant: (backup_id: string, collection_name?: string) =>
+    api.post<ApiResponse<BackupRecord>>('/api/v1/backup/qdrant/restore', { backup_id, collection_name }),
+  qdrantHistory: () =>
+    api.get<ApiResponse<BackupRecord[]>>('/api/v1/backup/qdrant/history'),
+  deleteQdrantBackup: (backup_id: string) =>
+    api.delete<ApiResponse<DeleteResult>>(`/api/v1/backup/qdrant/${backup_id}`),
+  qdrantDiskUsage: () =>
+    api.get<ApiResponse<DiskUsage>>('/api/v1/backup/qdrant/disk-usage'),
+
+  // Status
+  status: () =>
+    api.get<ApiResponse<BackupStatus>>('/api/v1/backup/status'),
 };
 
 export default api;
