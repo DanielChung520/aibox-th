@@ -72,6 +72,7 @@ impl ServiceController {
             "knowledge-agent" => 8007,
             "mcp-tools" => 8004,
             "bpa-mm-agent" => 8005,
+            "backup-agent" => 8010,
             _ => return Err(ApiError::not_found("Service")),
         };
 

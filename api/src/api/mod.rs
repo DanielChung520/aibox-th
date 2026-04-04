@@ -33,6 +33,7 @@ pub mod services;
 pub mod health;
 pub mod da;
 pub mod da_intents;
+pub mod backup;
 pub mod da_query;
 pub mod knowledge;
 pub mod ontology;
@@ -42,6 +43,7 @@ pub mod weather;
 pub mod intent;
 pub mod orch_intents;
 pub mod intent_catalog;
+pub mod leads;
 
 pub fn create_router() -> Router {
     let cors = CorsLayer::new()
@@ -101,6 +103,7 @@ pub fn create_router() -> Router {
 .route("/api/v1/knowledge/files/{key}/regenerate-graph", post(knowledge::regenerate_graph))
         .route("/api/v1/jobs", get(knowledge::list_jobs))
         .route("/api/v1/jobs/clear", delete(knowledge::clear_jobs))
+        .route("/api/v1/jobs/stuck", get(knowledge::list_jobs_stuck))
         .route("/api/v1/jobs/{key}/abort", post(knowledge::abort_job))
         .route("/api/v1/jobs/{key}/delete", post(knowledge::delete_job))
         .route("/api/v1/jobs/{key}/retry", post(knowledge::retry_job))
@@ -118,11 +121,13 @@ pub fn create_router() -> Router {
         .merge(health::create_health_router())
         .merge(da::create_da_router())
         .merge(da_intents::create_da_intents_router())
+        .merge(backup::create_backup_router())
         .merge(da_query::create_da_query_router())
         .merge(web_search::create_web_search_router())
         .merge(weather::create_weather_router())
         .merge(orch_intents::create_orch_intents_router())
         .merge(intent_catalog::create_intent_catalog_router())
+        .merge(leads::create_leads_router())
         .layer(cors)
 }
 
@@ -180,6 +185,7 @@ async fn login(Json(payload): Json<LoginRequest>) -> Result<impl IntoResponse, S
 
     let username = raw_user.get("username").and_then(|v| v.as_str()).unwrap_or("").to_string();
     let name = raw_user.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string();
+    let tier = raw_user.get("tier").and_then(|v| v.as_str()).unwrap_or("general").to_string();
 
     Ok(Json(ApiResponse::success(LoginResponse {
         token,
@@ -189,6 +195,7 @@ async fn login(Json(payload): Json<LoginRequest>) -> Result<impl IntoResponse, S
             name,
             role_keys,
             role_names,
+            tier,
         },
     })))
 }
@@ -246,6 +253,7 @@ async fn me(headers: HeaderMap) -> Result<impl IntoResponse, StatusCode> {
 
     let username = raw_user.get("username").and_then(|v| v.as_str()).unwrap_or("").to_string();
     let name = raw_user.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string();
+    let tier = raw_user.get("tier").and_then(|v| v.as_str()).unwrap_or("general").to_string();
 
     Ok(Json(ApiResponse::success(UserInfo {
         _key: user_key,
@@ -253,6 +261,7 @@ async fn me(headers: HeaderMap) -> Result<impl IntoResponse, StatusCode> {
         name,
         role_keys,
         role_names,
+        tier,
     })))
 }
 
@@ -331,6 +340,7 @@ async fn list_users() -> Result<impl IntoResponse, StatusCode> {
             name: u.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string(),
             role_keys,
             status: u.get("status").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            tier: u.get("tier").and_then(|v| v.as_str()).map(String::from),
             created_at: u.get("created_at").and_then(|v| v.as_str()).unwrap_or("").to_string(),
         }
     }).collect();
@@ -364,6 +374,7 @@ async fn create_user(Json(payload): Json<CreateUserRequest>) -> Result<impl Into
         name: payload.name,
         role_keys: payload.role_keys,
         status: payload.status,
+        tier: Some(payload.tier),
         created_at: chrono::Utc::now().to_rfc3339(),
     };
 
@@ -405,6 +416,7 @@ async fn get_user(Path(key): Path<String>) -> Result<impl IntoResponse, StatusCo
         name: u.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string(),
         role_keys,
         status: u.get("status").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+        tier: u.get("tier").and_then(|v| v.as_str()).map(String::from),
         created_at: u.get("created_at").and_then(|v| v.as_str()).unwrap_or("").to_string(),
     };
     
@@ -424,6 +436,9 @@ async fn update_user(Path(key): Path<String>, Json(payload): Json<UpdateUserRequ
     }
     if let Some(status) = payload.status {
         patch.insert("status".to_string(), serde_json::json!(status));
+    }
+    if let Some(tier) = payload.tier {
+        patch.insert("tier".to_string(), serde_json::json!(tier));
     }
     if let Some(password_hash) = payload.password_hash {
         let hashed = bcrypt::hash(&password_hash, 10).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -466,6 +481,7 @@ async fn update_user(Path(key): Path<String>, Json(payload): Json<UpdateUserRequ
         name: u.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string(),
         role_keys,
         status: u.get("status").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+        tier: u.get("tier").and_then(|v| v.as_str()).map(String::from),
         created_at: u.get("created_at").and_then(|v| v.as_str()).unwrap_or("").to_string(),
     };
     

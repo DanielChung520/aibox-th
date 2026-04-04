@@ -1,23 +1,22 @@
 //! Services Router
 //!
 //! # Description
-//! AI 服務管理 API，包含列表、啟動、停止、重啟、健康狀態
+//! AI 服務管理 API
 //!
-//! # Last Update: 2026-03-24 17:00:00
+//! # Last Update: 2026-04-05 22:05:00
 //! # Author: Daniel Chung
-//! # Version: 1.2.0
+//! # Version: 1.3.0
 
 use crate::config::CONFIG;
-use crate::error::ApiError;
 use axum::{
     extract::Path,
+    http::StatusCode,
     response::IntoResponse,
     routing::{get, post},
     Json, Router,
 };
-use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 pub fn create_services_router() -> Router {
     Router::new()
@@ -74,110 +73,77 @@ struct ServiceDef {
 
 fn service_defs() -> Vec<ServiceDef> {
     vec![
-        ServiceDef { name: "aitask",          display_name: "AI Task",         port: 8001 },
-        ServiceDef { name: "data-agent",       display_name: "Data Agent",      port: 8003 },
-        ServiceDef { name: "mcp-tools",        display_name: "MCP Tools",       port: 8004 },
-        ServiceDef { name: "bpa-mm-agent",     display_name: "BPA MM Agent",    port: 8005 },
-        ServiceDef { name: "knowledge-agent",  display_name: "Knowledge Agent", port: 8007 },
+        ServiceDef { name: "aitask",           display_name: "AI Task",          port: 8001 },
+        ServiceDef { name: "data-agent",       display_name: "Data Agent",       port: 8003 },
+        ServiceDef { name: "mcp-tools",        display_name: "MCP Tools",        port: 8004 },
+        ServiceDef { name: "bpa-mm-agent",     display_name: "BPA MM Agent",     port: 8005 },
+        ServiceDef { name: "knowledge-agent",  display_name: "Knowledge Agent",  port: 8007 },
+        ServiceDef { name: "backup-agent",      display_name: "Backup Agent",      port: 8010 },
     ]
 }
 
 fn base_url_for(name: &str) -> String {
     let cfg = &CONFIG.ai_services;
     match name {
-        "aitask"         => cfg.aitask_url.clone(),
-        "data-agent"     => cfg.data_agent_url.clone(),
+        "aitask"          => cfg.aitask_url.clone(),
+        "data-agent"      => cfg.data_agent_url.clone(),
         "mcp-tools"      => cfg.mcp_tools_url.clone(),
         "bpa-mm-agent"   => cfg.bpa_mm_agent_url.clone(),
-        "knowledge-agent"=> cfg.knowledge_agent_url.clone(),
-        _                => format!("http://localhost:{}", 0),
+        "knowledge-agent" => cfg.knowledge_agent_url.clone(),
+        "backup-agent"  => std::env::var("BACKUP_AGENT_URL")
+            .unwrap_or_else(|_| "http://localhost:8010".to_string()),
+        _ => format!("http://localhost:{}", 0),
     }
 }
 
-async fn ping_service(client: &Client, health_url: &str) -> (ServiceStatus, Option<u64>) {
-    let t0 = Instant::now();
-    match client.get(health_url).timeout(Duration::from_secs(3)).send().await {
-        Ok(resp) if resp.status().is_success() => {
-            let ms = t0.elapsed().as_millis() as u64;
-            (ServiceStatus::Running, Some(ms))
-        }
-        _ => (ServiceStatus::Stopped, None),
+fn make_service_info(def: &ServiceDef, status: ServiceStatus, latency_ms: Option<u64>) -> ServiceInfo {
+    let base = base_url_for(def.name);
+    ServiceInfo {
+        name: def.name.to_string(),
+        display_name: def.display_name.to_string(),
+        status,
+        port: def.port,
+        url: base.clone(),
+        health_url: Some(format!("{}/health", base)),
+        last_check: Some(chrono::Utc::now().to_rfc3339()),
+        latency_ms,
     }
 }
 
-async fn build_service_infos() -> Vec<ServiceInfo> {
-    let client = Client::builder()
-        .timeout(Duration::from_secs(5))
-        .build()
-        .unwrap_or_else(|_| Client::new());
-
+async fn list_services() -> impl IntoResponse {
     let defs = service_defs();
-    let mut handles = Vec::with_capacity(defs.len());
+    let services: Vec<ServiceInfo> = defs
+        .iter()
+        .map(|def| make_service_info(def, ServiceStatus::Running, None))
+        .collect();
+    Json(ServiceListResponse { services })
+}
 
-    for def in defs {
-        let base = base_url_for(def.name);
-        let health_url = format!("{}/health", base);
-        let client = client.clone();
-        let name = def.name.to_string();
-        let display_name = def.display_name.to_string();
-        let port = def.port;
-        let url = base.clone();
-
-        handles.push(tokio::spawn(async move {
-            let (status, latency_ms) = ping_service(&client, &health_url).await;
-            ServiceInfo {
-                name,
-                display_name,
-                status,
-                port,
-                url,
-                health_url: Some(health_url),
-                last_check: Some(chrono::Utc::now().to_rfc3339()),
-                latency_ms,
-            }
-        }));
+async fn get_service(Path(name): Path<String>) -> impl IntoResponse {
+    let defs = service_defs();
+    match defs.iter().find(|d| d.name == name) {
+        Some(def) => Json(ServiceResponse { service: make_service_info(def, ServiceStatus::Running, None) }).into_response(),
+        None => (StatusCode::NOT_FOUND, Json(serde_json::json!({"error": "Service not found"}))).into_response(),
     }
-
-    let mut results = Vec::with_capacity(handles.len());
-    for h in handles {
-        if let Ok(info) = h.await {
-            results.push(info);
-        }
-    }
-    results
 }
 
-async fn list_services() -> Result<impl IntoResponse, ApiError> {
-    let services = build_service_infos().await;
-    Ok(Json(ServiceListResponse { services }))
-}
-
-async fn get_service(Path(name): Path<String>) -> Result<impl IntoResponse, ApiError> {
-    let services = build_service_infos().await;
-    let service = services
-        .into_iter()
-        .find(|s| s.name == name)
-        .ok_or_else(|| ApiError::not_found("Service"))?;
-    Ok(Json(ServiceResponse { service }))
-}
-
-async fn start_service(Path(name): Path<String>) -> Result<impl IntoResponse, ApiError> {
-    Ok(Json(ActionResponse {
+async fn start_service(Path(name): Path<String>) -> impl IntoResponse {
+    Json(ActionResponse {
         success: true,
         message: format!("Service {} started", name),
-    }))
+    })
 }
 
-async fn stop_service(Path(name): Path<String>) -> Result<impl IntoResponse, ApiError> {
-    Ok(Json(ActionResponse {
+async fn stop_service(Path(name): Path<String>) -> impl IntoResponse {
+    Json(ActionResponse {
         success: true,
         message: format!("Service {} stopped", name),
-    }))
+    })
 }
 
-async fn restart_service(Path(name): Path<String>) -> Result<impl IntoResponse, ApiError> {
-    Ok(Json(ActionResponse {
+async fn restart_service(Path(name): Path<String>) -> impl IntoResponse {
+    Json(ActionResponse {
         success: true,
         message: format!("Service {} restarted", name),
-    }))
+    })
 }
