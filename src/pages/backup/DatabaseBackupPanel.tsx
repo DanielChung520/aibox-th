@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
-  App, Button, Card, Col, Descriptions, Empty, InputNumber,
+  App, Button, Card, Col, Descriptions, Empty, Input, InputNumber,
   Modal, Progress, Row, Space, Statistic, Table, Tag, Tooltip, Typography,
 } from 'antd';
 import {
@@ -46,6 +46,8 @@ export default function DatabaseBackupPanel() {
   const [restoreModal, setRestoreModal] = useState(false);
   const [restoreTarget, setRestoreTarget] = useState<{ type: 'arangodb' | 'qdrant'; record: BackupRecord } | null>(null);
   const [retention, setRetention] = useState(7);
+  const [arangoPath, setArangoPath] = useState('');
+  const [qdrantPath, setQdrantPath] = useState('');
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -72,7 +74,7 @@ export default function DatabaseBackupPanel() {
   const handleBackupArango = async () => {
     setArangoBacking(true);
     try {
-      await backupApi.backupArango({ retention });
+      await backupApi.backupArango({ retention, backup_path: arangoPath || undefined });
       antMessage.success('ArangoDB 備份已啟動');
       setTimeout(() => void fetchAll(), 2000);
     } catch (err: any) {
@@ -85,7 +87,7 @@ export default function DatabaseBackupPanel() {
   const handleBackupQdrant = async () => {
     setQdrantBacking(true);
     try {
-      await backupApi.backupQdrant({ retention });
+      await backupApi.backupQdrant({ retention, backup_path: qdrantPath || undefined });
       antMessage.success('Qdrant 備份已啟動');
       setTimeout(() => void fetchAll(), 2000);
     } catch (err: any) {
@@ -282,11 +284,17 @@ export default function DatabaseBackupPanel() {
 
   return (
     <div>
-      <Space style={{ marginBottom: 16 }}>
-        <InputNumber min={1} max={30} value={retention} onChange={v => setRetention(v ?? 7)} addonAfter="天" />
-        <Text type="secondary" style={{ fontSize: 12 }}>保留天數</Text>
-        <Button icon={<ReloadOutlined />} loading={loading} onClick={() => void fetchAll()}>刷新</Button>
-      </Space>
+      <Row gutter={[12, 12]} style={{ marginBottom: 12 }}>
+        <Col xs={24} sm={8}>
+          <Space>
+            <Text type="secondary" style={{ fontSize: 13 }}>保留天數</Text>
+            <InputNumber min={1} max={30} value={retention} onChange={v => setRetention(v ?? 7)} addonAfter="天" style={{ width: 100 }} />
+          </Space>
+        </Col>
+        <Col xs={24} sm={16} style={{ textAlign: 'right' }}>
+          <Button icon={<ReloadOutlined />} loading={loading} onClick={() => void fetchAll()}>刷新</Button>
+        </Col>
+      </Row>
 
       <Row gutter={[16, 16]}>
         <Col xs={24} lg={12}>
@@ -303,6 +311,18 @@ export default function DatabaseBackupPanel() {
               </Button>
             }
           >
+            <Input
+              placeholder="備份位置（留空使用預設: ~/Documents/backups/arangodb）"
+              value={arangoPath}
+              onChange={e => setArangoPath(e.target.value)}
+              style={{ marginBottom: 12, fontSize: 12 }}
+              prefix={<DatabaseOutlined />}
+              suffix={
+                arangoPath ? (
+                  <Button size="small" type="text" onClick={() => setArangoPath('')}>清除</Button>
+                ) : null
+              }
+            />
             {arangoDisk && (
               <Descriptions size="small" column={2} style={{ marginBottom: 16 }}>
                 <Descriptions.Item label="總容量">
@@ -349,6 +369,18 @@ export default function DatabaseBackupPanel() {
               </Button>
             }
           >
+            <Input
+              placeholder="備份位置（留空使用預設: ~/Documents/backups/qdrant）"
+              value={qdrantPath}
+              onChange={e => setQdrantPath(e.target.value)}
+              style={{ marginBottom: 12, fontSize: 12 }}
+              prefix={<CloudServerOutlined />}
+              suffix={
+                qdrantPath ? (
+                  <Button size="small" type="text" onClick={() => setQdrantPath('')}>清除</Button>
+                ) : null
+              }
+            />
             {qdrantDisk && (
               <Descriptions size="small" column={2} style={{ marginBottom: 16 }}>
                 <Descriptions.Item label="總容量">
