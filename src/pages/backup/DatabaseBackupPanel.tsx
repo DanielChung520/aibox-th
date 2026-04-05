@@ -5,8 +5,9 @@ import {
 } from 'antd';
 import {
   CloudServerOutlined, DatabaseOutlined, DeleteOutlined, DownloadOutlined,
-  ReloadOutlined, RestOutlined, WarningOutlined,
+  FolderOpenOutlined, ReloadOutlined, RestOutlined, WarningOutlined,
 } from '@ant-design/icons';
+import { open } from '@tauri-apps/plugin-dialog';
 import type { ColumnsType } from 'antd/es/table';
 import {
   backupApi, BackupRecord, DiskUsage,
@@ -318,9 +319,15 @@ export default function DatabaseBackupPanel() {
               style={{ marginBottom: 12, fontSize: 12 }}
               prefix={<DatabaseOutlined />}
               suffix={
-                arangoPath ? (
-                  <Button size="small" type="text" onClick={() => setArangoPath('')}>清除</Button>
-                ) : null
+                <Button
+                  size="small"
+                  type="text"
+                  icon={<FolderOpenOutlined />}
+                  onClick={async () => {
+                    const dir = await open({ directory: true, multiple: false, title: '選擇 ArangoDB 備份資料夾' });
+                    if (dir) setArangoPath(dir as string);
+                  }}
+                />
               }
             />
             {arangoDisk && (
@@ -376,9 +383,15 @@ export default function DatabaseBackupPanel() {
               style={{ marginBottom: 12, fontSize: 12 }}
               prefix={<CloudServerOutlined />}
               suffix={
-                qdrantPath ? (
-                  <Button size="small" type="text" onClick={() => setQdrantPath('')}>清除</Button>
-                ) : null
+                <Button
+                  size="small"
+                  type="text"
+                  icon={<FolderOpenOutlined />}
+                  onClick={async () => {
+                    const dir = await open({ directory: true, multiple: false, title: '選擇 Qdrant 備份資料夾' });
+                    if (dir) setQdrantPath(dir as string);
+                  }}
+                />
               }
             />
             {qdrantDisk && (
