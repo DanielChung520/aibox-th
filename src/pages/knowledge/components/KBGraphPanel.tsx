@@ -7,10 +7,11 @@
  */
 
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { Empty, Spin, Alert, Typography, Button, message, Segmented } from 'antd';
+import { Empty, Spin, Alert, Typography, Button, message, Segmented, Tooltip } from 'antd';
 import { Graph, NodeEvent, CanvasEvent } from '@antv/g6';
 import type { IElementEvent, IPointerEvent, NodeData, EdgeData } from '@antv/g6';
-import { ReloadOutlined, ZoomInOutlined, ZoomOutOutlined } from '@ant-design/icons';
+import { ReloadOutlined, ZoomInOutlined, ZoomOutOutlined, SearchOutlined, StopOutlined } from '@ant-design/icons';
+import { findShortestPath } from '@antv/algorithm';
 import { knowledgeApi, GraphNode, GraphEdge } from '../../../services/api';
 import KBGraph3DPanel from './KBGraph3DPanel';
 
@@ -94,8 +95,10 @@ export default function KBGraphPanel({ fileId, graphStatus, onNodeSelect, onGrap
   const [rawNodes, setRawNodes] = useState<GraphNode[]>([]);
   const [rawEdges, setRawEdges] = useState<GraphEdge[]>([]);
   const [containerSize, setContainerSize] = useState({ w: 800, h: 600 });
+  const [pathSearchMode, setPathSearchMode] = useState(false);
   const instanceRef = useRef(0);
   const zoomRef = useRef(1);
+  const graphDataRef = useRef<{ nodes: G6Node[]; edges: G6Edge[] }>({ nodes: [], edges: [] });
 
   const getLayout = useCallback((mode: LayoutMode) => {
     switch (mode) {
@@ -209,6 +212,17 @@ export default function KBGraphPanel({ fileId, graphStatus, onNodeSelect, onGrap
             stroke: token.colorPrimary,
             lineWidth: 2,
           },
+          highlight: {
+            fill: '#fbbf24',
+            stroke: '#f59e0b',
+            lineWidth: 3,
+            labelFill: '#1e293b',
+            labelFontSize: 14,
+            size: 44,
+          },
+          inactive: {
+            opacity: 0.25,
+          },
         },
       },
       edge: {
@@ -238,10 +252,23 @@ export default function KBGraphPanel({ fileId, graphStatus, onNodeSelect, onGrap
             lineWidth: 2,
             lineOpacity: 1,
           },
+          highlight: {
+            stroke: '#fbbf24',
+            lineWidth: 4,
+            lineOpacity: 1,
+          },
+          inactive: {
+            opacity: 0.15,
+          },
         },
       },
       layout: getLayout(layoutMode),
-      behaviors: ['drag-canvas', 'zoom-canvas', 'drag-element'],
+      behaviors: [
+        'drag-canvas',
+        'zoom-canvas',
+        'drag-element',
+        { type: 'click-select', multiple: true },
+      ],
     });
 
     graph.on(NodeEvent.CLICK, (evt: IElementEvent) => {
@@ -286,10 +313,12 @@ export default function KBGraphPanel({ fileId, graphStatus, onNodeSelect, onGrap
           data: { label: n.label, type: n.type },
         }));
         const edges: G6Edge[] = (data.edges || []).map((e: GraphEdge) => ({
+          id: `${e.source}-${e.target}`,
           source: e.source,
           target: e.target,
           data: { label: e.label },
         }));
+        graphDataRef.current = { nodes, edges };
         if (instanceRef.current !== currentInstance) return;
         graph.setData({ nodes, edges });
         await silentRender(graph);
@@ -320,6 +349,79 @@ export default function KBGraphPanel({ fileId, graphStatus, onNodeSelect, onGrap
       }
     };
   }, [fileId, onNodeSelect, onGraphReady, onDataLoaded, token]);
+
+  const resetElementStates = () => {
+    const g = graphRef.current;
+    if (!g) return;
+    const allElements = [...graphDataRef.current.nodes, ...graphDataRef.current.edges];
+    g.setElementState(Object.fromEntries(allElements.map((el) => [el.id, []])));
+  };
+
+  const searchShortestPath = () => {
+    const g = graphRef.current;
+    if (!g) return;
+    const selectedNodes = g.getElementDataByState('node', 'selected');
+    if (selectedNodes.length !== 2) {
+      message.warning('請選擇兩個節點（Shift+點擊）');
+      return;
+    }
+    const [source, target] = selectedNodes;
+    const { length, path: rawPath } = findShortestPath(graphDataRef.current, source.id, target.id);
+    const path = rawPath as string[];
+    if (length === Infinity) {
+      message.warning('未找到路徑');
+      return;
+    }
+    const pathSet = new Set(path);
+    const states: Record<string, string[]> = {};
+    for (const node of graphDataRef.current.nodes) {
+      const id = String(node.id);
+      states[id] = pathSet.has(id) ? ['highlight'] : ['inactive'];
+    }
+    for (const edge of graphDataRef.current.edges) {
+      const id = String(edge.id);
+      const src = String(edge.source);
+      const tgt = String(edge.target);
+      const srcInPath = pathSet.has(src);
+      const tgtInPath = pathSet.has(tgt);
+      if (!srcInPath && !tgtInPath) {
+        states[id] = ['inactive'];
+      } else {
+        const srcIdx = path.indexOf(src);
+        const tgtIdx = path.indexOf(tgt);
+        if (Math.abs(srcIdx - tgtIdx) === 1) {
+          states[id] = ['highlight'];
+        } else {
+          states[id] = ['inactive'];
+        }
+      }
+    }
+    g.setElementState(states);
+    const pathEdgeIds: string[] = [];
+    for (const edge of graphDataRef.current.edges) {
+      const src = String(edge.source);
+      const tgt = String(edge.target);
+      const srcIdx = path.indexOf(src);
+      const tgtIdx = path.indexOf(tgt);
+      if (srcIdx !== -1 && tgtIdx !== -1 && Math.abs(srcIdx - tgtIdx) === 1) {
+        pathEdgeIds.push(String(edge.id));
+      }
+    }
+    for (const id of [...path, ...pathEdgeIds]) {
+      g.frontElement(id);
+    }
+    message.success(`路徑長度: ${length} 步`);
+  };
+
+  const togglePathSearchMode = () => {
+    if (pathSearchMode) {
+      setPathSearchMode(false);
+      resetElementStates();
+    } else {
+      setPathSearchMode(true);
+      message.info('Shift+點擊選擇起點和終點，再點「查詢路徑」');
+    }
+  };
 
   return (
     <div
@@ -403,6 +505,32 @@ export default function KBGraphPanel({ fileId, graphStatus, onNodeSelect, onGrap
             <Button size="small" icon={<ZoomOutOutlined />} onClick={zoomOut} title="縮小" />
             <Button size="small" icon={<ZoomInOutlined />} onClick={zoomIn} title="放大" />
             <Button size="small" onClick={resetZoom} title="重置視角" style={{ fontSize: 10 }}>1:1</Button>
+          </div>
+        )}
+        {hasData && (
+          <div style={{ display: 'flex', gap: 4 }}>
+            <Tooltip title={pathSearchMode ? '退出路徑搜尋' : '路徑搜尋（Shift+點擊選節點）'}>
+              <Button
+                size="small"
+                icon={pathSearchMode ? <StopOutlined /> : <SearchOutlined />}
+                onClick={togglePathSearchMode}
+                type={pathSearchMode ? 'primary' : 'default'}
+                style={{ fontSize: 10 }}
+              >
+                {pathSearchMode ? '退出' : '路徑'}
+              </Button>
+            </Tooltip>
+            {pathSearchMode && (
+              <Button
+                size="small"
+                icon={<SearchOutlined />}
+                onClick={searchShortestPath}
+                type="primary"
+                style={{ fontSize: 10 }}
+              >
+                查詢
+              </Button>
+            )}
           </div>
         )}
         <Segmented
