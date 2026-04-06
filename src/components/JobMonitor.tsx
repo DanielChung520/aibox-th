@@ -14,7 +14,7 @@ import {
 import { jobsApi, JobLog, KbJobFile } from '../services/api';
 import { useContentTokens, useShellTokens } from '../contexts/AppThemeProvider';
 
-type JobStatus = 'active' | 'failed' | 'completed';
+type JobStatus = 'active' | 'failed' | 'completed' | 'stuck';
 
 interface JobMonitorProps {
   isDark: boolean;
@@ -34,22 +34,28 @@ export default function JobMonitor({ textColor }: JobMonitorProps) {
   const [logJob, setLogJob] = useState<KbJobFile | null>(null);
   const [logs, setLogs] = useState<JobLog[]>([]);
   const [loadingLogs, setLoadingLogs] = useState(false);
+  const [stuckCount, setStuckCount] = useState(0);
   const tokens = useContentTokens();
   const shellTokens = useShellTokens();
 
   const fetchJobs = async () => {
     try {
-      const response = await jobsApi.list(tab);
-      setJobs(response.data.data || []);
+      if (tab === 'stuck') {
+        const response = await jobsApi.listStuck();
+        setJobs(response.data.data || []);
+      } else {
+        const response = await jobsApi.list(tab);
+        setJobs(response.data.data || []);
+      }
     } catch (error: unknown) {
       console.error('Failed to fetch jobs:', error);
     }
   };
 
-  useEffect(() => { fetchJobs(); }, [tab]);
+  useEffect(() => { void fetchJobs(); }, [tab]);
 
   useEffect(() => {
-    const timer = setInterval(fetchJobs, 5000);
+    const timer = setInterval(() => void fetchJobs(), 5000);
     return () => clearInterval(timer);
   }, [tab]);
 
@@ -65,9 +71,9 @@ export default function JobMonitor({ textColor }: JobMonitorProps) {
       onOk: async () => {
         setClearing(true);
         try {
-          const response = await jobsApi.clear(tab === 'active' ? 'failed' : tab);
+          const response = await jobsApi.clear(tab === 'active' || tab === 'stuck' ? 'failed' : tab);
           message.success(response.data.message || '已清除');
-          fetchJobs();
+          void fetchJobs();
         } catch (error: unknown) {
           const err = error as { response?: { data?: { message?: string } } };
           message.error(err.response?.data?.message || '清除失敗');
@@ -175,7 +181,8 @@ export default function JobMonitor({ textColor }: JobMonitorProps) {
     }
   };
 
-  const getFileIcon = (type: string) => {
+  const getFileIcon = (type: string | undefined) => {
+    if (!type) return '📎';
     const t = type.toLowerCase();
     if (t === 'md') return '📝';
     if (t === 'pdf') return '📕';
@@ -196,21 +203,39 @@ export default function JobMonitor({ textColor }: JobMonitorProps) {
     const s = getOverallStatus(j);
     return s === 'pending' || s === 'processing';
   });
-  const badgeCount = activeJobs.length;
+  const badgeCount = activeJobs.length + stuckCount;
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const resp = await jobsApi.listStuck();
+        setStuckCount(resp.data.data?.length ?? 0);
+      } catch { /* empty */ }
+    })();
+    const t = setInterval(async () => {
+      try {
+        const resp = await jobsApi.listStuck();
+        setStuckCount(resp.data.data?.length ?? 0);
+      } catch { /* empty */ }
+    }, 30_000);
+    return () => clearInterval(t);
+  }, []);
 
   const tabLabels: Record<JobStatus, string> = {
     active: '處理中',
     failed: '失敗',
     completed: '已完成',
+    stuck: '卡住',
   };
 
   const tabBadges: Record<JobStatus, number> = {
     active: badgeCount,
-    failed: jobs.filter((j) => getOverallStatus(j) === 'failed').length,
-    completed: jobs.filter((j) => getOverallStatus(j) === 'completed').length,
+    failed: tab === 'failed' ? jobs.filter((j) => getOverallStatus(j) === 'failed').length : 0,
+    completed: tab === 'completed' ? jobs.filter((j) => getOverallStatus(j) === 'completed').length : 0,
+    stuck: tab === 'stuck' ? jobs.length : 0,
   };
 
-  const showClear = tab !== 'active';
+  const showClear = tab !== 'active' && tab !== 'stuck';
 
   return (
     <>
@@ -243,6 +268,7 @@ export default function JobMonitor({ textColor }: JobMonitorProps) {
               options={[
                 { label: `${tabLabels.active}${tabBadges.active > 0 ? ` (${tabBadges.active})` : ''}`, value: 'active' },
                 { label: `${tabLabels.failed}${tabBadges.failed > 0 ? ` (${tabBadges.failed})` : ''}`, value: 'failed' },
+                { label: `${tabLabels.stuck}${tabBadges.stuck > 0 ? ` (${tabBadges.stuck})` : ''}`, value: 'stuck' },
                 { label: tabLabels.completed, value: 'completed' },
               ]}
               style={{ flex: 1 }}
@@ -300,7 +326,7 @@ export default function JobMonitor({ textColor }: JobMonitorProps) {
                           </div>
                         </Tooltip>
                         {overall === 'processing' && (
-                          <Tooltip title="中止任務">
+                          <Tooltip title="中止並重置為等待中">
                             <Button
                               type="text"
                               size="small"

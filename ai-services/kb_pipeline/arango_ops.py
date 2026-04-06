@@ -168,6 +168,28 @@ class ArangoOps:
                 json=patch,
             )
 
+    def update_document_metadata(
+        self,
+        file_id: str,
+        document_type: list[str] | None = None,
+        document_summary: str | None = None,
+        ontology_major: str | None = None,
+    ) -> None:
+        patch: dict[str, object] = {}
+        if document_type is not None:
+            patch["document_type"] = document_type
+        if document_summary is not None:
+            patch["document_summary"] = document_summary
+        if ontology_major is not None:
+            patch["ontology_major"] = ontology_major
+        if not patch:
+            return
+        with self._client() as client:
+            client.patch(
+                f"{self.url}/_db/{self.db}/_api/document/knowledge_files/{file_id}",
+                json=patch,
+            )
+
     def set_task_id(
         self,
         file_id: str,
@@ -194,6 +216,39 @@ class ArangoOps:
             )
             if resp.status_code == 200:
                 return dict(resp.json())
+            return None
+
+    def get_root(self, root_id: str) -> dict[str, object] | None:
+        with self._client() as client:
+            resp = client.get(
+                f"{self.url}/_db/{self.db}/_api/document/knowledge_roots/{root_id}"
+            )
+            if resp.status_code == 200:
+                return dict(resp.json())
+            return None
+
+    def get_ontology(self, ontology_name: str) -> dict[str, object] | None:
+        with self._client() as client:
+            resp = client.get(
+                f"{self.url}/_db/{self.db}/_api/document/ontologies/{ontology_name}"
+            )
+            if resp.status_code == 200:
+                return dict(resp.json())
+            return None
+
+    def get_ontology_by_name(self, name: str) -> dict[str, object] | None:
+        with self._client() as client:
+            cursor_resp = client.post(
+                f"{self.url}/_db/{self.db}/_api/cursor",
+                json={
+                    "query": "FOR o IN ontologies FILTER o.name == @name LIMIT 1 RETURN o",
+                    "bindVars": {"name": name},
+                },
+            )
+            if cursor_resp.status_code == 201:
+                result = cursor_resp.json().get("result", [])
+                if result:
+                    return dict(result[0])
             return None
 
     def get_system_param(self, key: str) -> str | None:
@@ -235,18 +290,20 @@ class ArangoOps:
             }
             for i, n in enumerate(nodes)
         ]
-        entity_index: dict[str, int] = {
-            str(n["entity"]): i for i, n in enumerate(nodes)
+        # Case-insensitive entity index for matching relations
+        entity_index_lower: dict[str, int] = {
+            str(n["entity"]).strip().lower(): i for i, n in enumerate(nodes)
         }
         edges_data = []
+        skipped_edges = 0
         for i, e in enumerate(edges):
-            src_raw = str(e["source"])
-            tgt_raw = str(e["target"])
-            src_idx = entity_index.get(
-                src_raw, int(src_raw) if src_raw.isdigit() else -1
+            src_raw = str(e["source"]).strip()
+            tgt_raw = str(e["target"]).strip()
+            src_idx = entity_index_lower.get(
+                src_raw.lower(), int(src_raw) if src_raw.isdigit() else -1
             )
-            tgt_idx = entity_index.get(
-                tgt_raw, int(tgt_raw) if tgt_raw.isdigit() else -1
+            tgt_idx = entity_index_lower.get(
+                tgt_raw.lower(), int(tgt_raw) if tgt_raw.isdigit() else -1
             )
             if (
                 src_idx < 0
@@ -254,6 +311,7 @@ class ArangoOps:
                 or src_idx >= len(nodes)
                 or tgt_idx >= len(nodes)
             ):
+                skipped_edges += 1
                 continue
             edges_data.append(
                 {
@@ -309,6 +367,12 @@ class ArangoOps:
                         f"Failed to insert edge {edge['_key']}: "
                         f"{aql_resp.status_code} {aql_resp.text}"
                     )
+        if skipped_edges > 0:
+            logger.warning(
+                "upsert_graph: skipped %d/%d edges due to unmatched entity names",
+                skipped_edges,
+                len(edges),
+            )
 
     def ensure_job_logs_collection(self) -> None:
         with self._client() as client:

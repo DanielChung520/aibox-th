@@ -6,7 +6,34 @@ from typing import cast
 
 import httpx
 
-EMBEDDING_DIM = 1024
+_EMBEDDING_DIM: int | None = None
+
+
+def _get_embedding_dim() -> int:
+    global _EMBEDDING_DIM
+    if _EMBEDDING_DIM is not None:
+        return _EMBEDDING_DIM
+    from kb_pipeline.arango_ops import ArangoOps
+    from kb_pipeline.embedder import Embedder
+
+    arango = ArangoOps()
+    embedder = Embedder()
+    model = embedder.model
+    try:
+        with httpx.Client(timeout=10.0) as client:
+            resp = client.post(
+                f"{os.getenv('OLLAMA_BASE_URL', 'http://localhost:11434')}/api/embed",
+                json={"model": model, "input": "dim"},
+            )
+            resp.raise_for_status()
+            embeddings = resp.json().get("embeddings", [])
+            if embeddings and embeddings[0]:
+                _EMBEDDING_DIM = len(embeddings[0])
+                return _EMBEDDING_DIM
+    except Exception:
+        pass
+    _EMBEDDING_DIM = 4096
+    return _EMBEDDING_DIM
 
 
 @dataclass
@@ -33,10 +60,11 @@ class QdrantStore:
             resp = client.get(f"{self.url}/collections/{name}")
             if resp.status_code == 200:
                 return
+            dim = _get_embedding_dim()
             client.put(
                 f"{self.url}/collections/{name}",
                 json={
-                    "vectors": {"size": EMBEDDING_DIM, "distance": "Cosine"},
+                    "vectors": {"size": dim, "distance": "Cosine"},
                     "optimizers_config": {"indexing_threshold": 10000},
                 },
             )
@@ -66,6 +94,10 @@ class QdrantStore:
             )
             if resp.status_code >= 400:
                 raise Exception(f"Qdrant upsert failed: {resp.status_code} {resp.text}")
+            result = resp.json()
+            op_status = result.get("result", {}).get("status", "")
+            if op_status not in ("acknowledged", "completed"):
+                raise Exception(f"Qdrant upsert status={op_status}: {resp.text}")
         return len(points)
 
     def search(
