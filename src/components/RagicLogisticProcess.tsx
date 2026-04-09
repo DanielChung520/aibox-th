@@ -1117,7 +1117,7 @@ export default function RagicLogisticProcess() {
                 )}
                 <div ref={chatEndRef} />
               </div>
-              <div style={{ position: 'relative' }}>
+              <div style={{ position: 'relative', width: '100%' }}>
                 <Input.TextArea
                   value={chatInput}
                   onChange={(e) => setChatInput(e.target.value)}
@@ -1137,7 +1137,8 @@ export default function RagicLogisticProcess() {
                     position: 'absolute',
                     right: 4,
                     top: 4,
-                    height: 'calc(100% - 8px)',
+                    bottom: 4,
+                    height: 'auto',
                     minWidth: 36,
                     borderRadius: 6,
                   }}
