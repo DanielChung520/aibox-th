@@ -1006,7 +1006,7 @@ export default function RagicLogisticProcess() {
   }, [containerSize]);
 
   return (
-    <div style={{ padding: '8px 8px 16px' }}>
+    <div style={{ padding: '8px 8px 16px', height: '100%', display: 'flex', flexDirection: 'column' }}>
       <Card
         styles={{ body: { padding: 20 } }}
         style={{
@@ -1014,6 +1014,7 @@ export default function RagicLogisticProcess() {
           borderRadius: 20,
           background: `linear-gradient(135deg, ${token.colorPrimaryBg} 0%, #ffffff 100%)`,
           border: `1px solid ${token.colorBorderSecondary}`,
+          flexShrink: 0,
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
@@ -1030,11 +1031,11 @@ export default function RagicLogisticProcess() {
         </div>
       </Card>
 
-      <Row gutter={[20, 20]}>
-        <Col xs={24} xl={18}>
+      <Row gutter={[20, 20]} style={{ flex: 1, minHeight: 0 }}>
+        <Col xs={24} xl={18} style={{ height: '100%' }}>
           <Card
-            styles={{ body: { padding: 12 } }}
-            style={{ borderRadius: 20 }}
+            styles={{ body: { padding: 12, display: 'flex', flexDirection: 'column', height: '100%' } }}
+            style={{ borderRadius: 20, height: '100%' }}
           >
             <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginBottom: 10 }}>
               <Space size={8}>
@@ -1055,7 +1056,7 @@ export default function RagicLogisticProcess() {
               ref={containerRef}
               style={{
                 width: '100%',
-                height: suggestedGraphHeight,
+                height: '100%',
                 borderRadius: 16,
                 background: '#ffffff',
                 overflow: 'hidden',
@@ -1064,9 +1065,9 @@ export default function RagicLogisticProcess() {
           </Card>
         </Col>
 
-        <Col xs={2} xl={6}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16, height: suggestedGraphHeight, overflow: 'hidden' }}>
-            <Card styles={{ body: { padding: 18, display: 'flex', flexDirection: 'column', overflow: 'hidden' } }} style={{ borderRadius: 20, flex: 1, minHeight: 0 }}>
+        <Col xs={2} xl={6} style={{ height: '100%' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16, height: '100%', overflow: 'hidden' }}>
+            <Card styles={{ body: { padding: 18, display: 'flex', flexDirection: 'column', overflow: 'hidden', height: '100%' } }} style={{ borderRadius: 20, flex: 1, minHeight: 0, height: '100%' }}>
               <Title level={4} style={{ marginTop: 0, marginBottom: 10, flexShrink: 0 }}>
                 AI 流程問答
               </Title>
