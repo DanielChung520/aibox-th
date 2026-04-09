@@ -214,7 +214,7 @@ export default function MainLayout() {
             background: contentBg,
             borderRadius: '10px',
             height: 'calc(100vh - 96px)',
-            overflow: 'hidden',
+            overflow: 'auto',
             display: 'flex',
             flexDirection: 'column',
           }}>
