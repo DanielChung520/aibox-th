@@ -13,6 +13,7 @@ import { SendOutlined, UserOutlined, RobotOutlined, CompressOutlined, EyeOutline
 import { CanvasEvent, Graph, NodeEvent } from '@antv/g6';
 import type { ComboData, EdgeData, IElementEvent, NodeData } from '@antv/g6';
 import { chatStore } from '../stores/chatStore';
+import flowQuestions from '../../data/ragic-flow-questions.json';
 
 const { Title, Text } = Typography;
 
@@ -669,6 +670,7 @@ export default function RagicLogisticProcess() {
   const [containerSize, setContainerSize] = useState({ w: 1200, h: suggestedGraphHeight });
   const [chatInput, setChatInput] = useState('');
   const [infoModalNode, setInfoModalNode] = useState<typeof rawNodes[0] | null>(null);
+  const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>([]);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const [storeState, setStoreState] = useState(chatStore.getState());
 
@@ -696,6 +698,16 @@ export default function RagicLogisticProcess() {
     },
     [storeState.providers],
   );
+
+  useEffect(() => {
+    if (!selectedNodeId) {
+      setSuggestedQuestions([]);
+      return;
+    }
+    const all = (flowQuestions as Record<string, string[]>)[selectedNodeId] || [];
+    const shuffled = [...all].sort(() => Math.random() - 0.5);
+    setSuggestedQuestions(shuffled.slice(0, 3));
+  }, [selectedNodeId]);
 
   const handleSend = async () => {
     const text = chatInput.trim();
@@ -1020,9 +1032,38 @@ export default function RagicLogisticProcess() {
                 }}
               >
                 {storeState.messages.length === 0 ? (
-                  <div style={{ textAlign: 'center', marginTop: 80, color: '#999' }}>
-                    <RobotOutlined style={{ fontSize: 32, marginBottom: 8 }} />
-                    <div style={{ fontSize: 12 }}>詢問流程相關問題</div>
+                  <div style={{ padding: '16px 8px' }}>
+                    {suggestedQuestions.length > 0 ? (
+                      <div>
+                        <div style={{ fontSize: 12, color: '#999', marginBottom: 12, textAlign: 'center' }}>
+                          選擇一個問題後可修改並發送
+                        </div>
+                        {suggestedQuestions.map((q, i) => (
+                          <div
+                            key={i}
+                            onClick={() => setChatInput(q)}
+                            style={{
+                              padding: '10px 14px',
+                              marginBottom: 8,
+                              background: '#f5f5f5',
+                              borderRadius: 8,
+                              fontSize: 13,
+                              color: '#333',
+                              cursor: 'pointer',
+                              border: '1px solid #e8e8e8',
+                              transition: 'all 0.2s',
+                            }}
+                          >
+                            {q}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div style={{ textAlign: 'center', marginTop: 80, color: '#999' }}>
+                        <RobotOutlined style={{ fontSize: 32, marginBottom: 8 }} />
+                        <div style={{ fontSize: 12 }}>選擇一個流程節點後，這裡會顯示相關問題</div>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <List
