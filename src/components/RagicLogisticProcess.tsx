@@ -1,16 +1,16 @@
 /**
  * @file        Ragic 採購流程圖元件
  * @description 使用 G6 呈現採購-訂單-生產流程圖
- * @lastUpdate  2026-04-09 18:45:00
+ * @lastUpdate  2026-04-09 13:58:25
  * @author      Daniel Chung
- * @version     1.2.0
+ * @version     1.3.0
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button, Card, Col, Empty, Row, Space, Tag, Typography, theme } from 'antd';
-import { CompressOutlined, ZoomInOutlined, ZoomOutOutlined } from '@ant-design/icons';
+import { CompressOutlined, EyeOutlined, ZoomInOutlined, ZoomOutOutlined } from '@ant-design/icons';
 import { CanvasEvent, Graph, NodeEvent } from '@antv/g6';
-import type { ComboData, EdgeData, IElementEvent, IPointerEvent, NodeData } from '@antv/g6';
+import type { ComboData, EdgeData, IElementEvent, NodeData } from '@antv/g6';
 
 const { Title, Text } = Typography;
 
@@ -25,6 +25,10 @@ interface FlowNodeMeta {
   region: FlowRegion;
   fill: string;
   stroke: string;
+  opacity?: number;
+  lineWidth?: number;
+  shadowBlur?: number;
+  shadowColor?: string;
 }
 
 interface FlowEdgeMeta {
@@ -34,6 +38,12 @@ interface FlowEdgeMeta {
   stroke?: string;
   sourcePort?: string;
   targetPort?: string;
+  opacity?: number;
+  lineWidth?: number;
+  /** Per-edge controlPoints override (absolute coordinates) */
+  controlPoints?: [number, number][];
+  /** Per-edge router override; set false to disable orth routing */
+  noRouter?: boolean;
 }
 
 const regionInfo: Record<
@@ -61,6 +71,8 @@ const rawNodes: Array<{ id: string; combo?: string; style: Record<string, unknow
       ports: [
         { key: 'to-pr', placement: [0.12, 1] },
         { key: 'to-quote', placement: [0.88, 1] },
+        { key: 'right-center', placement: [1, 0.5] },
+        { key: 'left-center', placement: [0, 0.5] },
       ],
     },
     data: {
@@ -127,11 +139,14 @@ const rawNodes: Array<{ id: string; combo?: string; style: Record<string, unknow
       port: true,
       portR: 0,
       ports: [
-        { key: 'from-pr', placement: [0, 0.25] },
+        { key: 'from-pr', placement: [0, 0.35] },
         { key: 'from-rfq', placement: [0, 0.5] },
-        { key: 'from-budget', placement: [0.2, 1] },
+        { key: 'from-budget', placement: [0, 0.35] },
         { key: 'from-so', placement: [1, 0.18] },
         { key: 'to-receive', placement: [1, 0.5] },
+        { key: 'to-receive-low', placement: [1, 0.7] },
+        { key: 'bottom-po-left', placement: [0.409, 1] },
+        { key: 'bottom-po', placement: [0.5, 1] },
       ],
     },
     data: {
@@ -149,13 +164,14 @@ const rawNodes: Array<{ id: string; combo?: string; style: Record<string, unknow
     combo: 'combo-upstream',
     style: {
       x: 1140,
-      y: 130,
+      y: 250,
       port: true,
       portR: 0,
       ports: [
         { key: 'from-po', placement: [0, 0.5] },
         { key: 'to-return', placement: [1, 0.35] },
         { key: 'back-po', placement: [0.2, 1] },
+        { key: 'to-status', placement: [0.5, 0] },
       ],
     },
     data: {
@@ -173,12 +189,12 @@ const rawNodes: Array<{ id: string; combo?: string; style: Record<string, unknow
     combo: 'combo-upstream',
     style: {
       x: 1440,
-      y: 130,
+      y: 250,
       port: true,
       portR: 0,
       ports: [
-        { key: 'from-receive', placement: [0, 0.45] },
-        { key: 'back-po', placement: [0.2, 1] },
+        { key: 'from-receive', placement: [0, 0.35] },
+        { key: 'back-po', placement: [0.5, 0] },
       ],
     },
     data: {
@@ -196,7 +212,7 @@ const rawNodes: Array<{ id: string; combo?: string; style: Record<string, unknow
     combo: 'combo-downstream',
     style: {
       x: 1760,
-      y: 130,
+      y: 250,
       port: true,
       portR: 0,
       ports: [
@@ -224,9 +240,11 @@ const rawNodes: Array<{ id: string; combo?: string; style: Record<string, unknow
       portR: 0,
       ports: [
         { key: 'from-quote', placement: [0, 0.5] },
+        { key: 'to-po-left', placement: [0, 0.18] },
         { key: 'to-po', placement: [0.2, 1] },
         { key: 'to-prod', placement: [0.8, 1] },
-        { key: 'to-mo', placement: [0.5, 1] },
+        { key: 'to-mo', placement: [0.45, 1] },
+        { key: 'bottom-left', placement: [0.2, 1] },
       ],
     },
     data: {
@@ -250,6 +268,7 @@ const rawNodes: Array<{ id: string; combo?: string; style: Record<string, unknow
       ports: [
         { key: 'from-so', placement: [0.75, 0] },
         { key: 'to-mrp', placement: [0, 0.5] },
+        { key: 'right-middle', placement: [1, 0.5] },
       ],
     },
     data: {
@@ -296,6 +315,8 @@ const rawNodes: Array<{ id: string; combo?: string; style: Record<string, unknow
       ports: [
         { key: 'from-mrp', placement: [1, 0.5] },
         { key: 'to-po', placement: [0, 0.25] },
+        { key: 'bottom-budget', placement: [0.5, 1] },
+        { key: 'left-budget', placement: [0, 0.5] },
       ],
     },
     data: {
@@ -317,7 +338,7 @@ const rawNodes: Array<{ id: string; combo?: string; style: Record<string, unknow
       port: true,
       portR: 0,
       ports: [
-        { key: 'from-so', placement: [0.5, 0] },
+        { key: 'from-so', placement: [0.5, 0.5] },
         { key: 'to-issue', placement: [0, 0.5] },
       ],
     },
@@ -434,21 +455,21 @@ const suggestedGraphHeight = Math.max(
 );
 
 const rawEdges: Array<{ id: string; source: string; target: string; data?: FlowEdgeMeta }> = [
-  { id: 'e1', source: 'entry', target: 'pr', data: { label: '主流程 → 上游', stroke: '#7c8aa5', sourcePort: 'to-pr', targetPort: 'in-top' } },
-  { id: 'e2', source: 'entry', target: 'quote', data: { label: '開新報價單', stroke: '#fa8c16', sourcePort: 'to-quote', targetPort: 'from-entry' } },
+  { id: 'e1', source: 'entry', target: 'pr', data: { label: '主流程 → 上游', stroke: '#7c8aa5', sourcePort: 'left-center', targetPort: 'in-top', noRouter: true, controlPoints: [[220, -32]] } },
+  { id: 'e2', source: 'entry', target: 'quote', data: { label: '開新報價單', stroke: '#fa8c16', sourcePort: 'right-center', targetPort: 'from-entry', noRouter: true, controlPoints: [[1760, -32]] } },
   { id: 'e3', source: 'pr', target: 'rfq', data: { sourcePort: 'to-rfq', targetPort: 'in-left' } },
   { id: 'e4', source: 'pr', target: 'po', data: { sourcePort: 'to-po', targetPort: 'from-pr' } },
   { id: 'e5', source: 'rfq', target: 'po', data: { sourcePort: 'to-po', targetPort: 'from-rfq' } },
-  { id: 'e6', source: 'po', target: 'receive', data: { sourcePort: 'to-receive', targetPort: 'from-po' } },
+  { id: 'e6', source: 'po', target: 'receive', data: { sourcePort: 'bottom-po', targetPort: 'from-po' } },
   { id: 'e7', source: 'receive', target: 'return', data: { sourcePort: 'to-return', targetPort: 'from-receive' } },
-  { id: 'e8', source: 'return', target: 'po', data: { dashed: true, label: '異常回寫', stroke: '#cbd5e1', sourcePort: 'back-po', targetPort: 'from-budget' } },
-  { id: 'e9', source: 'receive', target: 'po', data: { dashed: true, label: '收貨狀態更新', stroke: '#cbd5e1', sourcePort: 'back-po', targetPort: 'from-budget' } },
+  { id: 'e8', source: 'return', target: 'po', data: { dashed: true, label: '異常回寫', stroke: '#cbd5e1', sourcePort: 'back-po', targetPort: 'to-receive' } },
+  { id: 'e9', source: 'receive', target: 'po', data: { dashed: true, label: '收貨狀態更新', stroke: '#cbd5e1', sourcePort: 'to-status', targetPort: 'to-receive-low' } },
   { id: 'e10', source: 'quote', target: 'so', data: { label: '轉訂購單', stroke: '#fa8c16', sourcePort: 'to-so', targetPort: 'from-quote' } },
-  { id: 'e11', source: 'so', target: 'prodDemand', data: { label: '自製件', stroke: '#722ed1', sourcePort: 'to-prod', targetPort: 'from-so' } },
+  { id: 'e11', source: 'so', target: 'prodDemand', data: { label: '自製件', stroke: '#722ed1', sourcePort: 'bottom-left', targetPort: 'right-middle', noRouter: true, controlPoints: [[1960, 530]] } },
   { id: 'e12', source: 'prodDemand', target: 'mrp', data: { sourcePort: 'to-mrp', targetPort: 'from-prod' } },
   { id: 'e13', source: 'mrp', target: 'budget', data: { sourcePort: 'to-budget', targetPort: 'from-mrp' } },
-  { id: 'e14', source: 'budget', target: 'po', data: { dashed: true, label: '預算回推採購', stroke: '#cbd5e1', sourcePort: 'to-po', targetPort: 'from-budget' } },
-  { id: 'e15', source: 'so', target: 'po', data: { label: '轉採購單（採購件）', stroke: '#52c41a', sourcePort: 'to-po', targetPort: 'from-so' } },
+  { id: 'e14', source: 'budget', target: 'po', data: { dashed: true, label: '預算回推採購', stroke: '#cbd5e1', sourcePort: 'left-budget', targetPort: 'bottom-po-left', noRouter: true, controlPoints: [[810, 530]] } },
+  { id: 'e15', source: 'so', target: 'po', data: { label: '轉採購單（採購件）', stroke: '#52c41a', sourcePort: 'to-po-left', targetPort: 'from-so' } },
   { id: 'e16', source: 'so', target: 'mo', data: { sourcePort: 'to-mo', targetPort: 'from-so' } },
   { id: 'e17', source: 'mo', target: 'issue', data: { sourcePort: 'to-issue', targetPort: 'from-mo' } },
   { id: 'e18', source: 'issue', target: 'dispatch', data: { sourcePort: 'to-dispatch', targetPort: 'from-issue' } },
@@ -470,9 +491,8 @@ const rawCombos: ComboData[] = [
       lineDash: [8, 8],
       radius: 12,
       labelText: '上游流程',
-      labelPlacement: 'top-left',
-      labelOffsetX: 18,
-      labelOffsetY: 18,
+      labelPlacement: 'top',
+      labelOffsetY: -12,
       labelFill: '#1d4ed8',
       labelFontSize: 18,
       labelFontWeight: 700,
@@ -494,9 +514,8 @@ const rawCombos: ComboData[] = [
       lineDash: [8, 8],
       radius: 12,
       labelText: '下游流程',
-      labelPlacement: 'top-left',
-      labelOffsetX: 18,
-      labelOffsetY: 18,
+      labelPlacement: 'top',
+      labelOffsetY: -12,
       labelFill: '#15803d',
       labelFontSize: 18,
       labelFontWeight: 700,
@@ -518,9 +537,8 @@ const rawCombos: ComboData[] = [
       lineDash: [8, 8],
       radius: 12,
       labelText: '生產需求流程',
-      labelPlacement: 'top-left',
-      labelOffsetX: 18,
-      labelOffsetY: 18,
+      labelPlacement: 'top',
+      labelOffsetY: -12,
       labelFill: '#c2410c',
       labelFontSize: 18,
       labelFontWeight: 700,
@@ -542,9 +560,8 @@ const rawCombos: ComboData[] = [
       lineDash: [8, 8],
       radius: 12,
       labelText: '生產製令 / 入庫',
-      labelPlacement: 'top-left',
-      labelOffsetX: 18,
-      labelOffsetY: 18,
+      labelPlacement: 'top',
+      labelOffsetY: -12,
       labelFill: '#6d28d9',
       labelFontSize: 18,
       labelFontWeight: 700,
@@ -554,6 +571,82 @@ const rawCombos: ComboData[] = [
     },
   },
 ];
+
+const DEFAULT_NODE_SHADOW_COLOR = 'rgba(15, 23, 42, 0.10)';
+const SELECTED_NODE_SHADOW_COLOR = 'rgba(22, 119, 255, 0.28)';
+
+const buildGraphData = (focusedNodeId: string | null) => {
+  const relatedNodeIds = new Set<string>();
+  const relatedEdgeIds = new Set<string>();
+  const relatedComboIds = new Set<string>();
+
+  if (focusedNodeId) {
+    relatedNodeIds.add(focusedNodeId);
+
+    for (const edge of rawEdges) {
+      if (edge.source === focusedNodeId || edge.target === focusedNodeId) {
+        relatedEdgeIds.add(edge.id);
+        relatedNodeIds.add(edge.source);
+        relatedNodeIds.add(edge.target);
+      }
+    }
+
+    for (const node of rawNodes) {
+      if (node.combo && relatedNodeIds.has(node.id)) {
+        relatedComboIds.add(node.combo);
+      }
+    }
+  }
+
+  return {
+    nodes: rawNodes.map((node) => {
+      const isSelected = focusedNodeId === node.id;
+      const isRelated = !focusedNodeId || relatedNodeIds.has(node.id);
+
+      return {
+        ...node,
+        data: {
+          ...node.data,
+          stroke: isSelected ? '#1677ff' : node.data.stroke,
+          opacity: isRelated ? 1 : 0.35,
+          lineWidth: isSelected ? 3 : 2,
+          shadowBlur: isSelected ? 26 : 18,
+          shadowColor: isSelected ? SELECTED_NODE_SHADOW_COLOR : DEFAULT_NODE_SHADOW_COLOR,
+        },
+      };
+    }),
+    edges: rawEdges.map((edge) => {
+      const isRelated = !focusedNodeId || relatedEdgeIds.has(edge.id);
+      const highlightEdge = !!focusedNodeId && relatedEdgeIds.has(edge.id);
+
+      const perEdgeStyle =
+        edge.data?.noRouter || edge.data?.controlPoints
+          ? {
+            ...(edge.data.noRouter ? { router: false as const } : {}),
+            ...(edge.data.controlPoints ? { controlPoints: edge.data.controlPoints } : {}),
+          }
+          : undefined;
+
+      return {
+        ...edge,
+        data: {
+          ...edge.data,
+          stroke: highlightEdge ? '#1677ff' : edge.data?.stroke || '#94a3b8',
+          opacity: isRelated ? 1 : 0.18,
+          lineWidth: highlightEdge ? 3 : 2,
+        },
+        ...(perEdgeStyle ? { style: perEdgeStyle } : {}),
+      };
+    }),
+    combos: rawCombos.map((combo) => ({
+      ...combo,
+      style: {
+        ...((combo.style as Record<string, unknown> | undefined) || {}),
+        opacity: !focusedNodeId || relatedComboIds.has(String(combo.id)) ? 1 : 0.22,
+      },
+    })),
+  };
+};
 
 export default function RagicLogisticProcess() {
   const { token } = theme.useToken();
@@ -630,6 +723,10 @@ export default function RagicLogisticProcess() {
     fitGraphToView(graph);
   };
 
+  const clearSelection = () => {
+    setSelectedNodeId(null);
+  };
+
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -642,7 +739,7 @@ export default function RagicLogisticProcess() {
     const graph = new Graph({
       container: el,
       autoResize: true,
-      data: { nodes: rawNodes, edges: rawEdges, combos: rawCombos },
+      data: buildGraphData(selectedNodeId),
       node: {
         type: 'rect',
         style: {
@@ -656,11 +753,24 @@ export default function RagicLogisticProcess() {
             const data = d.data as FlowNodeMeta | undefined;
             return data?.stroke || '#d9d9d9';
           },
-          lineWidth: 2,
-          shadowColor: 'rgba(15, 23, 42, 0.10)',
-          shadowBlur: 18,
+          lineWidth: (d: NodeData): number => {
+            const data = d.data as FlowNodeMeta | undefined;
+            return typeof data?.lineWidth === 'number' ? data.lineWidth : 2;
+          },
+          shadowColor: (d: NodeData): string => {
+            const data = d.data as FlowNodeMeta | undefined;
+            return typeof data?.shadowColor === 'string' ? data.shadowColor : DEFAULT_NODE_SHADOW_COLOR;
+          },
+          shadowBlur: (d: NodeData): number => {
+            const data = d.data as FlowNodeMeta | undefined;
+            return typeof data?.shadowBlur === 'number' ? data.shadowBlur : 18;
+          },
           shadowOffsetX: 0,
           shadowOffsetY: 8,
+          opacity: (d: NodeData): number => {
+            const data = d.data as FlowNodeMeta | undefined;
+            return typeof data?.opacity === 'number' ? data.opacity : 1;
+          },
           labelText: (d: NodeData): string => {
             const data = d.data as FlowNodeMeta | undefined;
             if (!data) return String(d.id);
@@ -674,17 +784,6 @@ export default function RagicLogisticProcess() {
           labelLineHeight: 18,
           labelFontWeight: 600,
         },
-        state: {
-          selected: {
-            lineWidth: 3,
-            stroke: '#1677ff',
-            shadowColor: 'rgba(22, 119, 255, 0.28)',
-            shadowBlur: 26,
-          },
-          inactive: {
-            opacity: 0.35,
-          },
-        },
       },
       edge: {
         type: 'polyline',
@@ -693,7 +792,10 @@ export default function RagicLogisticProcess() {
             const data = d.data as FlowEdgeMeta | undefined;
             return data?.stroke || '#94a3b8';
           },
-          lineWidth: 2,
+          lineWidth: (d: EdgeData): number => {
+            const data = d.data as FlowEdgeMeta | undefined;
+            return typeof data?.lineWidth === 'number' ? data.lineWidth : 2;
+          },
           radius: 16,
           router: { type: 'orth' },
           sourcePort: (d: EdgeData): string | undefined => {
@@ -721,14 +823,9 @@ export default function RagicLogisticProcess() {
           labelBackgroundPadding: [3, 6],
           labelPlacement: 'center',
           labelOffsetY: -12,
-        },
-        state: {
-          selected: {
-            stroke: '#1677ff',
-            lineWidth: 3,
-          },
-          inactive: {
-            opacity: 0.18,
+          opacity: (d: EdgeData): number => {
+            const data = d.data as FlowEdgeMeta | undefined;
+            return typeof data?.opacity === 'number' ? data.opacity : 1;
           },
         },
       },
@@ -739,27 +836,13 @@ export default function RagicLogisticProcess() {
     });
 
     graph.on(NodeEvent.CLICK, (evt: IElementEvent) => {
-      const nodeId = evt.target.id;
+      const nodeId = String((evt.target as { id?: string | number }).id ?? '');
+      if (!rawNodes.some((node) => node.id === nodeId)) return;
       setSelectedNodeId(nodeId);
-
-      const states: Record<string, string[]> = {};
-      for (const node of rawNodes) {
-        states[node.id] = node.id === nodeId ? ['selected'] : ['inactive'];
-      }
-      for (const edge of rawEdges) {
-        states[edge.id] = edge.source === nodeId || edge.target === nodeId ? ['selected'] : ['inactive'];
-      }
-      graph.setElementState(states);
-      graph.draw().catch(() => undefined);
     });
 
-    graph.on(CanvasEvent.CLICK, (_evt: IPointerEvent) => {
-      setSelectedNodeId(null);
-      const states: Record<string, string[]> = {};
-      for (const node of rawNodes) states[node.id] = [];
-      for (const edge of rawEdges) states[edge.id] = [];
-      graph.setElementState(states);
-      graph.draw().catch(() => undefined);
+    graph.on(CanvasEvent.DBLCLICK, () => {
+      clearSelection();
     });
 
     const renderGraph = async () => {
@@ -787,6 +870,22 @@ export default function RagicLogisticProcess() {
       }
     };
   }, []);
+
+  useEffect(() => {
+    const graph = graphRef.current;
+    if (!graph || !graphReadyRef.current) return;
+
+    const syncGraphData = async () => {
+      try {
+        graph.setData(buildGraphData(selectedNodeId));
+        await graph.render();
+      } catch {
+        undefined;
+      }
+    };
+
+    syncGraphData().catch(() => undefined);
+  }, [selectedNodeId]);
 
   useEffect(() => {
     const graph = graphRef.current;
@@ -832,6 +931,9 @@ export default function RagicLogisticProcess() {
                 縮放比例：{Math.round(zoom * 100)}%
               </Text>
               <Space size={8}>
+                <Button icon={<EyeOutlined />} size="small" onClick={clearSelection} disabled={!selectedNodeId}>
+                  全部顯示
+                </Button>
                 <Button icon={<ZoomOutOutlined />} size="small" onClick={zoomOut} />
                 <Button icon={<CompressOutlined />} size="small" onClick={resetView}>
                   自適應
@@ -854,60 +956,60 @@ export default function RagicLogisticProcess() {
 
         <Col xs={24} xl={6}>
           <div style={{ position: 'sticky', top: 16 }}>
-          <Card styles={{ body: { padding: 18 } }} style={{ borderRadius: 20, marginBottom: 20 }}>
-            <Title level={4} style={{ marginTop: 0, marginBottom: 12 }}>
-              流程分區
-            </Title>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {Object.entries(regionInfo).map(([key, item]) => (
-                <div
-                  key={key}
-                  style={{
-                    padding: 12,
-                    borderRadius: 12,
-                    border: '1px solid #e5e7eb',
-                    background: '#fafafa',
-                  }}
-                >
-                  <div style={{ marginBottom: 4 }}>
-                    <Tag color={item.color} style={{ marginInlineEnd: 0 }}>
-                      {item.title}
-                    </Tag>
+            <Card styles={{ body: { padding: 18 } }} style={{ borderRadius: 20, marginBottom: 20 }}>
+              <Title level={4} style={{ marginTop: 0, marginBottom: 12 }}>
+                流程分區
+              </Title>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {Object.entries(regionInfo).map(([key, item]) => (
+                  <div
+                    key={key}
+                    style={{
+                      padding: 12,
+                      borderRadius: 12,
+                      border: '1px solid #e5e7eb',
+                      background: '#fafafa',
+                    }}
+                  >
+                    <div style={{ marginBottom: 4 }}>
+                      <Tag color={item.color} style={{ marginInlineEnd: 0 }}>
+                        {item.title}
+                      </Tag>
+                    </div>
+                    <Text style={{ fontSize: 12, color: '#64748b' }}>{item.description}</Text>
                   </div>
-                  <Text style={{ fontSize: 12, color: '#64748b' }}>{item.description}</Text>
-                </div>
-              ))}
-            </div>
-          </Card>
-
-          <Card styles={{ body: { padding: 18 } }} style={{ borderRadius: 20 }}>
-            <Title level={4} style={{ marginTop: 0, marginBottom: 12 }}>
-              節點詳情
-            </Title>
-            {selectedNode ? (
-              <div>
-                <Title level={5} style={{ marginTop: 0, marginBottom: 8 }}>
-                  {selectedNode.data.label}
-                </Title>
-                <div style={{ marginBottom: 10 }}>
-                  <Tag color={regionInfo[selectedNode.data.region].color}>
-                    {regionInfo[selectedNode.data.region].title}
-                  </Tag>
-                  {selectedNode.data.table ? <Tag>{selectedNode.data.table}</Tag> : null}
-                </div>
-                <div style={{ marginBottom: 8 }}>
-                  <Text strong>副標：</Text>
-                  <Text> {selectedNode.data.subtitle}</Text>
-                </div>
-                <div>
-                  <Text strong>說明：</Text>
-                  <Text> {selectedNode.data.detail}</Text>
-                </div>
+                ))}
               </div>
-            ) : (
-              <Empty description="點擊左側節點查看流程說明" image={Empty.PRESENTED_IMAGE_SIMPLE} />
-            )}
-          </Card>
+            </Card>
+
+            <Card styles={{ body: { padding: 18 } }} style={{ borderRadius: 20 }}>
+              <Title level={4} style={{ marginTop: 0, marginBottom: 12 }}>
+                節點詳情
+              </Title>
+              {selectedNode ? (
+                <div>
+                  <Title level={5} style={{ marginTop: 0, marginBottom: 8 }}>
+                    {selectedNode.data.label}
+                  </Title>
+                  <div style={{ marginBottom: 10 }}>
+                    <Tag color={regionInfo[selectedNode.data.region].color}>
+                      {regionInfo[selectedNode.data.region].title}
+                    </Tag>
+                    {selectedNode.data.table ? <Tag>{selectedNode.data.table}</Tag> : null}
+                  </div>
+                  <div style={{ marginBottom: 8 }}>
+                    <Text strong>副標：</Text>
+                    <Text> {selectedNode.data.subtitle}</Text>
+                  </div>
+                  <div>
+                    <Text strong>說明：</Text>
+                    <Text> {selectedNode.data.detail}</Text>
+                  </div>
+                </div>
+              ) : (
+                <Empty description="點擊左側節點查看流程說明" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+              )}
+            </Card>
           </div>
         </Col>
       </Row>

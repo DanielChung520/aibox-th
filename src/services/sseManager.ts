@@ -1,12 +1,35 @@
 /**
  * @file        SSE 串流連線管理
  * @description 使用 fetch + ReadableStream 解析聊天 SSE 事件
- * @lastUpdate  2026-03-27 12:12:03
+ * @lastUpdate  2026-04-09 12:21:28
  * @author      Daniel Chung
- * @version     1.0.0
+ * @version     1.0.1
  */
 
 import { FileStatusPayload, SendMessageRequest } from './api';
+
+function resolveApiBaseUrl(): string {
+  const configured = import.meta.env.VITE_API_URL;
+
+  if (!configured) {
+    return import.meta.env.DEV ? '' : 'http://localhost:3001';
+  }
+
+  if (!import.meta.env.DEV) {
+    return configured;
+  }
+
+  try {
+    const parsed = new URL(configured);
+    if (parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1') {
+      return '';
+    }
+  } catch {
+    return configured;
+  }
+
+  return configured;
+}
 
 interface SSECallbacks {
   onChunk: (delta: string) => void;
@@ -55,7 +78,7 @@ export function sendMessageSSE(
   callbacks: SSECallbacks,
 ): SSEConnection {
   const controller = new AbortController();
-  const baseURL = import.meta.env.VITE_API_URL ?? 'http://localhost:3001';
+  const baseURL = resolveApiBaseUrl();
   const token = localStorage.getItem('token');
   const url = `${baseURL}/api/v1/chat/sessions/${encodeURIComponent(sessionKey)}/messages`;
 
@@ -196,7 +219,7 @@ export function subscribeSessionFileStatus(
   callbacks: FileStatusCallbacks,
 ): SSEConnection {
   const controller = new AbortController();
-  const baseURL = import.meta.env.VITE_API_URL ?? 'http://localhost:3001';
+  const baseURL = resolveApiBaseUrl();
   const token = localStorage.getItem('token');
   const url = `${baseURL}/api/v1/sse/session-files/${encodeURIComponent(sessionKey)}`;
 

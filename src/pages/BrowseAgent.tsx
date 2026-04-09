@@ -14,7 +14,7 @@ import AgentCard from '../components/AgentCard';
 import AgentFormModal from '../components/AgentFormModal';
 import { agentApi, Agent as ApiAgent } from '../services/api';
 import { authStore } from '../stores/auth';
-import RagicLogisticProcess from '../../.docs/Spec/智能體/Ragic_Logistic_process';
+import RagicLogisticProcess from '../components/RagicLogisticProcess';
 
 const groupConfig = [
   { key: 'all', label: '全部', icon: 'AppstoreOutlined' },

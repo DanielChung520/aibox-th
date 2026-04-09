@@ -1,9 +1,9 @@
 /**
  * @file        API 服務層
  * @description Axios 實例配置、API 請求封裝、所有業務 API 接口定義
- * @lastUpdate  2026-03-28 10:22:08
+ * @lastUpdate  2026-04-09 12:21:28
  * @author      Daniel Chung
- * @version     1.5.0
+ * @version     1.5.1
  * @history
  * - 2026-03-25 15:07:58 | Daniel Chung | 1.4.0 | 新增 activate() 方法到 themeTemplateApi
  * - 2026-03-24 23:01:20 | Daniel Chung | 1.3.0 | 新增 Knowledge Base 介面定義與 API 方法
@@ -14,8 +14,31 @@
 
 import axios from 'axios';
 
+function resolveApiBaseUrl(): string {
+  const configured = import.meta.env.VITE_API_URL;
+
+  if (!configured) {
+    return import.meta.env.DEV ? '' : 'http://localhost:3001';
+  }
+
+  if (!import.meta.env.DEV) {
+    return configured;
+  }
+
+  try {
+    const parsed = new URL(configured);
+    if (parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1') {
+      return '';
+    }
+  } catch {
+    return configured;
+  }
+
+  return configured;
+}
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL ?? 'http://localhost:3001',
+  baseURL: resolveApiBaseUrl(),
   timeout: 30000,
 });
 
