@@ -1120,6 +1120,18 @@ export default function RagicLogisticProcess() {
                 )}
                 <div ref={chatEndRef} />
               </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <span style={{ fontSize: 13, color: '#666' }}>模型：</span>
+                <Select
+                  size="small"
+                  style={{ flex: 1 }}
+                  value={selectedLlm}
+                  onChange={setSelectedLlm}
+                  loading={loadingModels}
+                  options={llmOptions.map((o) => ({ label: o.label, value: o.value }))}
+                  placeholder={loadingModels ? '載入中...' : '選擇模型'}
+                />
+              </div>
               <div style={{ display: 'flex', gap: 8 }}>
                 <div style={{ position: 'relative', flex: 1 }}>
                   <Input.TextArea
