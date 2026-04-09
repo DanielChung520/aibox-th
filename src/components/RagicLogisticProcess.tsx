@@ -1006,7 +1006,7 @@ export default function RagicLogisticProcess() {
   }, [containerSize]);
 
   return (
-    <div style={{ padding: '8px 8px 16px', display: 'flex', flexDirection: 'column', minHeight: 0, flex: 1 }}>
+    <div style={{ padding: '8px 8px 16px' }}>
       <Card
         styles={{ body: { padding: 20 } }}
         style={{
@@ -1031,11 +1031,11 @@ export default function RagicLogisticProcess() {
         </div>
       </Card>
 
-      <Row gutter={[20, 20]} style={{ flex: 1, minHeight: 0, alignItems: 'stretch' }}>
+      <Row gutter={[20, 20]}>
         <Col xs={24} xl={18}>
           <Card
-            styles={{ body: { padding: 12, display: 'flex', flexDirection: 'column' } }}
-            style={{ borderRadius: 20, height: '100%' }}
+            styles={{ body: { padding: 12 } }}
+            style={{ borderRadius: 20 }}
           >
             <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginBottom: 10 }}>
               <Space size={8}>
@@ -1056,7 +1056,7 @@ export default function RagicLogisticProcess() {
               ref={containerRef}
               style={{
                 width: '100%',
-                height: '100%',
+                height: suggestedGraphHeight,
                 borderRadius: 16,
                 background: '#ffffff',
                 overflow: 'hidden',
@@ -1066,7 +1066,7 @@ export default function RagicLogisticProcess() {
         </Col>
 
         <Col xs={2} xl={6}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16, height: '100%', overflow: 'hidden' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16, height: suggestedGraphHeight, overflow: 'hidden' }}>
             <Card styles={{ body: { padding: 18, display: 'flex', flexDirection: 'column', overflow: 'hidden', height: '100%' } }} style={{ borderRadius: 20, flex: 1, minHeight: 0 }}>
               <Title level={4} style={{ marginTop: 0, marginBottom: 10, flexShrink: 0 }}>
                 AI 流程問答
