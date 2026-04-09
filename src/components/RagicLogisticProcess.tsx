@@ -13,6 +13,7 @@ import { SendOutlined, UserOutlined, RobotOutlined, CompressOutlined, EyeOutline
 import { CanvasEvent, Graph, NodeEvent } from '@antv/g6';
 import type { ComboData, EdgeData, IElementEvent, NodeData } from '@antv/g6';
 import { chatStore } from '../stores/chatStore';
+import { dataAgentApi } from '../services/dataAgentApi';
 import flowQuestions from '../../data/ragic-flow-questions.json';
 
 const { Title, Text } = Typography;
@@ -671,6 +672,8 @@ export default function RagicLogisticProcess() {
   const [chatInput, setChatInput] = useState('');
   const [infoModalNode, setInfoModalNode] = useState<typeof rawNodes[0] | null>(null);
   const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>([]);
+  const [dataQueryResult, setDataQueryResult] = useState<{ query: string; response: string; columns?: string[]; rows?: Record<string, unknown>[] } | null>(null);
+  const [dataQueryLoading, setDataQueryLoading] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const [storeState, setStoreState] = useState(chatStore.getState());
 
@@ -708,6 +711,43 @@ export default function RagicLogisticProcess() {
     const shuffled = [...all].sort(() => Math.random() - 0.5);
     setSuggestedQuestions(shuffled.slice(0, 3));
   }, [selectedNodeId]);
+
+  const handleDataQuery = async (question: string) => {
+    setDataQueryLoading(true);
+    setDataQueryResult({ query: question, response: '查詢中...' });
+    try {
+      const res = await dataAgentApi.query({
+        query: question,
+        options: {
+          timezone: 'Asia/Taipei',
+          limit: 50,
+        },
+      });
+      const data = res.data.data;
+      if (data.results && data.results.length > 0) {
+        const cols = data.columns || Object.keys(data.results[0]);
+        const readable = data.results.slice(0, 20).map((r) =>
+          cols.map((c) => `${c}: ${r[c]}`).join(' | ')
+        ).join('\n');
+        setDataQueryResult({
+          query: question,
+          response: `共 ${data.metadata.row_count} 筆資料:\n${readable}`,
+          columns: cols,
+          rows: data.results,
+        });
+      } else {
+        setDataQueryResult({
+          query: question,
+          response: `SQL: ${data.sql}\n\n無查詢結果`,
+        });
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : '查詢失敗';
+      setDataQueryResult({ query: question, response: `錯誤: ${msg}` });
+    } finally {
+      setDataQueryLoading(false);
+    }
+  };
 
   const handleSend = async () => {
     const text = chatInput.trim();
@@ -1033,30 +1073,43 @@ export default function RagicLogisticProcess() {
               >
                 {storeState.messages.length === 0 ? (
                   <div style={{ padding: '16px 8px' }}>
-                    {suggestedQuestions.length > 0 ? (
+                        {suggestedQuestions.length > 0 ? (
                       <div>
                         <div style={{ fontSize: 12, color: '#999', marginBottom: 12, textAlign: 'center' }}>
-                          選擇一個問題後可修改並發送
+                          點擊問題直接查詢資料
                         </div>
                         {suggestedQuestions.map((q, i) => (
                           <div
                             key={i}
-                            onClick={() => setChatInput(q)}
+                            onClick={() => handleDataQuery(q)}
                             style={{
                               padding: '10px 14px',
                               marginBottom: 8,
-                              background: '#f5f5f5',
+                              background: '#e6f4ff',
                               borderRadius: 8,
                               fontSize: 13,
-                              color: '#333',
+                              color: '#1677ff',
                               cursor: 'pointer',
-                              border: '1px solid #e8e8e8',
+                              border: '1px solid #91caff',
                               transition: 'all 0.2s',
                             }}
                           >
                             {q}
                           </div>
                         ))}
+                        {dataQueryResult && (
+                          <div style={{ marginTop: 16, padding: 12, background: '#fafafa', borderRadius: 8, border: '1px solid #e8e8e8' }}>
+                            <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8, color: '#1677ff' }}>【查詢結果】</div>
+                            <div style={{ fontSize: 12, color: '#666', marginBottom: 8 }}>{dataQueryResult.query}</div>
+                            {dataQueryLoading ? (
+                              <Spin size="small" />
+                            ) : (
+                              <pre style={{ fontSize: 12, whiteSpace: 'pre-wrap', wordBreak: 'break-word', margin: 0, maxHeight: 200, overflow: 'auto', background: '#fff', padding: 8, borderRadius: 4, border: '1px solid #f0f0f0' }}>
+                                {dataQueryResult.response}
+                              </pre>
+                            )}
+                          </div>
+                        )}
                       </div>
                     ) : (
                       <div style={{ textAlign: 'center', marginTop: 80, color: '#999' }}>
