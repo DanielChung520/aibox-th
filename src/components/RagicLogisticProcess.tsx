@@ -967,7 +967,9 @@ export default function RagicLogisticProcess() {
         if (node.id === 'entry') continue;
         const bounds = g.getElementRenderBounds(node.id);
         if (!bounds) continue;
-        positions.set(node.id, { x: bounds.max[0] - 10, y: bounds.min[1] + 10 });
+        const topRightViewport = [bounds.max[0], bounds.min[1]] as [number, number];
+        const topRightCanvas = g.getCanvasByViewport(topRightViewport);
+        positions.set(node.id, { x: topRightCanvas[0] - 10, y: topRightCanvas[1] + 10 });
       }
       infoIconPositionsRef.current = positions;
       setInfoIconPositions(positions);
