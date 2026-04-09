@@ -1,13 +1,13 @@
 /**
  * @file        Ragic 採購流程圖元件
  * @description 使用 G6 呈現採購-訂單-生產流程圖
- * @lastUpdate  2026-04-09 16:37:57
+ * @lastUpdate  2026-04-09 17:24:17
  * @author      Daniel Chung
- * @version     1.7.0
+ * @version     1.9.0
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Avatar, Button, Card, Col, Divider, Empty, Input, List, Row, Select, Space, Spin, Tag, Typography, theme } from 'antd';
+import { Avatar, Button, Card, Col, Divider, Input, List, Modal, Row, Select, Space, Spin, Tag, Typography, theme } from 'antd';
 import { SendOutlined, UserOutlined, RobotOutlined, CompressOutlined, EyeOutlined, ZoomInOutlined, ZoomOutOutlined } from '@ant-design/icons';
 import { CanvasEvent, Graph, NodeEvent } from '@antv/g6';
 import type { ComboData, EdgeData, IElementEvent, NodeData } from '@antv/g6';
@@ -679,6 +679,7 @@ export default function RagicLogisticProcess() {
   const graphRef = useRef<Graph | null>(null);
   const graphReadyRef = useRef(false);
   const instanceRef = useRef(0);
+  const infoIconPositionsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [containerSize, setContainerSize] = useState({ w: 1200, h: suggestedGraphHeight });
   const [chatMessages, setChatMessages] = useState<ChatMessageItem[]>([]);
@@ -687,6 +688,8 @@ export default function RagicLogisticProcess() {
   const [llmOptions, setLlmOptions] = useState<LLMOption[]>([]);
   const [selectedLlm, setSelectedLlm] = useState<string>('');
   const [loadingModels, setLoadingModels] = useState(false);
+  const [infoModalNode, setInfoModalNode] = useState<typeof rawNodes[0] | null>(null);
+  const [infoIconPositions, setInfoIconPositions] = useState<Map<string, { x: number; y: number }>>(new Map());
   const chatEndRef = useRef<HTMLDivElement>(null);
   const sseRef = useRef<SSEConnection | null>(null);
   const SESSION_KEY = 'ragic-flow-chat';
@@ -955,8 +958,19 @@ export default function RagicLogisticProcess() {
       clearSelection();
     });
 
-    graph.on(CanvasEvent.DBLCLICK, () => {
-      clearSelection();
+    graph.on('after:render', () => {
+      if (!graphReadyRef.current) return;
+      const g = graphRef.current;
+      if (!g) return;
+      const positions = new Map<string, { x: number; y: number }>();
+      for (const node of rawNodes) {
+        if (node.id === 'entry') continue;
+        const bounds = g.getElementRenderBounds(node.id);
+        if (!bounds) continue;
+        positions.set(node.id, { x: bounds.max[0] - 10, y: bounds.min[1] + 10 });
+      }
+      infoIconPositionsRef.current = positions;
+      setInfoIconPositions(positions);
     });
 
     const renderGraph = async () => {
@@ -1019,13 +1033,12 @@ export default function RagicLogisticProcess() {
           border: `1px solid ${token.colorBorderSecondary}`,
         }}
       >
-        <Title level={3} style={{ marginTop: 0, marginBottom: 8 }}>
-          Ragic 採購流程
-        </Title>
-        <Text style={{ color: '#64748b' }}>
-          使用 G6 流程圖呈現「上游採購 / 下游訂單 / 生產需求 / 生產入庫」全鏈路；可點擊節點查看細節。
-        </Text>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+          <Title level={3} style={{ marginTop: 0, marginBottom: 0 }}>
+            Ragic 採購流程
+          </Title>
+        </div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
           {Object.values(regionInfo).map((item) => (
             <Tag key={item.title} color={item.color}>
               {item.title}
@@ -1060,47 +1073,65 @@ export default function RagicLogisticProcess() {
                 borderRadius: 16,
                 background: '#ffffff',
                 overflow: 'hidden',
+                position: 'relative',
               }}
-            />
+            >
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  height: '100%',
+                  pointerEvents: 'none',
+                  zIndex: 10,
+                }}
+              >
+                {Array.from(infoIconPositions.entries()).map(([nodeId, pos]) => (
+                  <button
+                    key={nodeId}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const node = rawNodes.find((n) => n.id === nodeId);
+                      if (node) setInfoModalNode(node);
+                    }}
+                    style={{
+                      position: 'absolute',
+                      left: pos.x - 9,
+                      top: pos.y - 9,
+                      width: 18,
+                      height: 18,
+                      borderRadius: '50%',
+                      background: '#1677ff',
+                      border: 'none',
+                      color: '#fff',
+                      fontSize: 12,
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      pointerEvents: 'auto',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      padding: 0,
+                      lineHeight: 1,
+                    }}
+                  >
+                    i
+                  </button>
+                ))}
+              </div>
+            </div>
           </Card>
         </Col>
 
         <Col xs={24} xl={6}>
-          <div style={{ position: 'sticky', top: 16 }}>
-            <Card styles={{ body: { padding: 18 } }} style={{ borderRadius: 20, marginBottom: 20 }}>
-              <Title level={4} style={{ marginTop: 0, marginBottom: 12 }}>
-                節點詳情
-              </Title>
-              {selectedNode ? (
-                <div>
-                  <Title level={5} style={{ marginTop: 0, marginBottom: 10 }}>
-                    {selectedNode.data.label}
-                  </Title>
-                  <Space wrap style={{ marginBottom: 10 }}>
-                    <Tag color={regionInfo[selectedNode.data.region].color}>
-                      {regionInfo[selectedNode.data.region].title}
-                    </Tag>
-                    {selectedNode.data.table ? <Tag color="blue">{selectedNode.data.table}</Tag> : null}
-                  </Space>
-                  <Divider style={{ margin: '10px 0' }} />
-                  <div style={{ marginBottom: 8 }}>
-                    <Text type="secondary" style={{ fontSize: 12 }}>【職責說明】</Text>
-                    <Text style={{ fontSize: 13, display: 'block' }}>
-                      {selectedNode.data.detail}
-                    </Text>
-                  </div>
-                </div>
-              ) : (
-                <Empty description="點擊左側節點查看流程說明" image={Empty.PRESENTED_IMAGE_SIMPLE} />
-              )}
-            </Card>
-
-            <Card styles={{ body: { padding: 18 } }} style={{ borderRadius: 20 }}>
-              <Title level={4} style={{ marginTop: 0, marginBottom: 10 }}>
+          <div style={{ position: 'sticky', top: 16, display: 'flex', flexDirection: 'column', gap: 16, height: suggestedGraphHeight, overflow: 'hidden' }}>
+            <Card styles={{ body: { padding: 18, display: 'flex', flexDirection: 'column', overflow: 'hidden' } }} style={{ borderRadius: 20, flex: 1, minHeight: 0 }}>
+              <Title level={4} style={{ marginTop: 0, marginBottom: 10, flexShrink: 0 }}>
                 AI 流程問答
               </Title>
               <Select
-                style={{ width: '100%', marginBottom: 12 }}
+                style={{ width: '100%', marginBottom: 10, flexShrink: 0 }}
                 value={selectedLlm}
                 onChange={setSelectedLlm}
                 loading={loadingModels}
@@ -1109,13 +1140,14 @@ export default function RagicLogisticProcess() {
               />
               <div
                 style={{
-                  height: 320,
+                  flex: 1,
                   overflowY: 'auto',
                   marginBottom: 10,
                   border: '1px solid #f0f0f0',
                   borderRadius: 8,
                   padding: '8px 12px',
                   background: '#fafafa',
+                  minHeight: 0,
                 }}
               >
                 {chatMessages.length === 0 ? (
@@ -1166,6 +1198,36 @@ export default function RagicLogisticProcess() {
           </div>
         </Col>
       </Row>
+
+      <Modal
+        title={infoModalNode ? `${infoModalNode.data.label}` : '節點詳情'}
+        open={!!infoModalNode}
+        onCancel={() => setInfoModalNode(null)}
+        footer={null}
+        width={480}
+      >
+        {infoModalNode && (
+          <div>
+            <Space wrap style={{ marginBottom: 12 }}>
+              <Tag color={regionInfo[infoModalNode.data.region].color}>
+                {regionInfo[infoModalNode.data.region].title}
+              </Tag>
+              {infoModalNode.data.table ? <Tag color="blue">{infoModalNode.data.table}</Tag> : null}
+            </Space>
+            <div style={{ marginBottom: 8 }}>
+              <Text type="secondary" style={{ fontSize: 12 }}>【副標】</Text>
+              <div><Text>{infoModalNode.data.subtitle}</Text></div>
+            </div>
+            <Divider style={{ margin: '10px 0' }} />
+            <div>
+              <Text type="secondary" style={{ fontSize: 12 }}>【職責說明】</Text>
+              <Text style={{ fontSize: 13, display: 'block', marginTop: 4 }}>
+                {infoModalNode.data.detail}
+              </Text>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }
