@@ -11,7 +11,8 @@ import { Avatar, Button, Card, Col, Divider, Dropdown, Input, List, message, Mod
 import { SendOutlined, UserOutlined, RobotOutlined, CompressOutlined, EyeOutlined, ZoomInOutlined, ZoomOutOutlined, InfoCircleOutlined } from '@ant-design/icons';
 import { CanvasEvent, Graph, NodeEvent } from '@antv/g6';
 import type { ComboData, EdgeData, IElementEvent, NodeData } from '@antv/g6';
-import { modelProviderApi, type SendMessageRequest } from '../services/api';
+import { type SendMessageRequest } from '../services/api';
+import { chatStore } from '../stores/chatStore';
 import { sendMessageSSE, type SSEConnection } from '../services/sseManager';
 
 const { Title, Text } = Typography;
@@ -690,6 +691,14 @@ export default function RagicLogisticProcess() {
   const chatEndRef = useRef<HTMLDivElement>(null);
   const sseRef = useRef<SSEConnection | null>(null);
   const SESSION_KEY = 'ragic-flow-chat';
+  const [storeState, setStoreState] = useState(chatStore.getState());
+
+  const unsubscribe = chatStore.subscribe(() => setStoreState(chatStore.getState()));
+
+  useEffect(() => {
+    void chatStore.loadProviders();
+    return () => unsubscribe();
+  }, []);
 
   const selectedNode = useMemo(
     () => rawNodes.find((node) => node.id === selectedNodeId) ?? null,
@@ -697,31 +706,26 @@ export default function RagicLogisticProcess() {
   );
 
   useEffect(() => {
-    modelProviderApi.list()
-      .then((res) => {
-        const options: LLMOption[] = [];
-        for (const provider of res.data.data || []) {
-          if (provider.status !== 'active') continue;
-          for (const model of provider.models) {
-            if (model.status !== 'active') continue;
-            options.push({
-              providerCode: provider.code,
-              modelId: model.model_id,
-              modelName: model.display_name || model.name,
-              providerName: provider.name,
-              label: `${provider.name} / ${model.display_name || model.name}`,
-              value: `${provider.code}:${model.model_id}`,
-            });
-          }
-        }
-        setLlmOptions(options);
-        if (options.length > 0 && !selectedLlm) {
-          setSelectedLlm(options[0].value);
-        }
-      })
-      .catch(() => undefined);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    const options: LLMOption[] = [];
+    for (const provider of storeState.providers) {
+      if (provider.status !== 'enabled') continue;
+      for (const model of provider.models) {
+        if (model.status !== 'enabled') continue;
+        options.push({
+          providerCode: provider.code,
+          modelId: model.model_id,
+          modelName: model.display_name || model.name,
+          providerName: provider.name,
+          label: `${provider.name} / ${model.display_name || model.name}`,
+          value: `${provider.code}:${model.model_id}`,
+        });
+      }
+    }
+    setLlmOptions(options);
+    if (options.length > 0 && !selectedLlm) {
+      setSelectedLlm(options[0].value);
+    }
+  }, [storeState.providers]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
