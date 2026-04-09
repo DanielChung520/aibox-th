@@ -1117,24 +1117,25 @@ export default function RagicLogisticProcess() {
                 )}
                 <div ref={chatEndRef} />
               </div>
-              <Input.TextArea
-                value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
-                onPressEnter={(e) => { if (!e.shiftKey) { e.preventDefault(); handleSendChat(); } }}
-                placeholder="輸入問題，Enter 發送（Shift+Enter 換行）"
-                autoSize={{ minRows: 1, maxRows: 3 }}
-                disabled={isStreaming}
-              />
-              <Button
-                type="primary"
-                icon={<SendOutlined />}
-                onClick={handleSendChat}
-                disabled={!chatInput.trim() || isStreaming}
-                loading={isStreaming}
-                style={{ marginTop: 8, width: '100%' }}
-              >
-                {isStreaming ? '回覆中...' : '發送'}
-              </Button>
+              <div style={{ position: 'relative', paddingRight: 40 }}>
+                <Input.TextArea
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  onPressEnter={(e) => { if (!e.shiftKey) { e.preventDefault(); handleSendChat(); } }}
+                  placeholder="輸入問題，Enter 發送（Shift+Enter 換行）"
+                  autoSize={{ minRows: 3, maxRows: 3 }}
+                  disabled={isStreaming}
+                  style={{ paddingRight: 40 }}
+                />
+                <Button
+                  type="primary"
+                  icon={<SendOutlined />}
+                  onClick={handleSendChat}
+                  disabled={!chatInput.trim() || isStreaming}
+                  loading={isStreaming}
+                  style={{ position: 'absolute', right: 0, top: 0, height: '100%', borderRadius: '0 6px 6px 0' }}
+                />
+              </div>
             </Card>
           </div>
         </Col>
