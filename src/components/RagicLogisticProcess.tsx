@@ -1122,8 +1122,13 @@ export default function RagicLogisticProcess() {
                   <Input.TextArea
                     value={chatInput}
                     onChange={(e) => setChatInput(e.target.value)}
-                    onKeyDown={(e) => { if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); handleSendChat(); } }}
-                    placeholder="輸入問題，Ctrl+Enter 發送（Shift+Enter 換行）"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSendChat();
+                      }
+                    }}
+                    placeholder="輸入問題，Ctrl+Enter 發送"
                     autoSize={{ minRows: 3, maxRows: 3 }}
                     disabled={isStreaming}
                     style={{ width: '100%', paddingRight: 44 }}
