@@ -1117,32 +1117,41 @@ export default function RagicLogisticProcess() {
                 )}
                 <div ref={chatEndRef} />
               </div>
-              <div style={{ position: 'relative', width: '100%' }}>
-                <Input.TextArea
-                  value={chatInput}
-                  onChange={(e) => setChatInput(e.target.value)}
-                  onPressEnter={(e) => { if (!e.shiftKey) { e.preventDefault(); handleSendChat(); } }}
-                  placeholder="輸入問題，Enter 發送（Shift+Enter 換行）"
-                  autoSize={{ minRows: 3, maxRows: 3 }}
-                  disabled={isStreaming}
-                  style={{ width: '100%', paddingRight: 44 }}
-                />
-                <Button
-                  type="primary"
-                  icon={<SendOutlined />}
-                  onClick={handleSendChat}
-                  disabled={!chatInput.trim() || isStreaming}
-                  loading={isStreaming}
-                  style={{
-                    position: 'absolute',
-                    right: 4,
-                    top: 4,
-                    bottom: 4,
-                    height: 'auto',
-                    minWidth: 36,
-                    borderRadius: 6,
-                  }}
-                />
+              <div style={{ display: 'flex', gap: 8 }}>
+                <div style={{ position: 'relative', flex: 1 }}>
+                  <Input.TextArea
+                    value={chatInput}
+                    onChange={(e) => setChatInput(e.target.value)}
+                    onPressEnter={(e) => { if (!e.shiftKey) { e.preventDefault(); handleSendChat(); } }}
+                    placeholder="輸入問題，Enter 發送（Shift+Enter 換行）"
+                    autoSize={{ minRows: 3, maxRows: 3 }}
+                    disabled={isStreaming}
+                    style={{ width: '100%', paddingRight: 44 }}
+                  />
+                  <div
+                    onClick={() => { if (chatInput.trim() && !isStreaming) handleSendChat(); }}
+                    style={{
+                      position: 'absolute',
+                      right: 4,
+                      top: 4,
+                      width: 32,
+                      height: 32,
+                      background: '#1677ff',
+                      borderRadius: 6,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: (chatInput.trim() && !isStreaming) ? 'pointer' : 'not-allowed',
+                      opacity: (chatInput.trim() && !isStreaming) ? 1 : 0.5,
+                    }}
+                  >
+                    {isStreaming ? (
+                      <Spin size="small" />
+                    ) : (
+                      <SendOutlined style={{ color: '#fff', fontSize: 14 }} />
+                    )}
+                  </div>
+                </div>
               </div>
             </Card>
           </div>
