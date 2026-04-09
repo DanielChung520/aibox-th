@@ -237,10 +237,10 @@ const rawNodes: Array<{ id: string; combo?: string; style: Record<string, unknow
       ],
     },
     data: {
-      label: '請購單',
-      subtitle: '需求發起',
+      label: '報價憑證',
+      subtitle: '報價流程',
       table: 'ERP_59',
-      detail: '採購需求的起點，由需求部門發起採購申請。流向：① 向下流動至採購單（PO）；② 可同時觸發詢價單，向供應商取得報價條件後再流回採購單。形成完整的「請購→詢價→採購」採購發起流程。',
+      detail: '狀態：產品開發打樣申請單 → 樣品品評調查表 → 新品生產申請單 → 報價成立中 → 報價待核簽 → 報價已簽核 → 報價轉訂購。\n動作：成立產品開發打樣申請單 → 拋轉樣品品評調查表 → 拋轉新品生產申請表 → 成立報價單 → 簽核報價單 → 拋轉訂購單。\n人員：(業務→研發部→總經理室) → (業務人員→主管) → (廠務-採購)',
       region: 'upstream',
       fill: '#eef5ff',
       stroke: '#2f74ff',
