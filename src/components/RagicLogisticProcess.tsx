@@ -7,7 +7,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Avatar, Button, Card, Col, Divider, Input, List, Modal, Row, Select, Space, Spin, Tag, Typography, theme } from 'antd';
+import { Avatar, Button, Card, Col, Divider, Input, List, message, Modal, Row, Select, Space, Spin, Tag, Typography, theme } from 'antd';
 import { SendOutlined, UserOutlined, RobotOutlined, CompressOutlined, EyeOutlined, ZoomInOutlined, ZoomOutOutlined, InfoCircleOutlined } from '@ant-design/icons';
 import { CanvasEvent, Graph, NodeEvent } from '@antv/g6';
 import type { ComboData, EdgeData, IElementEvent, NodeData } from '@antv/g6';
@@ -789,7 +789,10 @@ export default function RagicLogisticProcess() {
     if (!trimmed || isStreaming) return;
 
     const [providerCode, modelId] = selectedLlm.split(':');
-    if (!providerCode || !modelId) return;
+    if (!providerCode || !modelId) {
+      message.warning('請先選擇 AI 模型');
+      return;
+    }
 
     let contextInfo = '';
     if (selectedNode) {
