@@ -7,29 +7,14 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Avatar, Button, Card, Col, Divider, Dropdown, Input, List, message, Modal, Row, Space, Spin, Tag, Typography, theme } from 'antd';
+import { Avatar, Button, Card, Col, Divider, Dropdown, Input, List, Modal, Row, Space, Spin, Tag, Typography, theme } from 'antd';
+import type { MenuProps } from 'antd';
 import { SendOutlined, UserOutlined, RobotOutlined, CompressOutlined, EyeOutlined, ZoomInOutlined, ZoomOutOutlined, InfoCircleOutlined } from '@ant-design/icons';
 import { CanvasEvent, Graph, NodeEvent } from '@antv/g6';
 import type { ComboData, EdgeData, IElementEvent, NodeData } from '@antv/g6';
-import { type SendMessageRequest } from '../services/api';
 import { chatStore } from '../stores/chatStore';
-import { sendMessageSSE, type SSEConnection } from '../services/sseManager';
 
 const { Title, Text } = Typography;
-
-interface ChatMessageItem {
-  role: 'user' | 'assistant';
-  content: string;
-}
-
-interface LLMOption {
-  providerCode: string;
-  modelId: string;
-  modelName: string;
-  providerName: string;
-  label: string;
-  value: string;
-}
 
 type FlowRegion = 'entry' | 'upstream' | 'downstream' | 'planning' | 'production';
 
@@ -682,15 +667,9 @@ export default function RagicLogisticProcess() {
   const instanceRef = useRef(0);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [containerSize, setContainerSize] = useState({ w: 1200, h: suggestedGraphHeight });
-  const [chatMessages, setChatMessages] = useState<ChatMessageItem[]>([]);
   const [chatInput, setChatInput] = useState('');
-  const [isStreaming, setIsStreaming] = useState(false);
-  const [llmOptions, setLlmOptions] = useState<LLMOption[]>([]);
-  const [selectedLlm, setSelectedLlm] = useState<string>('');
   const [infoModalNode, setInfoModalNode] = useState<typeof rawNodes[0] | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
-  const sseRef = useRef<SSEConnection | null>(null);
-  const SESSION_KEY = 'ragic-flow-chat';
   const [storeState, setStoreState] = useState(chatStore.getState());
 
   const unsubscribe = chatStore.subscribe(() => setStoreState(chatStore.getState()));
@@ -705,31 +684,37 @@ export default function RagicLogisticProcess() {
     [selectedNodeId]
   );
 
-  useEffect(() => {
-    const options: LLMOption[] = [];
-    for (const provider of storeState.providers) {
-      if (provider.status !== 'enabled') continue;
-      for (const model of provider.models) {
-        if (model.status !== 'enabled') continue;
-        options.push({
-          providerCode: provider.code,
-          modelId: model.model_id,
-          modelName: model.display_name || model.name,
-          providerName: provider.name,
-          label: `${provider.name} / ${model.display_name || model.name}`,
-          value: `${provider.code}:${model.model_id}`,
-        });
-      }
+  const providerItems: MenuProps['items'] = useMemo(
+    () => {
+      const auto = [{ key: '__auto__', label: '自動' }];
+      const list = storeState.providers.map((provider) => {
+        const isLocal = provider.base_url.includes('localhost') || provider.base_url.includes('127.0.0.1');
+        const hasApiKey = Boolean(provider.api_key?.trim());
+        return { key: provider.code, label: provider.name, disabled: provider.status !== 'enabled' || (!isLocal && !hasApiKey) };
+      });
+      return [...auto, ...list];
+    },
+    [storeState.providers],
+  );
+
+  const handleSend = async () => {
+    const text = chatInput.trim();
+    if (!text) return;
+    if (storeState.isStreaming) return;
+
+    let contextInfo = '';
+    if (selectedNode) {
+      contextInfo = `\n【當前流程節點】\n名稱：${selectedNode.data.label}\n副標：${selectedNode.data.subtitle}\n表單：${selectedNode.data.table || '無'}\n說明：${selectedNode.data.detail}\n`;
     }
-    setLlmOptions(options);
-    if (options.length > 0 && !selectedLlm) {
-      setSelectedLlm(options[0].value);
-    }
-  }, [storeState.providers]);
+
+    const fullContent = `${contextInfo ? contextInfo + '\n---\n' : ''}【使用者問題】\n${text}`;
+    setChatInput('');
+    await chatStore.sendMessage(fullContent);
+  };
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [chatMessages]);
+  }, [storeState.messages]);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -783,59 +768,6 @@ export default function RagicLogisticProcess() {
     const graph = graphRef.current;
     if (!graph) return;
     fitGraphToView(graph);
-  };
-
-  const handleSendChat = () => {
-    const trimmed = chatInput.trim();
-    if (!trimmed || isStreaming) return;
-
-    const [providerCode, modelId] = selectedLlm.split(':');
-    if (!providerCode || !modelId) {
-      message.warning('請先選擇 AI 模型');
-      return;
-    }
-
-    let contextInfo = '';
-    if (selectedNode) {
-      contextInfo = `\n【當前流程節點】\n名稱：${selectedNode.data.label}\n副標：${selectedNode.data.subtitle}\n表單：${selectedNode.data.table || '無'}\n說明：${selectedNode.data.detail}\n`;
-    }
-
-    const fullContent = `${contextInfo ? contextInfo + '\n---\n' : ''}【使用者問題】\n${trimmed}`;
-
-    setChatMessages((prev) => [...prev, { role: 'user', content: trimmed }]);
-    setChatInput('');
-    setIsStreaming(true);
-
-    let streamedContent = '';
-
-    const request: SendMessageRequest = {
-      content: fullContent,
-      provider: providerCode,
-      model: modelId,
-    };
-
-    sseRef.current = sendMessageSSE(SESSION_KEY, request, {
-      onChunk: (delta: string) => {
-        streamedContent += delta;
-        setChatMessages((prev) => {
-          const last = prev[prev.length - 1];
-          if (last?.role === 'assistant') {
-            return [...prev.slice(0, -1), { role: 'assistant', content: streamedContent }];
-          }
-          return [...prev, { role: 'assistant', content: streamedContent }];
-        });
-      },
-      onDone: () => {
-        setIsStreaming(false);
-      },
-      onError: (err: string) => {
-        setIsStreaming(false);
-        setChatMessages((prev) => [
-          ...prev,
-          { role: 'assistant', content: `錯誤：${err}` },
-        ]);
-      },
-    });
   };
 
   const clearSelection = () => {
@@ -1087,14 +1019,14 @@ export default function RagicLogisticProcess() {
                   minHeight: 0,
                 }}
               >
-                {chatMessages.length === 0 ? (
+                {storeState.messages.length === 0 ? (
                   <div style={{ textAlign: 'center', marginTop: 80, color: '#999' }}>
                     <RobotOutlined style={{ fontSize: 32, marginBottom: 8 }} />
                     <div style={{ fontSize: 12 }}>詢問流程相關問題</div>
                   </div>
                 ) : (
                   <List
-                    dataSource={chatMessages}
+                    dataSource={storeState.messages}
                     renderItem={(item) => (
                       <List.Item style={{ padding: '6px 0', display: 'block', border: 'none' }}>
                         <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
@@ -1104,7 +1036,7 @@ export default function RagicLogisticProcess() {
                             style={{ background: item.role === 'user' ? '#1677ff' : '#52c41a', flexShrink: 0 }}
                           />
                           <Text style={{ fontSize: 13, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                            {item.content || (isStreaming && item.role === 'assistant' ? <Spin size="small" /> : '')}
+                            {item.content || (storeState.isStreaming && item.role === 'assistant' ? <Spin size="small" /> : '')}
                           </Text>
                         </div>
                       </List.Item>
@@ -1120,21 +1052,23 @@ export default function RagicLogisticProcess() {
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && !e.shiftKey) {
                       e.preventDefault();
-                      handleSendChat();
+                      handleSend();
                     }
                   }}
                   placeholder="輸入問題，Enter 發送"
                   autoSize={{ minRows: 3, maxRows: 3 }}
-                  disabled={isStreaming}
+                  disabled={storeState.isStreaming}
                   style={{ width: '100%', paddingRight: 110 }}
                 />
                 <div style={{ position: 'absolute', top: 6, right: 8, display: 'flex', gap: 4, alignItems: 'center' }}>
-                  <span style={{ fontSize: 11, color: '#999' }}>[{llmOptions.length}]</span>
                   <Dropdown
-                    menu={{
-                      items: llmOptions.map((o) => ({ key: o.value, label: o.label })),
-                      onClick: ({ key }) => setSelectedLlm(key),
-                    }}
+                    menu={{ items: providerItems, onClick: ({ key }) => {
+                      if (key === '__auto__') {
+                        chatStore.setSelectedProvider(null);
+                      } else {
+                        chatStore.setSelectedProvider(key);
+                      }
+                    }}}
                     trigger={['click']}
                   >
                     <span style={{
@@ -1154,11 +1088,11 @@ export default function RagicLogisticProcess() {
                       border: '1px solid #1677ff40',
                     }}>
                       <RobotOutlined style={{ fontSize: 10, flexShrink: 0 }} />
-                      {llmOptions.find((o) => o.value === selectedLlm)?.providerName || '選擇模型'}
+                      {storeState.providers.find((p) => p.code === storeState.selectedProvider)?.name || '自動'}
                     </span>
                   </Dropdown>
                   <div
-                    onClick={() => { if (chatInput.trim() && !isStreaming) handleSendChat(); }}
+                    onClick={() => { if (chatInput.trim() && !storeState.isStreaming) handleSend(); }}
                     style={{
                       width: 28,
                       height: 28,
@@ -1167,11 +1101,11 @@ export default function RagicLogisticProcess() {
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      cursor: (chatInput.trim() && !isStreaming) ? 'pointer' : 'not-allowed',
-                      opacity: (chatInput.trim() && !isStreaming) ? 1 : 0.5,
+                      cursor: (chatInput.trim() && !storeState.isStreaming) ? 'pointer' : 'not-allowed',
+                      opacity: (chatInput.trim() && !storeState.isStreaming) ? 1 : 0.5,
                     }}
                   >
-                    {isStreaming ? (
+                    {storeState.isStreaming ? (
                       <Spin size="small" />
                     ) : (
                       <SendOutlined style={{ color: '#fff', fontSize: 13 }} />
