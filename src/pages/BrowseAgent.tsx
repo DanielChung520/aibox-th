@@ -266,7 +266,7 @@ export default function BrowseAgent() {
   }));
 
   return (
-    <div style={{ padding: '24px' }}>
+    <div>
       <Spin spinning={loading}>
         <Tabs
           activeKey={activeTab}
