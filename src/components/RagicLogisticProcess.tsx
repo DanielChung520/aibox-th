@@ -1006,7 +1006,7 @@ export default function RagicLogisticProcess() {
   }, [containerSize]);
 
   return (
-    <div style={{ padding: '8px 8px 16px', overflowY: 'auto', maxHeight: 'calc(100vh - 80px)' }}>
+    <div style={{ padding: '8px 8px 16px' }}>
       <Card
         styles={{ body: { padding: 20 } }}
         style={{
@@ -1064,8 +1064,8 @@ export default function RagicLogisticProcess() {
           </Card>
         </Col>
 
-        <Col xs={24} xl={6}>
-          <div style={{ position: 'sticky', top: 16, display: 'flex', flexDirection: 'column', gap: 16, height: suggestedGraphHeight, overflow: 'hidden' }}>
+        <Col xs={2} xl={6}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16, height: suggestedGraphHeight, overflow: 'hidden' }}>
             <Card styles={{ body: { padding: 18, display: 'flex', flexDirection: 'column', overflow: 'hidden' } }} style={{ borderRadius: 20, flex: 1, minHeight: 0 }}>
               <Title level={4} style={{ marginTop: 0, marginBottom: 10, flexShrink: 0 }}>
                 AI 流程問答
