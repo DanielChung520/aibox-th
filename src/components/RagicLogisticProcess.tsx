@@ -240,7 +240,7 @@ const rawNodes: Array<{ id: string; combo?: string; style: Record<string, unknow
       label: '報價憑證',
       subtitle: '報價流程',
       table: 'ERP_59',
-      detail: '狀態：產品開發打樣申請單 → 樣品品評調查表 → 新品生產申請單 → 報價成立中 → 報價待核簽 → 報價已簽核 → 報價轉訂購。\n動作：成立產品開發打樣申請單 → 拋轉樣品品評調查表 → 拋轉新品生產申請表 → 成立報價單 → 簽核報價單 → 拋轉訂購單。\n人員：(業務→研發部→總經理室) → (業務人員→主管) → (廠務-採購)',
+      detail: "狀態：產品開發打樣申請單 → 樣品品評調查表 → 新品生產申請單 → 報價成立中 → 報價待核簽 → 報價已簽核 → 報價轉訂購。\n 動作：成立產品開發打樣申請單 → 拋轉樣品品評調查表 → 拋轉新品生產申請表 → 成立報價單 → 簽核報價單 → 拋轉訂購單。\n 人員：(業務→研發部→總經理室) → (業務人員→主管) → (廠務-採購)",
       region: 'upstream',
       fill: '#eef5ff',
       stroke: '#2f74ff',
@@ -723,7 +723,7 @@ export default function RagicLogisticProcess() {
       })
       .catch(() => undefined)
       .finally(() => setLoadingModels(false));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -1161,7 +1161,7 @@ export default function RagicLogisticProcess() {
             <Divider style={{ margin: '10px 0' }} />
             <div>
               <Text type="secondary" style={{ fontSize: 12 }}>【職責說明】</Text>
-              <Text style={{ fontSize: 13, display: 'block', marginTop: 4 }}>
+              <Text style={{ fontSize: 13, display: 'block', marginTop: 4, whiteSpace: 'pre-wrap' }}>
                 {infoModalNode.data.detail}
               </Text>
             </div>
