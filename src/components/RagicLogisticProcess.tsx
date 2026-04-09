@@ -1117,7 +1117,7 @@ export default function RagicLogisticProcess() {
                 )}
                 <div ref={chatEndRef} />
               </div>
-              <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+              <div style={{ position: 'relative' }}>
                 <Input.TextArea
                   value={chatInput}
                   onChange={(e) => setChatInput(e.target.value)}
@@ -1125,7 +1125,7 @@ export default function RagicLogisticProcess() {
                   placeholder="輸入問題，Enter 發送（Shift+Enter 換行）"
                   autoSize={{ minRows: 3, maxRows: 3 }}
                   disabled={isStreaming}
-                  style={{ flex: 1 }}
+                  style={{ width: '100%', paddingRight: 44 }}
                 />
                 <Button
                   type="primary"
@@ -1133,7 +1133,14 @@ export default function RagicLogisticProcess() {
                   onClick={handleSendChat}
                   disabled={!chatInput.trim() || isStreaming}
                   loading={isStreaming}
-                  style={{ height: 'auto', flexShrink: 0 }}
+                  style={{
+                    position: 'absolute',
+                    right: 4,
+                    top: 4,
+                    height: 'calc(100% - 8px)',
+                    minWidth: 36,
+                    borderRadius: 6,
+                  }}
                 />
               </div>
             </Card>
