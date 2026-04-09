@@ -1006,7 +1006,7 @@ export default function RagicLogisticProcess() {
   }, [containerSize]);
 
   return (
-    <div style={{ padding: '8px 8px 16px' }}>
+    <div style={{ padding: '8px 8px 16px', overflowY: 'auto', maxHeight: 'calc(100vh - 80px)' }}>
       <Card
         styles={{ body: { padding: 20 } }}
         style={{
