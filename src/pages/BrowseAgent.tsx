@@ -272,6 +272,7 @@ export default function BrowseAgent() {
           activeKey={activeTab}
           onChange={setActiveTab}
           items={tabItems}
+          style={{ marginTop: -8 }}
         />
       </Spin>
        <AgentFormModal

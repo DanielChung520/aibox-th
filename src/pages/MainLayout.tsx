@@ -209,7 +209,6 @@ export default function MainLayout() {
           </Header>
 
           <Content style={{
-            margin: '16px',
             padding: '24px',
             background: contentBg,
             borderRadius: '10px',
