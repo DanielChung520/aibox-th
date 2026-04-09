@@ -169,7 +169,7 @@ const rawNodes: Array<{ id: string; combo?: string; style: Record<string, unknow
       label: '採購單（PO）',
       subtitle: '正式採購',
       table: 'ERP_13',
-      detail: '正式發給供應商的採購合同，是採購流程的核心樞紐。四大流向：① 向下游流動至收貨單，供供應商交貨驗收；② 向下游物料需求單（MRP）流動，用於生產物料規劃；③ 接收下游報價憑證單的反向流動（間結帳價單）；④ 接收收貨單的退貨反向流動，沖減採購數量。',
+      detail: '狀態：採購成立中 → 採購待核簽 → 採購已簽核 → 採購轉收貨。\n動作：成立採購單 → 簽核採購單 → 拋轉收貨單。\n人員：(廠務部-採購人員+主管) / 廠務部(倉管人員+主管)',
       region: 'upstream',
       fill: '#f6ffed',
       stroke: '#52c41a',
