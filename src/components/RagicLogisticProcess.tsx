@@ -1074,13 +1074,13 @@ export default function RagicLogisticProcess() {
               <Title level={4} style={{ marginTop: 0, marginBottom: 10, flexShrink: 0 }}>
                 AI 流程問答
               </Title>
-              <Select
+               <Select
                 style={{ width: '100%', marginBottom: 10, flexShrink: 0 }}
                 value={selectedLlm}
                 onChange={setSelectedLlm}
                 loading={loadingModels}
                 options={llmOptions.map((o) => ({ label: o.label, value: o.value }))}
-                placeholder="選擇 AI 模型"
+                placeholder={loadingModels ? '載入模型...' : (llmOptions.length === 0 ? '暫無可用模型' : '選擇 AI 模型')}
               />
               <div
                 style={{
