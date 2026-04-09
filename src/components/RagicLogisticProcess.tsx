@@ -1,18 +1,34 @@
 /**
  * @file        Ragic 採購流程圖元件
  * @description 使用 G6 呈現採購-訂單-生產流程圖
- * @lastUpdate  2026-04-09 16:22:18
+ * @lastUpdate  2026-04-09 16:37:57
  * @author      Daniel Chung
- * @version     1.4.0
+ * @version     1.7.0
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Button, Card, Col, Divider, Empty, Row, Space, Tag, Typography, theme } from 'antd';
-import { CompressOutlined, EyeOutlined, ZoomInOutlined, ZoomOutOutlined } from '@ant-design/icons';
+import { Avatar, Button, Card, Col, Divider, Empty, Input, List, Row, Select, Space, Spin, Tag, Typography, theme } from 'antd';
+import { SendOutlined, UserOutlined, RobotOutlined, CompressOutlined, EyeOutlined, ZoomInOutlined, ZoomOutOutlined } from '@ant-design/icons';
 import { CanvasEvent, Graph, NodeEvent } from '@antv/g6';
 import type { ComboData, EdgeData, IElementEvent, NodeData } from '@antv/g6';
+import { modelProviderApi, type SendMessageRequest } from '../services/api';
+import { sendMessageSSE, type SSEConnection } from '../services/sseManager';
 
 const { Title, Text } = Typography;
+
+interface ChatMessageItem {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+interface LLMOption {
+  providerCode: string;
+  modelId: string;
+  modelName: string;
+  providerName: string;
+  label: string;
+  value: string;
+}
 
 type FlowRegion = 'entry' | 'upstream' | 'downstream' | 'planning' | 'production';
 
@@ -665,12 +681,53 @@ export default function RagicLogisticProcess() {
   const instanceRef = useRef(0);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [containerSize, setContainerSize] = useState({ w: 1200, h: suggestedGraphHeight });
-  const [zoom, setZoom] = useState(1);
+  const [chatMessages, setChatMessages] = useState<ChatMessageItem[]>([]);
+  const [chatInput, setChatInput] = useState('');
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [llmOptions, setLlmOptions] = useState<LLMOption[]>([]);
+  const [selectedLlm, setSelectedLlm] = useState<string>('');
+  const [loadingModels, setLoadingModels] = useState(false);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+  const sseRef = useRef<SSEConnection | null>(null);
+  const SESSION_KEY = 'ragic-flow-chat';
 
   const selectedNode = useMemo(
     () => rawNodes.find((node) => node.id === selectedNodeId) ?? null,
     [selectedNodeId]
   );
+
+  useEffect(() => {
+    setLoadingModels(true);
+    modelProviderApi.list()
+      .then((res) => {
+        const options: LLMOption[] = [];
+        for (const provider of res.data.data || []) {
+          if (provider.status !== 'active') continue;
+          for (const model of provider.models) {
+            if (model.status !== 'active') continue;
+            options.push({
+              providerCode: provider.code,
+              modelId: model.model_id,
+              modelName: model.display_name || model.name,
+              providerName: provider.name,
+              label: `${provider.name} / ${model.display_name || model.name}`,
+              value: `${provider.code}:${model.model_id}`,
+            });
+          }
+        }
+        setLlmOptions(options);
+        if (options.length > 0 && !selectedLlm) {
+          setSelectedLlm(options[0].value);
+        }
+      })
+      .catch(() => undefined)
+      .finally(() => setLoadingModels(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chatMessages]);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -689,10 +746,6 @@ export default function RagicLogisticProcess() {
     if (!graphReadyRef.current) return;
     try {
       graph.fitView();
-      const currentZoom = graph.getZoom();
-      if (typeof currentZoom === 'number' && Number.isFinite(currentZoom)) {
-        setZoom(Number(currentZoom.toFixed(2)));
-      }
     } catch {
       undefined;
     }
@@ -706,7 +759,6 @@ export default function RagicLogisticProcess() {
       if (typeof currentZoom !== 'number' || !Number.isFinite(currentZoom)) return;
       const next = Math.min(currentZoom + 0.15, 2.5);
       graph.zoomTo(next, undefined);
-      setZoom(Number(next.toFixed(2)));
     } catch {
       undefined;
     }
@@ -720,7 +772,6 @@ export default function RagicLogisticProcess() {
       if (typeof currentZoom !== 'number' || !Number.isFinite(currentZoom)) return;
       const next = Math.max(currentZoom - 0.15, 0.35);
       graph.zoomTo(next, undefined);
-      setZoom(Number(next.toFixed(2)));
     } catch {
       undefined;
     }
@@ -730,6 +781,56 @@ export default function RagicLogisticProcess() {
     const graph = graphRef.current;
     if (!graph) return;
     fitGraphToView(graph);
+  };
+
+  const handleSendChat = () => {
+    const trimmed = chatInput.trim();
+    if (!trimmed || isStreaming) return;
+
+    const [providerCode, modelId] = selectedLlm.split(':');
+    if (!providerCode || !modelId) return;
+
+    let contextInfo = '';
+    if (selectedNode) {
+      contextInfo = `\n【當前流程節點】\n名稱：${selectedNode.data.label}\n副標：${selectedNode.data.subtitle}\n表單：${selectedNode.data.table || '無'}\n說明：${selectedNode.data.detail}\n`;
+    }
+
+    const fullContent = `${contextInfo ? contextInfo + '\n---\n' : ''}【使用者問題】\n${trimmed}`;
+
+    setChatMessages((prev) => [...prev, { role: 'user', content: trimmed }]);
+    setChatInput('');
+    setIsStreaming(true);
+
+    let streamedContent = '';
+
+    const request: SendMessageRequest = {
+      content: fullContent,
+      provider: providerCode,
+      model: modelId,
+    };
+
+    sseRef.current = sendMessageSSE(SESSION_KEY, request, {
+      onChunk: (delta: string) => {
+        streamedContent += delta;
+        setChatMessages((prev) => {
+          const last = prev[prev.length - 1];
+          if (last?.role === 'assistant') {
+            return [...prev.slice(0, -1), { role: 'assistant', content: streamedContent }];
+          }
+          return [...prev, { role: 'assistant', content: streamedContent }];
+        });
+      },
+      onDone: () => {
+        setIsStreaming(false);
+      },
+      onError: (err: string) => {
+        setIsStreaming(false);
+        setChatMessages((prev) => [
+          ...prev,
+          { role: 'assistant', content: `錯誤：${err}` },
+        ]);
+      },
+    });
   };
 
   const clearSelection = () => {
@@ -854,6 +955,10 @@ export default function RagicLogisticProcess() {
       clearSelection();
     });
 
+    graph.on(CanvasEvent.DBLCLICK, () => {
+      clearSelection();
+    });
+
     const renderGraph = async () => {
       const origError = console.error;
       console.error = () => undefined;
@@ -935,17 +1040,14 @@ export default function RagicLogisticProcess() {
             styles={{ body: { padding: 12 } }}
             style={{ borderRadius: 20 }}
           >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-              <Text style={{ color: '#64748b', fontSize: 12 }}>
-                縮放比例：{Math.round(zoom * 100)}%
-              </Text>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginBottom: 10 }}>
               <Space size={8}>
                 <Button icon={<EyeOutlined />} size="small" onClick={clearSelection} disabled={!selectedNodeId}>
                   全部顯示
                 </Button>
                 <Button icon={<ZoomOutOutlined />} size="small" onClick={zoomOut} />
                 <Button icon={<CompressOutlined />} size="small" onClick={resetView}>
-                  自適應
+                  歸位
                 </Button>
                 <Button icon={<ZoomInOutlined />} size="small" onClick={zoomIn} />
               </Space>
@@ -966,32 +1068,6 @@ export default function RagicLogisticProcess() {
         <Col xs={24} xl={6}>
           <div style={{ position: 'sticky', top: 16 }}>
             <Card styles={{ body: { padding: 18 } }} style={{ borderRadius: 20, marginBottom: 20 }}>
-              <Title level={4} style={{ marginTop: 0, marginBottom: 12 }}>
-                流程分區
-              </Title>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {Object.entries(regionInfo).map(([key, item]) => (
-                  <div
-                    key={key}
-                    style={{
-                      padding: 12,
-                      borderRadius: 12,
-                      border: '1px solid #e5e7eb',
-                      background: '#fafafa',
-                    }}
-                  >
-                    <div style={{ marginBottom: 4 }}>
-                      <Tag color={item.color} style={{ marginInlineEnd: 0 }}>
-                        {item.title}
-                      </Tag>
-                    </div>
-                    <Text style={{ fontSize: 12, color: '#64748b' }}>{item.description}</Text>
-                  </div>
-                ))}
-              </div>
-            </Card>
-
-            <Card styles={{ body: { padding: 18 } }} style={{ borderRadius: 20 }}>
               <Title level={4} style={{ marginTop: 0, marginBottom: 12 }}>
                 節點詳情
               </Title>
@@ -1017,6 +1093,75 @@ export default function RagicLogisticProcess() {
               ) : (
                 <Empty description="點擊左側節點查看流程說明" image={Empty.PRESENTED_IMAGE_SIMPLE} />
               )}
+            </Card>
+
+            <Card styles={{ body: { padding: 18 } }} style={{ borderRadius: 20 }}>
+              <Title level={4} style={{ marginTop: 0, marginBottom: 10 }}>
+                AI 流程問答
+              </Title>
+              <Select
+                style={{ width: '100%', marginBottom: 12 }}
+                value={selectedLlm}
+                onChange={setSelectedLlm}
+                loading={loadingModels}
+                options={llmOptions.map((o) => ({ label: o.label, value: o.value }))}
+                placeholder="選擇 AI 模型"
+              />
+              <div
+                style={{
+                  height: 320,
+                  overflowY: 'auto',
+                  marginBottom: 10,
+                  border: '1px solid #f0f0f0',
+                  borderRadius: 8,
+                  padding: '8px 12px',
+                  background: '#fafafa',
+                }}
+              >
+                {chatMessages.length === 0 ? (
+                  <div style={{ textAlign: 'center', marginTop: 80, color: '#999' }}>
+                    <RobotOutlined style={{ fontSize: 32, marginBottom: 8 }} />
+                    <div style={{ fontSize: 12 }}>詢問流程相關問題</div>
+                  </div>
+                ) : (
+                  <List
+                    dataSource={chatMessages}
+                    renderItem={(item) => (
+                      <List.Item style={{ padding: '6px 0', display: 'block', border: 'none' }}>
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                          <Avatar
+                            size={24}
+                            icon={item.role === 'user' ? <UserOutlined /> : <RobotOutlined />}
+                            style={{ background: item.role === 'user' ? '#1677ff' : '#52c41a', flexShrink: 0 }}
+                          />
+                          <Text style={{ fontSize: 13, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                            {item.content || (isStreaming && item.role === 'assistant' ? <Spin size="small" /> : '')}
+                          </Text>
+                        </div>
+                      </List.Item>
+                    )}
+                  />
+                )}
+                <div ref={chatEndRef} />
+              </div>
+              <Input.TextArea
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                onPressEnter={(e) => { if (!e.shiftKey) { e.preventDefault(); handleSendChat(); } }}
+                placeholder="輸入問題，Enter 發送（Shift+Enter 換行）"
+                autoSize={{ minRows: 1, maxRows: 3 }}
+                disabled={isStreaming}
+              />
+              <Button
+                type="primary"
+                icon={<SendOutlined />}
+                onClick={handleSendChat}
+                disabled={!chatInput.trim() || isStreaming}
+                loading={isStreaming}
+                style={{ marginTop: 8, width: '100%' }}
+              >
+                {isStreaming ? '回覆中...' : '發送'}
+              </Button>
             </Card>
           </div>
         </Col>
