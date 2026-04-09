@@ -339,6 +339,7 @@ const rawNodes: Array<{ id: string; combo?: string; style: Record<string, unknow
       portR: 0,
       ports: [
         { key: 'from-so', placement: [0.5, 0.5] },
+        { key: 'top-mo', placement: [0.5, 0] },
         { key: 'to-issue', placement: [0, 0.5] },
       ],
     },
@@ -455,26 +456,26 @@ const suggestedGraphHeight = Math.max(
 );
 
 const rawEdges: Array<{ id: string; source: string; target: string; data?: FlowEdgeMeta }> = [
-  { id: 'e1', source: 'entry', target: 'pr', data: { label: '主流程 → 上游', stroke: '#7c8aa5', sourcePort: 'left-center', targetPort: 'in-top', noRouter: true, controlPoints: [[220, -32]] } },
+  { id: 'e1', source: 'entry', target: 'pr', data: { label: '主流程 → 上游', stroke: '#3f5e9bff', sourcePort: 'left-center', targetPort: 'in-top', noRouter: true, controlPoints: [[220, -32]] } },
   { id: 'e2', source: 'entry', target: 'quote', data: { label: '開新報價單', stroke: '#fa8c16', sourcePort: 'right-center', targetPort: 'from-entry', noRouter: true, controlPoints: [[1760, -32]] } },
-  { id: 'e3', source: 'pr', target: 'rfq', data: { sourcePort: 'to-rfq', targetPort: 'in-left' } },
-  { id: 'e4', source: 'pr', target: 'po', data: { sourcePort: 'to-po', targetPort: 'from-pr' } },
-  { id: 'e5', source: 'rfq', target: 'po', data: { sourcePort: 'to-po', targetPort: 'from-rfq' } },
-  { id: 'e6', source: 'po', target: 'receive', data: { sourcePort: 'bottom-po', targetPort: 'from-po' } },
+  { id: 'e3', source: 'pr', target: 'rfq', data: { stroke: '#da8d49ff', sourcePort: 'to-rfq', targetPort: 'in-left' } },
+  { id: 'e4', source: 'pr', target: 'po', data: { stroke: '#52c41a', sourcePort: 'to-po', targetPort: 'from-pr' } },
+  { id: 'e5', source: 'rfq', target: 'po', data: { stroke: '#52c41a', sourcePort: 'to-po', targetPort: 'from-rfq' } },
+  { id: 'e6', source: 'po', target: 'receive', data: { stroke: '#e8953cff', sourcePort: 'bottom-po', targetPort: 'from-po' } },
   { id: 'e7', source: 'receive', target: 'return', data: { sourcePort: 'to-return', targetPort: 'from-receive' } },
-  { id: 'e8', source: 'return', target: 'po', data: { dashed: true, label: '異常回寫', stroke: '#cbd5e1', sourcePort: 'back-po', targetPort: 'to-receive' } },
-  { id: 'e9', source: 'receive', target: 'po', data: { dashed: true, label: '收貨狀態更新', stroke: '#cbd5e1', sourcePort: 'to-status', targetPort: 'to-receive-low' } },
+  { id: 'e8', source: 'return', target: 'po', data: { dashed: true, label: '異常回寫', stroke: '#a2b4c9ff', sourcePort: 'back-po', targetPort: 'to-receive' } },
+  { id: 'e9', source: 'receive', target: 'po', data: { dashed: true, label: '收貨狀態更新', stroke: '#99a7b7ff', sourcePort: 'to-status', targetPort: 'to-receive-low' } },
   { id: 'e10', source: 'quote', target: 'so', data: { label: '轉訂購單', stroke: '#fa8c16', sourcePort: 'to-so', targetPort: 'from-quote' } },
   { id: 'e11', source: 'so', target: 'prodDemand', data: { label: '自製件', stroke: '#722ed1', sourcePort: 'bottom-left', targetPort: 'right-middle', noRouter: true, controlPoints: [[1960, 530]] } },
   { id: 'e12', source: 'prodDemand', target: 'mrp', data: { sourcePort: 'to-mrp', targetPort: 'from-prod' } },
   { id: 'e13', source: 'mrp', target: 'budget', data: { sourcePort: 'to-budget', targetPort: 'from-mrp' } },
-  { id: 'e14', source: 'budget', target: 'po', data: { dashed: true, label: '預算回推採購', stroke: '#cbd5e1', sourcePort: 'left-budget', targetPort: 'bottom-po-left', noRouter: true, controlPoints: [[810, 530]] } },
+  { id: 'e14', source: 'budget', target: 'po', data: { dashed: true, label: '預算回推採購', stroke: '#94a5baff', sourcePort: 'left-budget', targetPort: 'bottom-po-left', noRouter: true, controlPoints: [[810, 530]] } },
   { id: 'e15', source: 'so', target: 'po', data: { label: '轉採購單（採購件）', stroke: '#52c41a', sourcePort: 'to-po-left', targetPort: 'from-so' } },
-  { id: 'e16', source: 'so', target: 'mo', data: { sourcePort: 'to-mo', targetPort: 'from-so' } },
-  { id: 'e17', source: 'mo', target: 'issue', data: { sourcePort: 'to-issue', targetPort: 'from-mo' } },
-  { id: 'e18', source: 'issue', target: 'dispatch', data: { sourcePort: 'to-dispatch', targetPort: 'from-issue' } },
-  { id: 'e19', source: 'dispatch', target: 'report', data: { sourcePort: 'to-report', targetPort: 'from-dispatch' } },
-  { id: 'e20', source: 'report', target: 'fg', data: { sourcePort: 'to-fg', targetPort: 'from-report' } },
+  { id: 'e16', source: 'so', target: 'mo', data: { stroke: '#52c41a', sourcePort: 'to-mo', targetPort: 'top-mo' } },
+  { id: 'e17', source: 'mo', target: 'issue', data: { stroke: '#612c6eff', sourcePort: 'to-issue', targetPort: 'from-mo' } },
+  { id: 'e18', source: 'issue', target: 'dispatch', data: { stroke: '#d68c3cff', sourcePort: 'to-dispatch', targetPort: 'from-issue' } },
+  { id: 'e19', source: 'dispatch', target: 'report', data: { stroke: '#2ac74cff', sourcePort: 'to-report', targetPort: 'from-dispatch' } },
+  { id: 'e20', source: 'report', target: 'fg', data: { stroke: '#495ea4ff', sourcePort: 'to-fg', targetPort: 'from-report' } },
 ];
 
 const rawCombos: ComboData[] = [
@@ -619,23 +620,31 @@ const buildGraphData = (focusedNodeId: string | null) => {
       const isRelated = !focusedNodeId || relatedEdgeIds.has(edge.id);
       const highlightEdge = !!focusedNodeId && relatedEdgeIds.has(edge.id);
 
-      const perEdgeStyle =
-        edge.data?.noRouter || edge.data?.controlPoints
-          ? {
-            ...(edge.data.noRouter ? { router: false as const } : {}),
-            ...(edge.data.controlPoints ? { controlPoints: edge.data.controlPoints } : {}),
-          }
-          : undefined;
+      if (edge.data?.controlPoints) {
+        return {
+          id: edge.id,
+          source: edge.source,
+          target: edge.target,
+          data: {
+            ...edge.data,
+            stroke: highlightEdge ? '#1677ff' : edge.data?.stroke || '#94a3b8',
+            opacity: isRelated ? 1 : 0.18,
+            lineWidth: highlightEdge ? 3 : 2,
+          },
+          style: { controlPoints: edge.data.controlPoints },
+        };
+      }
 
       return {
-        ...edge,
+        id: edge.id,
+        source: edge.source,
+        target: edge.target,
         data: {
           ...edge.data,
           stroke: highlightEdge ? '#1677ff' : edge.data?.stroke || '#94a3b8',
           opacity: isRelated ? 1 : 0.18,
           lineWidth: highlightEdge ? 3 : 2,
         },
-        ...(perEdgeStyle ? { style: perEdgeStyle } : {}),
       };
     }),
     combos: rawCombos.map((combo) => ({
