@@ -1,13 +1,13 @@
 /**
  * @file        Ragic 採購流程圖元件
  * @description 使用 G6 呈現採購-訂單-生產流程圖
- * @lastUpdate  2026-04-09 13:58:25
+ * @lastUpdate  2026-04-09 16:22:18
  * @author      Daniel Chung
- * @version     1.3.0
+ * @version     1.4.0
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Button, Card, Col, Empty, Row, Space, Tag, Typography, theme } from 'antd';
+import { Button, Card, Col, Divider, Empty, Row, Space, Tag, Typography, theme } from 'antd';
 import { CompressOutlined, EyeOutlined, ZoomInOutlined, ZoomOutOutlined } from '@ant-design/icons';
 import { CanvasEvent, Graph, NodeEvent } from '@antv/g6';
 import type { ComboData, EdgeData, IElementEvent, NodeData } from '@antv/g6';
@@ -78,7 +78,7 @@ const rawNodes: Array<{ id: string; combo?: string; style: Record<string, unknow
     data: {
       label: '表單成立追蹤（主）',
       subtitle: '流程總入口',
-      detail: '由主流程節點分流至採購與訂單流程',
+      detail: '這是整個流程的總控節點，所有下游表單的成立都從此節點發起，用於追蹤全鏈路表單狀態。負責部門：總經理+廠長、業務部（業務課）、商品部、品保部。',
       region: 'entry',
       fill: '#f0f7ff',
       stroke: '#1677ff',
@@ -124,7 +124,7 @@ const rawNodes: Array<{ id: string; combo?: string; style: Record<string, unknow
       label: '詢價單',
       subtitle: '供應商比價',
       table: 'ERP_59',
-      detail: '向供應商取得報價條件',
+      detail: '向供應商詢價、比價的表單，取得報價條件與交期。流向：流回採購單（PO），用於確定正式採購的價格與供應商。是採購決策的關鍵依據，確保採購條件最優化。',
       region: 'upstream',
       fill: '#fff6e8',
       stroke: '#fa8c16',
@@ -153,7 +153,7 @@ const rawNodes: Array<{ id: string; combo?: string; style: Record<string, unknow
       label: '採購單（PO）',
       subtitle: '正式採購',
       table: 'ERP_13',
-      detail: '採購主單，串接收貨與預算回推',
+      detail: '正式發給供應商的採購合同，是採購流程的核心樞紐。四大流向：① 向下游流動至收貨單，供供應商交貨驗收；② 向下游物料需求單（MRP）流動，用於生產物料規劃；③ 接收下游報價憑證單的反向流動（間結帳價單）；④ 接收收貨單的退貨反向流動，沖減採購數量。',
       region: 'upstream',
       fill: '#f6ffed',
       stroke: '#52c41a',
@@ -178,7 +178,7 @@ const rawNodes: Array<{ id: string; combo?: string; style: Record<string, unknow
       label: '收貨單',
       subtitle: '到貨驗收',
       table: 'ERP_15',
-      detail: '確認供應商交貨與狀態回寫',
+      detail: '供應商交貨時的驗收單，確認數量、品質、規格是否與採購單一致。三種流向：① 正常：完成採購入庫，閉環採購流程；② 異常：向下流動至退貨單，執行退貨沖減；③ 反向流回採購單，更新採購執行狀態（收貨狀態更新）。',
       region: 'upstream',
       fill: '#fff7e6',
       stroke: '#fa8c16',
@@ -201,7 +201,7 @@ const rawNodes: Array<{ id: string; combo?: string; style: Record<string, unknow
       label: '退貨 / 進貨異常',
       subtitle: '異常閉環',
       table: 'ERP_16',
-      detail: '不良與多送貨物回沖採購單',
+      detail: '針對不合格品或超量交貨的退貨申請與執行單。流向：流回採購單（PO），沖減採購數量，完成退貨閉環。是採購流程異常處理的核心機制，確保來料品質與數量準確。',
       region: 'upstream',
       fill: '#fff0f6',
       stroke: '#eb2f96',
@@ -221,13 +221,13 @@ const rawNodes: Array<{ id: string; combo?: string; style: Record<string, unknow
       ],
     },
     data: {
-      label: '報價憑證單',
-      subtitle: '開新報價單',
-      table: 'ERP_57',
-      detail: '可輸出 ISO 文件與間結帳價單',
-      region: 'downstream',
+      label: '請購單',
+      subtitle: '需求發起',
+      table: 'ERP_59',
+      detail: '採購需求的起點，由需求部門發起採購申請。流向：① 向下流動至採購單（PO）；② 可同時觸發詢價單，向供應商取得報價條件後再流回採購單。形成完整的「請購→詢價→採購」採購發起流程。',
+      region: 'upstream',
       fill: '#eef5ff',
-      stroke: '#1677ff',
+      stroke: '#2f74ff',
     },
   },
   {
@@ -251,7 +251,7 @@ const rawNodes: Array<{ id: string; combo?: string; style: Record<string, unknow
       label: '訂購單（SO）',
       subtitle: '轉訂購單 / 自製件',
       table: 'ERP_14',
-      detail: '承接客戶需求並拆分採購件 / 自製件',
+      detail: '客戶正式下單的銷售合同，是銷售流程核心。標註「轉訂單彙算」與「自製件」，說明包含外購/自製兩類產品需彙算分流。訂單變更：週三早主管Line通知、週三下午食品/台灣福益變更。流向：① 向下流動至生產需求單，驅動生產排程；② 採購件轉至採購單（PO）；③ 自製件進入生產製令單。',
       region: 'downstream',
       fill: '#f6ffed',
       stroke: '#52c41a',
@@ -275,7 +275,7 @@ const rawNodes: Array<{ id: string; combo?: string; style: Record<string, unknow
       label: '生產需求單',
       subtitle: '需求拆解',
       table: 'ERP_43',
-      detail: '由訂購單轉入生產需求',
+      detail: '由銷售訂購單（SO）拆解出的生產需求，明確產品、數量、交期。流向：向下流動至物料需求單（MRP），進一步拆解為具體的物料清單，計算原料需求與採購缺口，實現「銷售-生產」的拉式驅動。',
       region: 'planning',
       fill: '#f9f0ff',
       stroke: '#722ed1',
@@ -298,7 +298,7 @@ const rawNodes: Array<{ id: string; combo?: string; style: Record<string, unknow
       label: '物料需求單（MRP）',
       subtitle: '物料展開',
       table: 'ERP_42',
-      detail: '計算原料需求與採購缺口',
+      detail: '由生產需求拆解出的物料清單，明確各項原料的採購/領料需求。流向：向下流動至採購預算表，用於採購預算控制與正式採購申請。實現「需求驅動採購」的拉式模式，避免庫存積壓。',
       region: 'planning',
       fill: '#fff7e6',
       stroke: '#fa8c16',
@@ -323,7 +323,7 @@ const rawNodes: Array<{ id: string; combo?: string; style: Record<string, unknow
       label: '採購預算表',
       subtitle: '預算回推採購',
       table: 'ERP_41',
-      detail: '預算審核後回推正式採購',
+      detail: '物料需求對應的採購預算申請表，經預算審核後正式生成採購單。流向：反向流回採購單（PO），用於生成正式採購合同。是「銷售驅動採購」拉式生產模式的核心紐帶，確保採購以實際需求為導向。',
       region: 'planning',
       fill: '#eef5ff',
       stroke: '#1677ff',
@@ -347,7 +347,7 @@ const rawNodes: Array<{ id: string; combo?: string; style: Record<string, unknow
       label: '生產製令單',
       subtitle: 'P-4-P-01-05',
       table: 'ERP_44',
-      detail: '製令明細與產線排程',
+      detail: '正式下發的生產製令（P-4-P-01-05 製令明細單），明確生產產品、數量、工單號，是生產執行的核心指令。流向：向下流動至領料單，開始備料與領用程序，拉動整個生產流程。',
       region: 'production',
       fill: '#f9f0ff',
       stroke: '#722ed1',
@@ -370,7 +370,7 @@ const rawNodes: Array<{ id: string; combo?: string; style: Record<string, unknow
       label: '領料單',
       subtitle: 'P-4-P-01-04 / 03',
       table: 'ERP_46',
-      detail: '依製令進行備料與領用',
+      detail: '依據製令從倉庫領取生產所需物料的申請單（P-4-P-01-09 文創備料單 / P-4-P-01-03 領用單），對應不同產品線（文創/通用）的備料需求。流向：向下流動至派工單，開始加工製造程序。',
       region: 'production',
       fill: '#fff7e6',
       stroke: '#fa8c16',
@@ -393,7 +393,7 @@ const rawNodes: Array<{ id: string; combo?: string; style: Record<string, unknow
       label: '派工單',
       subtitle: 'P-4-P-02-03 B',
       table: 'ERP_47',
-      detail: '製程管制與工序追蹤',
+      detail: '生產排程與製程管控單（P-4-P-02-03 B 製程管制紀錄表），負責追蹤每道工序的進度與品質，是現場製造執行與進度管理的核心單據。流向：向下流動至報工事項，完成工序執行與進度回報。',
       region: 'production',
       fill: '#f6ffed',
       stroke: '#52c41a',
@@ -415,7 +415,7 @@ const rawNodes: Array<{ id: string; combo?: string; style: Record<string, unknow
     data: {
       label: '報工事項',
       subtitle: '現場回報',
-      detail: '領工事項與製程作業紀錄',
+      detail: '生產現場的工序執行與進度回報節點，記錄實際作業內容與現場狀況。流向：向下流動至入庫/IQC/異常處理，完成最後的品檢與入庫程序，實現從訂單到成品的全流程閉環。',
       region: 'production',
       fill: '#eef5ff',
       stroke: '#1677ff',
@@ -435,7 +435,7 @@ const rawNodes: Array<{ id: string; combo?: string; style: Record<string, unknow
       label: '入庫 / IQC / 異常處理',
       subtitle: '成品入庫閉環',
       table: 'ERP_45 / ERP_48',
-      detail: '最終檢驗、包裝檢核與不合格處理',
+      detail: '入庫前的全流程品檢與驗收（ERP_45 / ERP_48），包含：① P-4-P-01-06 半成品/成品校驗；② Q-4-Q-03-03 包裝檢核；③ Q-4-Q-05-01 不合格品處理；④ Q-4-Q-06-01 異常狀況處理；⑤ P-4-P-02-01 C 全檢紀錄。是產品質量的最後關卡，完成後正式入庫，閉環整個「銷售-生產-採購」業務流程。',
       region: 'production',
       fill: '#fff0f6',
       stroke: '#eb2f96',
@@ -997,22 +997,21 @@ export default function RagicLogisticProcess() {
               </Title>
               {selectedNode ? (
                 <div>
-                  <Title level={5} style={{ marginTop: 0, marginBottom: 8 }}>
+                  <Title level={5} style={{ marginTop: 0, marginBottom: 10 }}>
                     {selectedNode.data.label}
                   </Title>
-                  <div style={{ marginBottom: 10 }}>
+                  <Space wrap style={{ marginBottom: 10 }}>
                     <Tag color={regionInfo[selectedNode.data.region].color}>
                       {regionInfo[selectedNode.data.region].title}
                     </Tag>
-                    {selectedNode.data.table ? <Tag>{selectedNode.data.table}</Tag> : null}
-                  </div>
+                    {selectedNode.data.table ? <Tag color="blue">{selectedNode.data.table}</Tag> : null}
+                  </Space>
+                  <Divider style={{ margin: '10px 0' }} />
                   <div style={{ marginBottom: 8 }}>
-                    <Text strong>副標：</Text>
-                    <Text> {selectedNode.data.subtitle}</Text>
-                  </div>
-                  <div>
-                    <Text strong>說明：</Text>
-                    <Text> {selectedNode.data.detail}</Text>
+                    <Text type="secondary" style={{ fontSize: 12 }}>【職責說明】</Text>
+                    <Text style={{ fontSize: 13, display: 'block' }}>
+                      {selectedNode.data.detail}
+                    </Text>
                   </div>
                 </div>
               ) : (
