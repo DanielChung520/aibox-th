@@ -1125,6 +1125,7 @@ export default function RagicLogisticProcess() {
                   style={{ width: '100%', paddingRight: 110 }}
                 />
                 <div style={{ position: 'absolute', top: 6, right: 8, display: 'flex', gap: 4, alignItems: 'center' }}>
+                  <span style={{ fontSize: 11, color: '#999' }}>[{llmOptions.length}]</span>
                   <Dropdown
                     menu={{
                       items: llmOptions.map((o) => ({ key: o.value, label: o.label })),
