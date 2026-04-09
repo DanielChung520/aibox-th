@@ -136,7 +136,7 @@ export default function KBVectorPanel({ fileId, vectorStatus }: KBVectorPanelPro
       )}
 
       {!loading && error && (
-        <Alert type="error" message={error} showIcon />
+        <Alert type="error" title={error} showIcon />
       )}
 
       {!loading && !error && chunks.length === 0 && (
@@ -191,7 +191,7 @@ export default function KBVectorPanel({ fileId, vectorStatus }: KBVectorPanelPro
         )}
 
         {similarError && (
-          <Alert type="error" message={similarError} showIcon />
+          <Alert type="error" title={similarError} showIcon />
         )}
 
         {!similarLoading && !similarError && similarChunks.length === 0 && (

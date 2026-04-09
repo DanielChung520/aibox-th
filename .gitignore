@@ -70,3 +70,21 @@ dom_dump.json
 
 # Local data directory
 data/
+
+# Playwright MCP artifacts
+.playwright-mcp/
+
+# Rust build artifacts (alternate target dir)
+api/target-rust/
+
+# Temporary test scripts at root
+test-*.js
+test-*.cjs
+test-*.mjs
+test_*.rs
+
+# Web subproject (if not part of main build)
+web/
+
+# Tauri icons (allow)
+!src-tauri/icons/*.png

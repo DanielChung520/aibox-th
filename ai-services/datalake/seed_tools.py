@@ -1,9 +1,12 @@
 """
 @file        seed_tools.py
 @description 將 ai-services/tools/ 下的工具登記進 ArangoDB tools collection
-@lastUpdate  2026-03-29 00:42:24
+@lastUpdate  2026-04-08 00:00:00
 @author      Daniel Chung
-@version     1.0.0
+@version     1.2.0
+@changelog
+- 2026-04-08 | 1.2.0 | 新增 nl_examples 自然語言範例
+- 2026-04-08 | 1.1.0 | tool_type 從 "api" 改為 "tool"，符合統一框架
 """
 
 import httpx
@@ -23,12 +26,24 @@ TOOLS: list[dict] = [
         "code": "weather",
         "name": "即時天氣查詢",
         "description": "依城市名稱或經緯度取得即時天氣（溫度、濕度、風速、天氣描述等）。使用 OpenWeatherMap API，支援 metric/imperial 單位，結果快取 10 分鐘。",
-        "tool_type": "api",
+        "tool_type": "tool",
         "icon": "CloudOutlined",
         "status": "online",
         "usage_count": 0,
         "group_key": "weather",
         "intent_tags": ["天氣", "weather", "氣象", "溫度", "humidity"],
+        "nl_examples": [
+            "台北現在天氣怎樣？",
+            "今天氣溫多少度？",
+            "幫我查一下北京的天氣",
+            "現在外面冷嗎？",
+            "今天會下雨嗎？",
+            "今天適合出門嗎？",
+            "外面風大嗎？",
+            "今天濕度高嗎？",
+            "幫我看看東京現在的天氣",
+            "今天天氣好不好？",
+        ],
         "endpoint_url": None,
         "input_schema": {
             "type": "object",
@@ -94,12 +109,26 @@ TOOLS: list[dict] = [
         "code": "forecast",
         "name": "天氣預報查詢",
         "description": "依城市名稱或經緯度取得未來 1–7 天天氣預報，支援每日摘要與逐小時預報。使用 OpenWeatherMap API，結果快取 1 小時。",
-        "tool_type": "api",
+        "tool_type": "tool",
         "icon": "CloudSyncOutlined",
         "status": "online",
         "usage_count": 0,
         "group_key": "weather",
         "intent_tags": ["天氣預報", "forecast", "明天天氣", "未來天氣", "一週天氣"],
+        "nl_examples": [
+            "明天天氣怎樣？",
+            "這週會下雨嗎？",
+            "週末天氣如何？",
+            "未來一週的天氣預報",
+            "下週去東京該帶什麼衣服？",
+            "這幾天會變冷嗎？",
+            "禮拜五天氣好嗎？",
+            "明天適合去郊外踏青嗎？",
+            "這幾天氣溫變化大嗎？",
+            "未來三天會下雪嗎？",
+            "下禮拜二是晴天嗎？",
+            "這週末要去墾丁，天氣怎樣？",
+        ],
         "endpoint_url": None,
         "input_schema": {
             "type": "object",
@@ -184,12 +213,26 @@ TOOLS: list[dict] = [
         "code": "web_search",
         "name": "網路搜尋",
         "description": "執行網路搜尋，支援多 Provider 自動切換（Serper → SerpAPI → ScraperAPI → Google CSE）。回傳標題、連結、摘要等搜尋結果，結果快取 30 分鐘。",
-        "tool_type": "api",
+        "tool_type": "tool",
         "icon": "SearchOutlined",
         "status": "online",
         "usage_count": 0,
         "group_key": "search",
         "intent_tags": ["搜尋", "search", "網路", "web", "查詢", "資訊"],
+        "nl_examples": [
+            "搜尋一下最近的科技新聞",
+            "幫我查一下這個公司的資料",
+            "網路上怎麼說",
+            "幫我找一下這個問題的解答",
+            "這個術語是什麼意思？",
+            "搜尋相關資訊",
+            "幫我查一下這個產品的使用評價",
+            "最新的人工智慧發展動態",
+            "搜尋一下這個錯誤的解決方法",
+            "這個東西哪裡可以買到？",
+            "搜尋一下旅遊景點推薦",
+            "幫我查一下食譜做法",
+        ],
         "endpoint_url": None,
         "input_schema": {
             "type": "object",

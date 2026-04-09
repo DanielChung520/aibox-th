@@ -3,9 +3,9 @@
 //! # Description
 //! AI 服務管理 API
 //!
-//! # Last Update: 2026-04-05 22:05:00
+//! # Last Update: 2026-04-05 12:05:00
 //! # Author: Daniel Chung
-//! # Version: 1.3.0
+//! # Version: 1.4.0
 
 use crate::config::CONFIG;
 use axum::{
@@ -15,8 +15,13 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
+use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::time::Instant;
+use std::net::SocketAddr;
+use std::time::Duration;
+use tokio::net::TcpStream;
+use tokio::time::timeout;
 
 pub fn create_services_router() -> Router {
     Router::new()
@@ -27,7 +32,7 @@ pub fn create_services_router() -> Router {
         .route("/api/v1/services/{name}/restart", post(restart_service))
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ServiceInfo {
     pub name: String,
     pub display_name: String,
@@ -37,6 +42,7 @@ pub struct ServiceInfo {
     pub health_url: Option<String>,
     pub last_check: Option<String>,
     pub latency_ms: Option<u64>,
+    pub health_via_tcp: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -69,16 +75,18 @@ struct ServiceDef {
     name: &'static str,
     display_name: &'static str,
     port: u16,
+    health_via_tcp: bool,
 }
 
 fn service_defs() -> Vec<ServiceDef> {
     vec![
-        ServiceDef { name: "aitask",           display_name: "AI Task",          port: 8001 },
-        ServiceDef { name: "data-agent",       display_name: "Data Agent",       port: 8003 },
-        ServiceDef { name: "mcp-tools",        display_name: "MCP Tools",        port: 8004 },
-        ServiceDef { name: "bpa-mm-agent",     display_name: "BPA MM Agent",     port: 8005 },
-        ServiceDef { name: "knowledge-agent",  display_name: "Knowledge Agent",  port: 8007 },
-        ServiceDef { name: "backup-agent",      display_name: "Backup Agent",      port: 8010 },
+        ServiceDef { name: "aitask",           display_name: "AI Task",         port: 8001, health_via_tcp: false },
+        ServiceDef { name: "data-agent",       display_name: "Data Agent",      port: 8003, health_via_tcp: false },
+        ServiceDef { name: "mcp-tools",        display_name: "MCP Tools",      port: 8004, health_via_tcp: false },
+        ServiceDef { name: "bpa-mm-agent",     display_name: "BPA MM Agent",   port: 8005, health_via_tcp: false },
+        ServiceDef { name: "knowledge-agent",   display_name: "Knowledge Agent",port: 8007, health_via_tcp: false },
+        ServiceDef { name: "backup-agent",      display_name: "Backup Agent",   port: 8010, health_via_tcp: false },
+        ServiceDef { name: "celery",            display_name: "Celery Worker",   port: 6379, health_via_tcp: true  },
     ]
 }
 
@@ -92,37 +100,102 @@ fn base_url_for(name: &str) -> String {
         "knowledge-agent" => cfg.knowledge_agent_url.clone(),
         "backup-agent"  => std::env::var("BACKUP_AGENT_URL")
             .unwrap_or_else(|_| "http://localhost:8010".to_string()),
+        "celery"        => format!("http://localhost:6379"),
         _ => format!("http://localhost:{}", 0),
     }
 }
 
-fn make_service_info(def: &ServiceDef, status: ServiceStatus, latency_ms: Option<u64>) -> ServiceInfo {
+fn health_url_for(def: &ServiceDef) -> Option<String> {
+    if def.health_via_tcp {
+        None
+    } else {
+        Some(format!("{}/health", base_url_for(def.name)))
+    }
+}
+
+async fn check_http_health(client: &Client, url: &str) -> (ServiceStatus, Option<u64>) {
+    let start = Instant::now();
+    let resp = client.get(url).send().await;
+    let latency_ms = start.elapsed().as_millis() as u64;
+
+    match resp {
+        Ok(r) if r.status().is_success() => (ServiceStatus::Running, Some(latency_ms)),
+        _ => (ServiceStatus::Error, Some(latency_ms)),
+    }
+}
+
+async fn check_tcp_health(port: u16) -> (ServiceStatus, Option<u64>) {
+    let addr: SocketAddr = format!("127.0.0.1:{}", port).parse().unwrap();
+    let start = Instant::now();
+    let result = timeout(Duration::from_secs(3), TcpStream::connect(addr)).await;
+    let latency_ms = start.elapsed().as_millis() as u64;
+
+    match result {
+        Ok(Ok(_)) => (ServiceStatus::Running, Some(latency_ms)),
+        _ => (ServiceStatus::Error, Some(latency_ms)),
+    }
+}
+
+async fn check_service(def: ServiceDef) -> ServiceInfo {
+    let client = Client::builder()
+        .timeout(Duration::from_secs(5))
+        .build()
+        .unwrap_or_else(|_| Client::new());
+
+    let (status, latency_ms) = if def.health_via_tcp {
+        check_tcp_health(def.port).await
+    } else {
+        let url = format!("{}/health", base_url_for(def.name));
+        check_http_health(&client, &url).await
+    };
+
     let base = base_url_for(def.name);
     ServiceInfo {
         name: def.name.to_string(),
         display_name: def.display_name.to_string(),
         status,
         port: def.port,
-        url: base.clone(),
-        health_url: Some(format!("{}/health", base)),
+        url: base,
+        health_url: health_url_for(&def),
         last_check: Some(chrono::Utc::now().to_rfc3339()),
         latency_ms,
+        health_via_tcp: def.health_via_tcp,
     }
 }
 
 async fn list_services() -> impl IntoResponse {
     let defs = service_defs();
-    let services: Vec<ServiceInfo> = defs
-        .iter()
-        .map(|def| make_service_info(def, ServiceStatus::Running, None))
-        .collect();
+
+    let mut handles = Vec::new();
+    for def in defs {
+        handles.push(tokio::spawn(check_service(def)));
+    }
+
+    let mut services = Vec::new();
+    for handle in handles {
+        if let Ok(svc) = handle.await {
+            services.push(svc);
+        }
+    }
+
+    // Sort by display_name for consistent ordering
+    services.sort_by(|a, b| a.display_name.cmp(&b.display_name));
+
     Json(ServiceListResponse { services })
 }
 
 async fn get_service(Path(name): Path<String>) -> impl IntoResponse {
     let defs = service_defs();
     match defs.iter().find(|d| d.name == name) {
-        Some(def) => Json(ServiceResponse { service: make_service_info(def, ServiceStatus::Running, None) }).into_response(),
+        Some(def) => {
+            let svc = check_service(ServiceDef {
+                name: def.name,
+                display_name: def.display_name,
+                port: def.port,
+                health_via_tcp: def.health_via_tcp,
+            }).await;
+            Json(ServiceResponse { service: svc }).into_response()
+        }
         None => (StatusCode::NOT_FOUND, Json(serde_json::json!({"error": "Service not found"}))).into_response(),
     }
 }

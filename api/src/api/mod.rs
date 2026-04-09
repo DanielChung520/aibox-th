@@ -45,6 +45,48 @@ pub mod orch_intents;
 pub mod intent_catalog;
 pub mod leads;
 
+async fn sync_tool_intents(
+    Path(key): Path<String>,
+    Json(payload): Json<serde_json::Value>,
+) -> Result<impl IntoResponse, StatusCode> {
+    let db = get_db();
+    let col = db.collection("tools").await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let intent_tags = payload.get("intent_tags")
+        .and_then(|v| v.as_array())
+        .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect::<Vec<_>>())
+        .unwrap_or_default();
+    
+    let nl_examples = payload.get("nl_examples")
+        .and_then(|v| v.as_array())
+        .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect::<Vec<_>>())
+        .unwrap_or_default();
+
+    let existing: Vec<serde_json::Value> = db
+        .aql_bind_vars(
+            "FOR t IN tools FILTER t._key == @key LIMIT 1 RETURN t",
+            [("key", serde_json::json!(key))].into(),
+        )
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let _old = existing.into_iter().next().ok_or(StatusCode::NOT_FOUND)?;
+
+    let update_data = serde_json::json!({
+        "intent_tags": intent_tags,
+        "nl_examples": nl_examples,
+        "updated_at": chrono::Utc::now().to_rfc3339(),
+    });
+
+    col.update_document(&key, update_data, Default::default())
+        .await
+        .map_err(|e| {
+            eprintln!("Sync tool intents error: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    Ok(Json(ApiResponse::success("已更新工具意圖".to_string())))
+}
+
 pub fn create_router() -> Router {
     let cors = CorsLayer::new()
         .allow_origin(Any)
@@ -70,6 +112,7 @@ pub fn create_router() -> Router {
         .route("/api/v1/agents/{key}", get(get_agent).put(update_agent).delete(delete_agent))
         .route("/api/v1/tools", get(list_tools).post(create_tool))
         .route("/api/v1/tools/{key}", get(get_tool).put(update_tool).delete(delete_tool))
+        .route("/api/v1/tools/{key}/intents", post(sync_tool_intents))
         .route("/api/v1/agents/{key}/favorite", patch(toggle_agent_favorite))
         .route("/api/v1/model-providers", get(list_model_providers).post(create_model_provider))
         .route("/api/v1/model-providers/{key}", get(get_model_provider).put(update_model_provider).delete(delete_model_provider))
@@ -95,6 +138,7 @@ pub fn create_router() -> Router {
         .route("/api/v1/knowledge/roots/{key}/favorite", patch(knowledge::toggle_favorite))
         .route("/api/v1/knowledge/roots/{root_id}/files", get(knowledge::list_files))
         .route("/api/v1/knowledge/files/{key}", get(knowledge::get_file).delete(knowledge::delete_file))
+        .route("/api/v1/knowledge/files/{key}/download", get(knowledge::download_file_proxy))
         .route("/api/v1/knowledge/files/{key}/preview", get(knowledge::preview_file))
 .route("/api/v1/knowledge/files/{key}/vectors", get(knowledge::get_vectors))
 .route("/api/v1/knowledge/files/{key}/graph", get(knowledge::get_graph))
@@ -1180,6 +1224,7 @@ async fn create_tool(Json(payload): Json<CreateToolRequest>) -> Result<impl Into
         usage_count: 0,
         group_key: payload.group_key,
         intent_tags: payload.intent_tags,
+        nl_examples: payload.nl_examples,
         endpoint_url: payload.endpoint_url,
         input_schema: payload.input_schema,
         output_schema: payload.output_schema,

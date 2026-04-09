@@ -76,7 +76,7 @@ async fn ensure_collections(db: &Database<ReqwestClient>) -> Result<(), String> 
         .map(|c| c.name)
         .collect();
 
-    let docs = ["users", "roles", "system_params", "functions", "role_functions", "agents", "tools", "tool_logs", "model_providers", "theme_templates", "knowledge_roots", "knowledge_files", "ontologies", "job_logs", "knowledge_graphs", "knowledge_graph_edges", "chat_sessions", "chat_messages", "orch_intents", "intent_catalog"];
+    let docs = ["users", "roles", "system_params", "functions", "role_functions", "agents", "tools", "tool_logs", "model_providers", "theme_templates", "knowledge_roots", "knowledge_files", "ontologies", "job_logs", "knowledge_graphs", "knowledge_graph_edges", "chat_sessions", "chat_messages", "orch_intents", "intent_catalog", "leads"];
     for name in docs {
         if !existing.contains(&name.to_string()) {
             db.create_collection(name)
@@ -239,6 +239,49 @@ async fn ensure_weather_params(db: &Database<ReqwestClient>) -> Result<(), Strin
     Ok(())
 }
 
+async fn ensure_upload_params(db: &Database<ReqwestClient>) -> Result<(), String> {
+    let col = db
+        .collection("system_params")
+        .await
+        .map_err(|e| format!("system_params collection: {e}"))?;
+
+    let defaults: &[(&str, &str, &str)] = &[
+        // v5.0 上傳分級限制（bytes）
+        ("upload_max_size_general", "5242880", "number"),      // 5 MB
+        ("upload_max_size_vip", "52428800", "number"),         // 50 MB
+        ("upload_max_size_super_vip", "524288000", "number"),  // 500 MB（系統硬上限）
+    ];
+
+    let now = Utc::now().to_rfc3339();
+    for (key, value, param_type) in defaults {
+        let existing: Vec<serde_json::Value> = db
+            .aql_bind_vars(
+                "FOR p IN system_params FILTER p.param_key == @k LIMIT 1 RETURN p",
+                [("k", serde_json::json!(key))].into(),
+            )
+            .await
+            .map_err(|e| format!("AQL error on '{key}': {e}"))?;
+
+        if existing.is_empty() {
+            col.create_document(
+                SystemParam {
+                    _key: Some(key.to_string()),
+                    param_key: key.to_string(),
+                    param_value: value.to_string(),
+                    param_type: param_type.to_string(),
+                    require_restart: false,
+                    category: "upload".to_string(),
+                    updated_at: now.clone(),
+                },
+                Default::default(),
+            )
+            .await
+            .map_err(|e| format!("Seed upload param '{key}' failed: {e}"))?;
+        }
+    }
+    Ok(())
+}
+
 async fn seed_defaults(db: &Database<ReqwestClient>) -> Result<(), String> {
     seed_roles(db).await?;
     seed_users(db).await?;
@@ -251,6 +294,7 @@ async fn seed_defaults(db: &Database<ReqwestClient>) -> Result<(), String> {
     ensure_agent_defaults(db).await?;
     ensure_websearch_params(db).await?;
     ensure_weather_params(db).await?;
+    ensure_upload_params(db).await?;
     Ok(())
 }
 
@@ -311,6 +355,7 @@ async fn seed_users(db: &Database<ReqwestClient>) -> Result<(), String> {
             name: "管理员".into(),
             role_keys: vec!["admin".into()],
             status: "enabled".into(),
+            tier: Some("vip".into()),
             created_at: Utc::now().to_rfc3339(),
         },
         Default::default(),
@@ -540,6 +585,7 @@ pub struct User {
     pub name: String,
     pub role_keys: Vec<String>,
     pub status: String,
+    pub tier: Option<String>,
     pub created_at: String,
 }
 
@@ -638,18 +684,16 @@ pub struct CreateUserRequest {
     pub role_keys: Vec<String>,
     #[serde(default = "default_status")]
     pub status: String,
+    #[serde(default = "default_tier")]
+    pub tier: String,
 }
 
 fn default_status() -> String {
     "enabled".to_string()
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct UpdateUserRequest {
-    pub name: Option<String>,
-    pub role_keys: Option<Vec<String>>,
-    pub status: Option<String>,
-    pub password_hash: Option<String>,
+fn default_tier() -> String {
+    "general".to_string()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -724,6 +768,7 @@ pub struct Tool {
     pub usage_count: i32,
     pub group_key: Option<String>,
     pub intent_tags: Option<Vec<String>>,
+    pub nl_examples: Option<Vec<String>>,
     pub endpoint_url: Option<String>,
     pub input_schema: Option<serde_json::Value>,
     pub output_schema: Option<serde_json::Value>,
@@ -751,6 +796,7 @@ pub struct CreateToolRequest {
     pub status: Option<String>,
     pub group_key: Option<String>,
     pub intent_tags: Option<Vec<String>>,
+    pub nl_examples: Option<Vec<String>>,
     pub endpoint_url: Option<String>,
     pub input_schema: Option<serde_json::Value>,
     pub output_schema: Option<serde_json::Value>,

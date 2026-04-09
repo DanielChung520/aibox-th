@@ -156,7 +156,8 @@ export default function KnowledgeBaseDetail() {
       </div>
 
       <div style={{
-        flex: 1, minWidth: 0, overflow: 'hidden',
+        flex: 1, minWidth: 0, flexShrink: 0,
+        overflow: 'hidden',
         backgroundColor: token.colorBgLayout,
         display: 'flex', flexDirection: 'column',
         height: '100%', alignItems: 'stretch',

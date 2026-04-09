@@ -29,7 +29,7 @@ export default function AppLogo({ logo, collapsed }: AppLogoProps) {
         src={imgSrc}
         alt="EDGE logo"
         style={{
-          height: collapsed ? 32 : 28,
+          height: collapsed ? Math.round(32 * 2 / 3) : 28,
           width: 'auto',
           objectFit: 'contain',
           display: 'block',

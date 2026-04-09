@@ -42,6 +42,7 @@ interface AgentCardProps {
   actionDisabled?: boolean;
   actionStyle?: React.CSSProperties;
   showMenu?: boolean;
+  onCardClick?: (agentId: string) => void;
 }
 
 const statusColors: Record<string, { color: string; text: string }> = {
@@ -64,6 +65,7 @@ export default function AgentCard({
   actionDisabled,
   actionStyle,
   showMenu = true,
+  onCardClick,
 }: AgentCardProps) {
   const { token } = theme.useToken();
   const contentTokens = useContentTokens();
@@ -112,7 +114,11 @@ export default function AgentCard({
         border: isHovered ? `1px solid ${contentTokens.colorPrimary}80` : undefined,
         width: '100%',
       }}
-      onClick={() => !isDisabled && !actionDisabled && (onAction || onChat)?.(agent.id)}
+      onClick={() => {
+        if (isDisabled || actionDisabled) return;
+        onCardClick?.(agent.id);
+        (onAction || onChat)?.(agent.id);
+      }}
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>

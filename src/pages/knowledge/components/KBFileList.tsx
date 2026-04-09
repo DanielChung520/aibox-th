@@ -1,14 +1,14 @@
 /**
  * @file        知識庫檔案列表元件
  * @description 顯示並管理知識庫內的文件清單
- * @lastUpdate  2026-03-26 00:00:00
+ * @lastUpdate  2026-04-05 22:00:00
  * @author      Daniel Chung
  * @version     1.1.0
  */
 
-import { Input, Button, Popconfirm, Typography, Table, theme } from 'antd';
+import { Input, Button, Popconfirm, Typography, Table, theme, Tag, Tooltip } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { SearchOutlined, UploadOutlined, DeleteOutlined, FilePdfOutlined, FileMarkdownOutlined, FileTextOutlined } from '@ant-design/icons';
+import { SearchOutlined, UploadOutlined, DeleteOutlined, FilePdfOutlined, FileMarkdownOutlined, FileTextOutlined, InfoCircleOutlined } from '@ant-design/icons';
 import { useState } from 'react';
 import { KnowledgeFile } from '../../../services/api';
 
@@ -24,11 +24,6 @@ interface KBFileListProps {
   loading?: boolean;
 }
 
-const formatSize = (bytes: number) => {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-};
 
 export default function KBFileList({ files, selectedFileId, onSelectFile, onUpload, onDeleteFile, loading }: KBFileListProps) {
   const [searchText, setSearchText] = useState('');
@@ -49,29 +44,55 @@ export default function KBFileList({ files, selectedFileId, onSelectFile, onUplo
         const iconColor = isSelected ? '#fff' : (
           isPdf ? token.colorError : isMd ? token.colorPrimary : token.colorSuccess
         );
-        return (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            {isPdf ? <FilePdfOutlined style={{ color: iconColor }} /> :
-             isMd ? <FileMarkdownOutlined style={{ color: iconColor }} /> :
-             <FileTextOutlined style={{ color: iconColor }} />}
-            <Text ellipsis={{ tooltip: filename }} style={{ color: textColor, fontWeight: isSelected ? 500 : 400 }}>
-              {filename}
-            </Text>
+
+        const tooltipContent = (
+          <div style={{ maxWidth: 300 }}>
+            {record.ontology_major && (
+              <div style={{ marginBottom: 6 }}>
+                <span style={{ color: '#94a3b8', fontSize: 11 }}>領域: </span>
+                <Tag color="blue" style={{ fontSize: 10, marginLeft: 4 }}>{record.ontology_major}</Tag>
+              </div>
+            )}
+            {record.document_type?.length ? (
+              <div style={{ marginBottom: 6 }}>
+                <span style={{ color: '#94a3b8', fontSize: 11 }}>類型: </span>
+                <div style={{ marginTop: 4 }}>
+                  {record.document_type.map(t => (
+                    <Tag key={t} style={{ fontSize: 10 }}>{t}</Tag>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+            {record.document_summary ? (
+              <div style={{ marginTop: 4 }}>
+                <span style={{ color: '#94a3b8', fontSize: 11 }}>摘要: </span>
+                <div style={{ fontSize: 11, color: '#e2e8f0', marginTop: 4, lineHeight: 1.5 }}>
+                  {record.document_summary}
+                </div>
+              </div>
+            ) : null}
+            {!record.ontology_major && !record.document_type?.length && !record.document_summary ? (
+              <span style={{ color: '#64748b', fontSize: 11 }}>尚無分析資料</span>
+            ) : null}
           </div>
         );
-      },
-    },
-    {
-      title: '大小',
-      dataIndex: 'file_size',
-      key: 'file_size',
-      width: 80,
-      render: (size: number, record) => {
-        const isSelected = record._key === selectedFileId;
+
         return (
-          <Text style={{ fontSize: token.fontSizeSM, color: isSelected ? 'rgba(255,255,255,0.7)' : token.colorTextSecondary }}>
-            {formatSize(size)}
-          </Text>
+          <Tooltip title={tooltipContent} placement="right" styles={{ root: { maxWidth: 340 } }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              {isPdf ? <FilePdfOutlined style={{ color: iconColor, fontSize: 14 }} /> :
+               isMd ? <FileMarkdownOutlined style={{ color: iconColor, fontSize: 14 }} /> :
+               <FileTextOutlined style={{ color: iconColor, fontSize: 14 }} />}
+              <Text ellipsis style={{ color: textColor, fontWeight: isSelected ? 500 : 400, fontSize: 12, flex: 1 }}>
+                {filename}
+              </Text>
+              {record.document_type?.length ? (
+                <span style={{ color: isSelected ? 'rgba(255,255,255,0.5)' : '#94a3b8', fontSize: 10 }}>
+                  <InfoCircleOutlined />
+                </span>
+              ) : null}
+            </div>
+          </Tooltip>
         );
       },
     },

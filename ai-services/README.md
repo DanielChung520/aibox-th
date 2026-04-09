@@ -17,6 +17,7 @@ AIBox Python FastAPI 微服務集群，提供 AI Agent 系統的後端能力。
 | MCP Tools | 8004 | `mcp_tools/` | MCP 工具集成服務 |
 | BPA MM Agent | 8005 | `bpa/mm_agent/` | 物料管理業務流程自動化 |
 | Knowledge Agent | 8007 | `knowledge_agent/` | 知識庫 RAG 管理服務 |
+| Memory Agent | 8008 | `memory_agent/` | AI 增強記憶系統 |
 
 ## 目錄結構
 
@@ -48,6 +49,18 @@ ai-services/
 ├── knowledge_agent/          # Knowledge Agent 服務 (port 8007)
 │   ├── __init__.py
 │   └── main.py
+├── memory_agent/             # Memory Agent 服務 (port 8008)
+│   ├── __init__.py
+│   ├── main.py
+│   └── core/                 # 核心模組
+│       ├── __init__.py
+│       ├── models.py          # 類型定義
+│       ├── storage.py         # 文件存儲
+│       ├── security.py       # 安全模組
+│       ├── recall.py          # 召回模組
+│       ├── working_memory.py  # 工作記憶
+│       ├── session_memory.py  # 會話記憶
+│       └── consolidation.py   # 離線整理
 ├── bpa/                      # BPA 服務群組
 │   └── mm_agent/             # 物料管理 Agent (port 8005)
 │       ├── __init__.py

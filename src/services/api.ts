@@ -183,12 +183,13 @@ export interface Tool {
   code: string;
   name: string;
   description?: string;
-  tool_type?: 'mcp' | 'builtin' | 'custom';
+  tool_type?: 'tool' | 'advisor' | 'oracle' | 'mcp' | 'builtin' | 'custom';
   icon?: string;
   status?: 'online' | 'maintenance' | 'deprecated' | 'registering';
   usage_count?: number;
   group_key?: string;
   intent_tags?: string[];
+  nl_examples?: string[];
   endpoint_url?: string;
   input_schema?: Record<string, unknown>;
   output_schema?: Record<string, unknown>;
@@ -227,6 +228,8 @@ export const toolApi = {
   create: (data: Partial<Tool>) => api.post('/api/v1/tools', data),
   update: (key: string, data: Partial<Tool>) => api.put(`/api/v1/tools/${key}`, data),
   delete: (key: string) => api.delete(`/api/v1/tools/${key}`),
+  syncIntents: (key: string, data: { intent_tags: string[]; nl_examples: string[] }) =>
+    api.post<{ code: number; message: string }>(`/api/v1/tools/${key}/intents`, data),
 };
 
 export const functionApi = {
@@ -722,11 +725,9 @@ export const knowledgeApi = {
     api.put<ApiMessage>(`/api/v1/knowledge/roots/${rootId}/roles`, { role_keys, inherited_role_keys }),
 };
 
-const KNOWLEDGE_AGENT_BASE = 'http://localhost:8007';
-
 export const downloadFile = async (fileId: string): Promise<Blob> => {
   const token = localStorage.getItem('token');
-  const resp = await fetch(`${KNOWLEDGE_AGENT_BASE}/pipeline/download?file_id=${encodeURIComponent(fileId)}`, {
+  const resp = await fetch(`/api/v1/knowledge/files/${encodeURIComponent(fileId)}/download`, {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
   if (!resp.ok) {

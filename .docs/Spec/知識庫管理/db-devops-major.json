@@ -1,0 +1,520 @@
+{
+  "type": "major",
+  "name": "Database_Engineering",
+  "version": "1.0",
+  "default_version": true,
+  "ontology_name": "Database_Engineering_Major_Ontology",
+  "description": "資料庫工程專業本體論，定義資料庫系統從需求分析到生產維運的全生命週期中的所有核心概念與實踐，包括關聯式與非關聯式資料庫設計、查詢優化、索引策略、交易與隔離等級、資料庫安全、備份還原、高可用性（HA）、複寫（Replication）、分片（Sharding）與遷移管理等專業領域。本體論整合 ACID 原則、CAP 定理、資料庫效能調校、備份還原策略與雲端資料庫服務等知識，適用於資料庫設計審查、RAG 輔助 SQL 生成、AI 輔助效能診斷與資料庫遷移規劃場景。",
+  "author": "Daniel Chung",
+  "last_modified": "2026-04-04 10:01:38",
+  "inherits_from": [
+    "5W1H_Base_Ontology_OWL",
+    "System_Development_Domain_Ontology"
+  ],
+  "tags": [
+    "DatabaseEngineering",
+    "SQL",
+    "NoSQL",
+    "QueryOptimization",
+    "Indexing",
+    "Replication",
+    "Sharding",
+    "BackupRecovery",
+    "HighAvailability",
+    "DatabaseMigration"
+  ],
+  "use_cases": [
+    "資料庫 Schema 設計審查",
+    "SQL 查詢效能調優",
+    "索引策略規劃與評估",
+    "資料庫安全與權限管理",
+    "備份還原計畫制定",
+    "高可用性架構設計",
+    "RAG 輔助 SQL 生成",
+    "AI 輔助資料庫遷移規劃"
+  ],
+
+  "entity_classes": [
+    {
+      "name": "Schema_Design",
+      "base_class": "Document",
+      "description": "Schema 設計文件，定義資料庫的邏輯結構，包括資料表、視圖、欄位、資料型別、約束條件與索引規劃。"
+    },
+    {
+      "name": "Entity_Relationship_Diagram",
+      "base_class": "Document",
+      "description": "實體關係圖（ER Diagram），視覺化呈現資料模型中的實體、屬性與實體之間的關係（一對一、一對多、多對多）。"
+    },
+    {
+      "name": "Normalization_Form",
+      "base_class": "Concept",
+      "description": "正規化形式，定義資料庫設計的正規化等級，如 1NF（第一正規化）、2NF、3NF、BCNF（Boyce-Codd）等，用於消除資料冗餘與更新異常。"
+    },
+    {
+      "name": "Data_Type",
+      "base_class": "Concept",
+      "description": "資料型別，定義資料庫欄位的資料型別，如 INTEGER、VARCHAR、TEXT、DATE、TIMESTAMP、JSON、UUID 等，影響儲存空間與查詢效能。"
+    },
+    {
+      "name": "Table_Constraint",
+      "base_class": "Concept",
+      "description": "資料表約束條件，如 PRIMARY KEY、FOREIGN KEY、UNIQUE、NOT NULL、CHECK 與 DEFAULT，確保資料完整性與一致性。"
+    },
+    {
+      "name": "Index_Strategy",
+      "base_class": "Concept",
+      "description": "索引策略，定義資料庫查詢優化所使用的索引類型，包含 B-Tree Index、Hash Index、GIN（Generalized Inverted Index）、GiST 與覆蓋索引（Covering Index）。"
+    },
+    {
+      "name": "Composite_Index",
+      "base_class": "Concept",
+      "description": "複合索引，在多個欄位上建立的聯合索引，欄位順序影響索引效率，需依查詢模式（Query Pattern）精心設計。"
+    },
+    {
+      "name": "Query_Execution_Plan",
+      "base_class": "Document",
+      "description": "查詢執行計畫，分析資料庫查詢的執行路徑，包含掃描方式（Seq Scan/Index Scan）、連接演算法（Nested Loop/Hash Join/Merge Join）與成本估算。"
+    },
+    {
+      "name": "Query_Pattern",
+      "base_class": "Concept",
+      "description": "查詢模式，描述系統中最常見的查詢類型與頻率，如點查詢（Point Query）、範圍查詢（Range Query）、聚合查詢（Aggregation）與全文檢索（Full-text Search）。"
+    },
+    {
+      "name": "Transaction",
+      "base_class": "Process",
+      "description": "交易，代表一組不可分割的資料庫操作（ACID），要么全部成功，要么全部失敗，用於確保資料一致性。"
+    },
+    {
+      "name": "Isolation_Level",
+      "base_class": "Concept",
+      "description": "交易隔離等級，定義並發交易之間的可見度，如 READ UNCOMMITTED、READ COMMITTED、REPEATABLE READ 與 SERIALIZABLE，不同等級影響效能與一致性。"
+    },
+    {
+      "name": "Deadlock",
+      "base_class": "Concept",
+      "description": "死結，當兩個或多個交易相互等待對方釋放鎖而形成的循環等待狀態，需要資料庫管理系統偵測並自動解除。"
+    },
+    {
+      "name": "Lock_Management",
+      "base_class": "Concept",
+      "description": "鎖管理，控制並發存取的機制，包含悲觀鎖（Pessimistic Locking）、樂觀鎖（Optimistic Locking）、列級鎖（Row-level Lock）與表級鎖（Table-level Lock）。"
+    },
+    {
+      "name": "Connection_Pool",
+      "base_class": "Concept",
+      "description": "連線池，管理資料庫連線的重複使用，減少連線建立/銷毀的開銷，支援最大連線數、空閒連線回收與連線Timeout配置。"
+    },
+    {
+      "name": "Database_User",
+      "base_class": "Agent",
+      "description": "資料庫使用者帳戶，定義具有不同權限層級的資料庫帳戶，如管理員（Admin）、應用程式帳戶（App User）與唯讀帳戶（Read-only）。"
+    },
+    {
+      "name": "Role_Based_Access",
+      "base_class": "Concept",
+      "description": "角色型存取控制（RBAC），透過角色（Role）管理資料庫權限，簡化權限管理，如 readonly_role、readwrite_role、admin_role 等。"
+    },
+    {
+      "name": "Column_Level_Security",
+      "base_class": "Concept",
+      "description": "欄位層級安全，控制使用者對特定欄位的存取權限，常用於保護敏感資料（如薪資、PII）使其僅對授權角色可見。"
+    },
+    {
+      "name": "Data_Encryption_At_Rest",
+      "base_class": "Concept",
+      "description": "靜態資料加密，保護儲存在磁碟上的資料，透過資料庫原生加密功能（如 Transparent Data Encryption，TDE）或應用層加密。"
+    },
+    {
+      "name": "Audit_Log_Database",
+      "base_class": "Document",
+      "description": "資料庫稽核日誌，記錄所有資料庫操作事件（DDL/DML），用於安全審查、合規稽核與異常行為偵測。"
+    },
+    {
+      "name": "Backup_Policy",
+      "base_class": "Document",
+      "description": "備份策略，定義備份頻率（全備份、增量備份、差異備份）、保留期限、儲存位置與復原時間目標（RTO）與復原點目標（RPO）。"
+    },
+    {
+      "name": "Full_Backup",
+      "base_class": "Process",
+      "description": "全量備份，對整個資料庫進行完整備份，是最基礎的備份類型，恢復簡單但耗時較長。"
+    },
+    {
+      "name": "Incremental_Backup",
+      "base_class": "Process",
+      "description": "增量備份，只備份自上次任何類型備份後變更的資料，節省儲存空間但恢復需要按順序套用所有備份。"
+    },
+    {
+      "name": "Point_In_Time_Recovery",
+      "base_class": "Process",
+      "description": "時間點復原（PITR），將資料庫恢復至特定時間點的能力，透過 WAL（Write-Ahead Logging）或二進位日誌（Binary Log）實現。"
+    },
+    {
+      "name": "Database_Replica",
+      "base_class": "Concept",
+      "description": "資料庫複本，資料庫的非主動更新副本，用於讀寫分離（Read Replica）、異地備援與分析查詢分流。"
+    },
+    {
+      "name": "Streaming_Replication",
+      "base_class": "Process",
+      "description": "串流複寫，將主資料庫的變更即時同步至複本的機制，如 PostgreSQL Streaming Replication、MySQL binlog replication。"
+    },
+    {
+      "name": "Synchronous_Replication",
+      "base_class": "Process",
+      "description": "同步複寫，等待所有複本確認寫入後才回傳成功，確保零資料損失但增加寫入延遲。"
+    },
+    {
+      "name": "Asynchronous_Replication",
+      "base_class": "Process",
+      "description": "非同步複寫，主資料庫寫入後立即回傳，複本在背景同步，延遲低但可能造成少量資料損失。"
+    },
+    {
+      "name": "Failover_Mechanism",
+      "base_class": "Concept",
+      "description": "故障轉移機制，當主資料庫故障時自動或手動切換至複本的過程，包含自動 Failover 與手動 Switchover。"
+    },
+    {
+      "name": "High_Availability_Cluster",
+      "base_class": "Concept",
+      "description": "高可用性叢集，多個資料庫節點組成的高可用架構，如 Patroni（PostgreSQL）、InnoDB Cluster（MySQL）、Rhodecode 與雲端原生 HA。"
+    },
+    {
+      "name": "Load_Balancer",
+      "base_class": "Infrastructure_Resource",
+      "description": "負載平衡器，將讀取流量分散至多個讀寫分離的複本，提升系統吞吐量與回應速度。"
+    },
+    {
+      "name": "Database_Sharding",
+      "base_class": "Process",
+      "description": "資料庫分片，將資料水平分割至多個資料庫或節點的技術，用於突破單一資料庫的容量與效能上限。"
+    },
+    {
+      "name": "Shard_Key",
+      "base_class": "Concept",
+      "description": "分片鍵，決定資料如何分配至不同分片的欄位，分片鍵選擇影響資料均勻性與查詢效率（如以 User ID 或 Region 分片）。"
+    },
+    {
+      "name": "Sharding_Strategy",
+      "base_class": "Concept",
+      "description": "分片策略，定義分片演算法，包含雜湊分片（Hash Sharding）、範圍分片（Range Sharding）與目錄分片（Directory-based Sharding）。"
+    },
+    {
+      "name": "Cross_Shard_Query",
+      "base_class": "Concept",
+      "description": "跨分片查詢，涉及多個分片的查詢，是分片架構的主要挑戰，需要特殊的路由與聚合策略。"
+    },
+    {
+      "name": "Database_Migration",
+      "base_class": "Process",
+      "description": "資料庫遷移，將資料庫遷移至新環境、新版本或新架構的過程，包含 Schema 遷移、資料遷移與應用程式相容性驗證。"
+    },
+    {
+      "name": "Schema_Migration_Script",
+      "base_class": "Source_Code",
+      "description": "Schema 遷移腳本，使用版本控制工具（如 Flyway、Liquibase）管理的結構變更腳本，支援向前/向後遷移與衝突檢測。"
+    },
+    {
+      "name": "Data_Migration_Plan",
+      "base_class": "Document",
+      "description": "資料遷移計畫，定義大資料量遷移的策略，包含分批遷移、雙寫（Dual Write）、影子模式（Shadow Mode）與回滾計畫。"
+    },
+    {
+      "name": "Zero_Downtime_Migration",
+      "base_class": "Process",
+      "description": "零停機遷移，確保業務在遷移期間持續運作的策略，如 Expand-Contract Pattern、Blue-Green Deployment 與 CDC（Change Data Capture）。"
+    },
+    {
+      "name": "Query_Cache",
+      "base_class": "Concept",
+      "description": "查詢快取，儲存常見查詢結果以減少資料庫負載的機制，適用於變動頻率低的資料，但需注意快取失效與一致性問題。"
+    },
+    {
+      "name": "Partitioning",
+      "base_class": "Concept",
+      "description": "資料分割（Partitioning），將大型資料表依時間或範圍分割為多個邏輯子表（如依月份或地區），提升查詢效能與維護效率。"
+    },
+    {
+      "name": "Connection_Proxy",
+      "base_class": "Infrastructure_Resource",
+      "description": "連線代理層，如 PgBouncer（PostgreSQL）、ProxySQL（MySQL）等，用於連線池管理、讀寫分流與查詢路由。"
+    }
+  ],
+
+  "object_properties": [
+    {
+      "name": "defines_schema",
+      "description": "Schema 設計文件定義資料庫邏輯結構。",
+      "domain": ["Schema_Design"],
+      "range": ["Database_Schema", "Table_Constraint", "Index_Strategy"]
+    },
+    {
+      "name": "documents_entity_relationship",
+      "description": "ER 圖描述實體之間的關係。",
+      "domain": ["Entity_Relationship_Diagram"],
+      "range": ["Schema_Design"]
+    },
+    {
+      "name": "normalizes_to_form",
+      "description": "正規化將資料庫結構提升至特定正規化形式。",
+      "domain": ["Normalization_Form"],
+      "range": ["Schema_Design"]
+    },
+    {
+      "name": "creates_table",
+      "description": "資料表約束條件確保資料完整性。",
+      "domain": ["Table_Constraint"],
+      "range": ["Database_Schema"]
+    },
+    {
+      "name": "creates_index",
+      "description": "索引策略建立索引以加速查詢。",
+      "domain": ["Index_Strategy"],
+      "range": ["Database_Schema", "Table_Constraint"]
+    },
+    {
+      "name": "composite_on_columns",
+      "description": "複合索引建立在多個欄位上。",
+      "domain": ["Composite_Index"],
+      "range": ["Table_Constraint"]
+    },
+    {
+      "name": "analyzes_query_plan",
+      "description": "查詢執行計畫分析查詢效能瓶頸。",
+      "domain": ["Query_Execution_Plan"],
+      "range": ["Query_Pattern"]
+    },
+    {
+      "name": "matches_pattern",
+      "description": "查詢模式匹配特定索引以加速查詢。",
+      "domain": ["Query_Pattern"],
+      "range": ["Composite_Index", "Index_Strategy"]
+    },
+    {
+      "name": "executes_transaction",
+      "description": "交易確保資料操作的 ACID 特性。",
+      "domain": ["Transaction"],
+      "range": ["Database_Schema"]
+    },
+    {
+      "name": "isolates_with_level",
+      "description": "隔離等級控制並發交易的可見度。",
+      "domain": ["Isolation_Level"],
+      "range": ["Transaction"]
+    },
+    {
+      "name": "resolves_deadlock",
+      "description": "死結需被偵測並解除。",
+      "domain": ["Deadlock"],
+      "range": ["Lock_Management"]
+    },
+    {
+      "name": "manages_locks",
+      "description": "鎖管理控制並發存取的衝突。",
+      "domain": ["Lock_Management"],
+      "range": ["Transaction"]
+    },
+    {
+      "name": "pools_connections",
+      "description": "連線池管理資料庫連線的重複使用。",
+      "domain": ["Connection_Pool"],
+      "range": ["System"]
+    },
+    {
+      "name": "authenticates_user",
+      "description": "資料庫使用者需經過身份驗證。",
+      "domain": ["Database_User"],
+      "range": ["System"]
+    },
+    {
+      "name": "assigns_role",
+      "description": "角色型存取控制分配權限。",
+      "domain": ["Role_Based_Access"],
+      "range": ["Database_User"]
+    },
+    {
+      "name": "secures_column",
+      "description": "欄位層級安全控制特定欄位的存取。",
+      "domain": ["Column_Level_Security"],
+      "range": ["Table_Constraint"]
+    },
+    {
+      "name": "encrypts_data",
+      "description": "靜態資料加密保護磁碟上的資料。",
+      "domain": ["Data_Encryption_At_Rest"],
+      "range": ["Database_Schema"]
+    },
+    {
+      "name": "logs_operations",
+      "description": "稽核日誌記錄資料庫操作。",
+      "domain": ["Audit_Log_Database"],
+      "range": ["Transaction"]
+    },
+    {
+      "name": "defines_backup_policy",
+      "description": "備份策略定義備份頻率與保留期限。",
+      "domain": ["Backup_Policy"],
+      "range": ["Full_Backup", "Incremental_Backup"]
+    },
+    {
+      "name": "performs_full_backup",
+      "description": "全量備份完整複製資料庫。",
+      "domain": ["Full_Backup"],
+      "range": ["Database_Schema"]
+    },
+    {
+      "name": "performs_incremental_backup",
+      "description": "增量備份僅備份變更部分。",
+      "domain": ["Incremental_Backup"],
+      "range": ["Full_Backup"]
+    },
+    {
+      "name": "recovers_to_point",
+      "description": "時間點復原將資料庫恢復至特定時間。",
+      "domain": ["Point_In_Time_Recovery"],
+      "range": ["Full_Backup", "Incremental_Backup"]
+    },
+    {
+      "name": "replicates_to",
+      "description": "串流複寫將變更同步至複本。",
+      "domain": ["Streaming_Replication"],
+      "range": ["Database_Replica"]
+    },
+    {
+      "name": "synchronously_replicates",
+      "description": "同步複寫確保所有複本寫入成功。",
+      "domain": ["Synchronous_Replication"],
+      "range": ["Database_Replica"]
+    },
+    {
+      "name": "asynchronously_replicates",
+      "description": "非同步複寫在背景同步變更。",
+      "domain": ["Asynchronous_Replication"],
+      "range": ["Database_Replica"]
+    },
+    {
+      "name": "triggers_failover",
+      "description": "故障轉移機制在故障時切換至複本。",
+      "domain": ["Failover_Mechanism"],
+      "range": ["High_Availability_Cluster"]
+    },
+    {
+      "name": "provides_high_availability",
+      "description": "高可用性叢集提供故障容錯能力。",
+      "domain": ["High_Availability_Cluster"],
+      "range": ["Database_Replica", "Failover_Mechanism"]
+    },
+    {
+      "name": "balances_load",
+      "description": "負載平衡器分散讀取流量至複本。",
+      "domain": ["Load_Balancer"],
+      "range": ["Database_Replica"]
+    },
+    {
+      "name": "shards_data",
+      "description": "資料庫分片將資料水平分割。",
+      "domain": ["Database_Sharding"],
+      "range": ["Schema_Design"]
+    },
+    {
+      "name": "distributes_by_key",
+      "description": "分片鍵決定資料的分配方式。",
+      "domain": ["Shard_Key"],
+      "range": ["Database_Sharding"]
+    },
+    {
+      "name": "implements_strategy",
+      "description": "分片策略定義分片演算法。",
+      "domain": ["Sharding_Strategy"],
+      "range": ["Database_Sharding"]
+    },
+    {
+      "name": "queries_across_shards",
+      "description": "跨分片查詢涉及多個分片。",
+      "domain": ["Cross_Shard_Query"],
+      "range": ["Database_Sharding"]
+    },
+    {
+      "name": "executes_migration",
+      "description": "資料庫遷移執行 Schema 與資料的變更。",
+      "domain": ["Database_Migration"],
+      "range": ["Schema_Migration_Script", "Data_Migration_Plan"]
+    },
+    {
+      "name": "versions_schema",
+      "description": "Schema 遷移腳本受版本控制管理。",
+      "domain": ["Schema_Migration_Script"],
+      "range": ["Source_Code"]
+    },
+    {
+      "name": "plans_data_move",
+      "description": "資料遷移計畫定義分批遷移策略。",
+      "domain": ["Data_Migration_Plan"],
+      "range": ["Database_Replica"]
+    },
+    {
+      "name": "achieves_zero_downtime",
+      "description": "零停機遷移確保業務持續運作。",
+      "domain": ["Zero_Downtime_Migration"],
+      "range": ["Database_Migration"]
+    },
+    {
+      "name": "caches_query_result",
+      "description": "查詢快取儲存查詢結果以提升效能。",
+      "domain": ["Query_Cache"],
+      "range": ["Query_Pattern"]
+    },
+    {
+      "name": "partitions_table",
+      "description": "資料分割將大型資料表分為子表。",
+      "domain": ["Partitioning"],
+      "range": ["Database_Schema"]
+    },
+    {
+      "name": "proxies_connections",
+      "description": "連線代理層管理連線池與路由。",
+      "domain": ["Connection_Proxy"],
+      "range": ["Connection_Pool"]
+    }
+  ],
+
+  "metadata": {
+    "domain": "System_Development",
+    "major_owner": "KA-Agent",
+    "data_classification": "INTERNAL",
+    "ontological_level": "MAJOR",
+    "intended_usage": [
+      "資料庫 Schema 設計審查",
+      "SQL 查詢效能調優建議",
+      "索引策略規劃",
+      "備份還原計畫制定",
+      "高可用性架構設計",
+      "AI 輔助資料庫遷移規劃"
+    ],
+    "linked_ai_needs": [
+      "自然語言轉 SQL（Natural Language → SQL Query）",
+      "AI 輔助 Schema 設計（Requirement → Schema Recommendation）",
+      "AI 輔助效能診斷（Query Execution Plan → Recommendations）",
+      "AI 輔助遷移評估（Old DB → Migration Plan）",
+      "AI 輔助異常偵測（Database Metrics → Anomaly Alert）"
+    ],
+    "framework_references": [
+      "ACID Properties (Atomicity, Consistency, Isolation, Durability)",
+      "CAP Theorem (Consistency, Availability, Partition Tolerance)",
+      "PostgreSQL Documentation (Benchmark for relational DB)",
+      "MongoDB Architecture Patterns (Document Store reference)",
+      "Google SRE Chapter on Data Integrity",
+      "AWS Well-Architected Framework - Data Layer"
+    ],
+    "database_types": [
+      "Relational DBMS（PostgreSQL, MySQL, Oracle, SQL Server）",
+      "Document Store（MongoDB, CouchDB）",
+      "Key-Value Store（Redis, Amazon DynamoDB）",
+      "Column-Family Store（Cassandra, HBase）",
+      "Time-Series DB（InfluxDB, TimescaleDB）",
+      "Graph DB（Neo4j, ArangoDB）",
+      "Vector DB（Qdrant, Pinecone, Weaviate）"
+    ]
+  }
+}

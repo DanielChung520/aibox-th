@@ -1,0 +1,532 @@
+{
+  "type": "major",
+  "name": "System_Analysis",
+  "version": "1.0",
+  "default_version": true,
+  "ontology_name": "System_Analysis_Major_Ontology",
+  "description": "系統分析專業本體論，定義系統分析師在系統開發生命週期前期所使用的所有概念與流程。包括可行性分析、需求取得、需求分析、系統建模、系統規格書撰寫、原型設計、利害關係人管理、風險評估等專業領域。本體論整合 UML 建模、TOGAF 架構框架、 BABOK 需求分析與敏捷需求實踐，適用於需求工程、RAG 輔助需求審查、AI 輔助系統規格生成與系統分析知識管理場景。",
+  "author": "Daniel Chung",
+  "last_modified": "2026-04-04 10:01:38",
+  "inherits_from": [
+    "5W1H_Base_Ontology_OWL",
+    "System_Development_Domain_Ontology"
+  ],
+  "tags": [
+    "SystemAnalysis",
+    "RequirementsEngineering",
+    "UML",
+    "TOGAF",
+    "BABOK",
+    "FeasibilityStudy",
+    "StakeholderManagement",
+    "RiskAssessment",
+    "AgileRequirements"
+  ],
+  "use_cases": [
+    "需求工程知識管理",
+    "RAG 輔助需求規格審查",
+    "AI 輔助系統規格文件生成",
+    "系統模型比對與一致性檢查",
+    "利害關係人分析",
+    "可行性評估報告生成",
+    "需求追溯管理",
+    "跨系統整合介面分析"
+  ],
+
+  "entity_classes": [
+    {
+      "name": "Feasibility_Study",
+      "base_class": "Process",
+      "description": "可行性研究流程，評估系統提案在技術、經濟、營運、法務等維度的可行性，並產出可行性評估報告。"
+    },
+    {
+      "name": "Technical_Feasibility",
+      "base_class": "Concept",
+      "description": "技術可行性，評估提案所需的技術能力是否具備，包括技術成熟度、人才可獲得性與基礎設施可行性。"
+    },
+    {
+      "name": "Economic_Feasibility",
+      "base_class": "Concept",
+      "description": "經濟可行性，評估系統的投資報酬率，包含成本估算、效益量化與回收期分析。"
+    },
+    {
+      "name": "Operational_Feasibility",
+      "base_class": "Concept",
+      "description": "營運可行性，評估系統上線後組織是否能有效使用，包括組織變革接受度與現有流程整合程度。"
+    },
+    {
+      "name": "Legal_Feasibility",
+      "base_class": "Concept",
+      "description": "法務可行性，評估系統是否遵守法規要求，如 GDPR、個人資料保護法、產業專門法規等。"
+    },
+    {
+      "name": "Requirement_Elicitation",
+      "base_class": "Process",
+      "description": "需求獲取流程，透過訪談、問卷、工作観察、原型演示等方式從利害關係人取得需求。"
+    },
+    {
+      "name": "Stakeholder",
+      "base_class": "Agent",
+      "description": "利害關係人，與系統有直接或間接利益的個人或團體，如系統用戶、業務主管、 IT 部門、外部廠商、監管單位等。"
+    },
+    {
+      "name": "Stakeholder_Map",
+      "base_class": "Document",
+      "description": "利害關係人地圖，識別所有利害關係人並分析其權力/利益矩陣、用藥性與參與策略。"
+    },
+    {
+      "name": "Requirement_Analysis",
+      "base_class": "Process",
+      "description": "需求分析流程，對取得的原始需求進行分類、優先級排序、衝突調和與一致性檢查。"
+    },
+    {
+      "name": "Business_Requirement",
+      "base_class": "Requirement",
+      "description": "業務需求，代表組織或部門的整體目標與期望，通常由高層提出，與組織策略直接關聯。"
+    },
+    {
+      "name": "User_Requirement",
+      "base_class": "Requirement",
+      "description": "用戶需求，代表系統終端用戶的具體期望，通常以用戶故事（User Story）或使用案例（Use Case）形式描述。"
+    },
+    {
+      "name": "System_Requirement",
+      "base_class": "Requirement",
+      "description": "系統需求，代表對軟體系統本身的技術約束與功能規範，通常由用戶需求推导而来。"
+    },
+    {
+      "name": "Quality_Attribute",
+      "base_class": "Non_Functional_Requirement",
+      "description": "品質屬性，代表系統的非功能需求，如效能（Performance）、安全性（Security）、可用性（Availability）、可擴展性（Scalability）、可維護性（Maintainability）等。"
+    },
+    {
+      "name": "Constraint",
+      "base_class": "Requirement",
+      "description": "約束條件，代表系統設計與實作的限制，如預算限制、時程約束、技術標準、政策規定等。"
+    },
+    {
+      "name": "Use_Case",
+      "base_class": "Concept",
+      "description": "使用案例，以敘述性方式描述系統與使用者之間的互動情境，包含前置條件、主要流程、替代流程與例外流程。"
+    },
+    {
+      "name": "Use_Case_Diagram",
+      "base_class": "Document",
+      "description": "使用案例圖，UML 建模工具產出的視覺化圖表，展示系統邊界、參與者與使用案例之間的關係。"
+    },
+    {
+      "name": "User_Story",
+      "base_class": "Concept",
+      "description": "用戶故事，以標準格式（As a [角色], I want [功能], so that [價值]）描述用戶需求的敏捷需求描述方式。"
+    },
+    {
+      "name": "Acceptance_Criteria",
+      "base_class": "Concept",
+      "description": "驗收標準，定義用戶故事或功能需求被視為完成的具體條件，通常以可測試的語句描述。"
+    },
+    {
+      "name": "Requirement_Priority",
+      "base_class": "Concept",
+      "description": "需求優先級，代表需求的重要程度與緊急程度，常用框架包括 MoSCoW（Must/Should/Could/Won't）、Kano Model 與 RICE Score。"
+    },
+    {
+      "name": "Requirement_Conflict",
+      "base_class": "Concept",
+      "description": "需求衝突，當兩個或多個需求之間存在相互矛盾或競爭關係時的狀況，需要透過分析與協商来解决。"
+    },
+    {
+      "name": "System_Modeling",
+      "base_class": "Process",
+      "description": "系統建模流程，使用 UML 或其他建模語言對系統的結構與行為進行抽象描述。"
+    },
+    {
+      "name": "Business_Process_Model",
+      "base_class": "Document",
+      "description": "業務流程模型，使用 BPMN 或流程圖描述組織內部的作業流程，包含流程節點、泳道、條件分支與例外處理。"
+    },
+    {
+      "name": "Domain_Model",
+      "base_class": "Document",
+      "description": "領域模型，使用類別圖或概念模型描述問題領域中的核心概念及其關係。"
+    },
+    {
+      "name": "Sequence_Diagram",
+      "base_class": "Document",
+      "description": "時序圖，UML 建模產出，描述物件之間的訊息傳遞順序與時間軸關係。"
+    },
+    {
+      "name": "Class_Diagram",
+      "base_class": "Document",
+      "description": "類別圖，UML 建模產出，描述系統中的類別、介面及其靜態結構關係。"
+    },
+    {
+      "name": "State_Machine_Diagram",
+      "base_class": "Document",
+      "description": "狀態機圖，描述物件或系統在生命週期中不同狀態之間的轉換條件與行為。"
+    },
+    {
+      "name": "Component_Diagram",
+      "base_class": "Document",
+      "description": "元件圖，描述系統的元件結構與元件之間的依賴關係。"
+    },
+    {
+      "name": "Deployment_Diagram",
+      "base_class": "Document",
+      "description": "部署圖，描述系統的軟硬體部署架構，包含節點、元件配置與連線關係。"
+    },
+    {
+      "name": "System_Specification",
+      "base_class": "Document",
+      "description": "系統規格書，正式文件，完整描述系統的功能需求、非功能需求、系統架構、介面規格與驗收標準。"
+    },
+    {
+      "name": "Validation_Dataset",
+      "base_class": "Concept",
+      "description": "驗證資料集，用於模型訓練過程中的超參數調優與 early stopping，避免模型過擬合（Overfitting）。在需求分析文件中常見於 AI 相關需求的驗證資料描述。文件 pattern：「驗證資料集包含 1000 筆測試資料」。"
+    },
+    {
+      "name": "Interface_Specification",
+      "base_class": "System_Specification",
+      "description": "介面規格書，詳細定義系統內外部 API 的規格，包含資料格式、通訊協定、驗證規則與錯誤碼。"
+    },
+    {
+      "name": "Prototype",
+      "base_class": "Document",
+      "description": "原型，展示系統外觀與互動行為的早期模型，可分為低保真（紙本、Wireframe）與高保真（可互動的視覺原型）兩種類型。"
+    },
+    {
+      "name": "Requirement_Traceability_Matrix",
+      "base_class": "Document",
+      "description": "需求追溯矩陣，追蹤從業務需求→用戶需求→系統需求→設計→實作→測試的完整對應關係，確保每個需求都被正確實作與測試。"
+    },
+    {
+      "name": "Gap_Analysis",
+      "base_class": "Process",
+      "description": "缺口分析，評估新系統與既有系統之間的功能缺口，識別需新建、開發、整合或取捨的功能模組。"
+    },
+    {
+      "name": "Risk_Assessment",
+      "base_class": "Process",
+      "description": "風險評估流程，識別系統開發過程中的風險，評估其發生概率與影響程度，並制定風險因應策略。"
+    },
+    {
+      "name": "Risk_Item",
+      "base_class": "Concept",
+      "description": "風險項目，代表一個具體的風險，包含風險描述、類型（技術/營運/時程/預算）、發生概率、影響程度與因應策略。"
+    },
+    {
+      "name": "System_Integration_Analysis",
+      "base_class": "Process",
+      "description": "系統整合分析，評估新系統與既有系統之間的整合需求，包含資料介面、訊息格式、通訊協定與錯誤處理機制。"
+    },
+    {
+      "name": "Integration_Point",
+      "base_class": "Concept",
+      "description": "整合點，代表兩個系統之間的具體連接位置，包含上游系統、下游系統、資料流向與轉換邏輯。"
+    },
+    {
+      "name": "Data_Integration_Spec",
+      "base_class": "Document",
+      "description": "資料整合規格，定義跨系統的資料交換格式、頻率、校驗規則與錯誤處理機制。"
+    },
+    {
+      "name": "API_Integration_Spec",
+      "base_class": "Document",
+      "description": "API 整合規格，定義跨系統 API 的呼叫方式、認證機制、超時設定、重試策略與降級計畫。"
+    },
+    {
+      "name": "Current_State_Analysis",
+      "base_class": "Process",
+      "description": "現況分析，描述組織或業務流程的現有運作方式，是未來態分析與系統提案的基準線。"
+    },
+    {
+      "name": "To_Be_State_Analysis",
+      "base_class": "Process",
+      "description": "未來態分析，描述系統上線後組織或業務流程的期望運作方式，通常包含流程改善目標與量化指標。"
+    },
+    {
+      "name": "Solution_Option",
+      "base_class": "Concept",
+      "description": "解決方案選項，代表針對業務需求提出的候選系統方案，通常包含多個選項以便比較評估。"
+    },
+    {
+      "name": "Solution_Evaluation",
+      "base_class": "Process",
+      "description": "方案評估流程，針對多個解決方案選項進行多維度評估，通常使用加權評分法或成本效益分析。"
+    }
+  ],
+
+  "object_properties": [
+    {
+      "name": "conducts_feasibility",
+      "description": "可行性研究評估特定維度的可行性。",
+      "domain": ["Feasibility_Study"],
+      "range": [
+        "Technical_Feasibility",
+        "Economic_Feasibility",
+        "Operational_Feasibility",
+        "Legal_Feasibility"
+      ]
+    },
+    {
+      "name": "has_stakeholder_map",
+      "description": "可行性研究或專案具有利害關係人地圖。",
+      "domain": ["Feasibility_Study", "Requirement_Elicitation"],
+      "range": ["Stakeholder_Map"]
+    },
+    {
+      "name": "identifies_stakeholder",
+      "description": "識別並新增利害關係人。",
+      "domain": ["Stakeholder_Map"],
+      "range": ["Stakeholder"]
+    },
+    {
+      "name": "analyses_requirements",
+      "description": "需求分析流程處理取得的原始需求。",
+      "domain": ["Requirement_Analysis"],
+      "range": ["Requirement"]
+    },
+    {
+      "name": "derives_from",
+      "description": "系統需求由用戶需求或業務需求推导而来。",
+      "domain": ["System_Requirement"],
+      "range": ["User_Requirement", "Business_Requirement"]
+    },
+    {
+      "name": "prioritizes",
+      "description": "需求分析師為需求設定優先級。",
+      "domain": ["Requirement_Analysis"],
+      "range": ["Requirement_Priority"]
+    },
+    {
+      "name": "has_priority",
+      "description": "需求具有特定的優先級。",
+      "domain": ["Requirement"],
+      "range": ["Requirement_Priority"]
+    },
+    {
+      "name": "conflicts_with",
+      "description": "需求之間存在衝突關係。",
+      "domain": ["Requirement"],
+      "range": ["Requirement"]
+    },
+    {
+      "name": "resolves_conflict",
+      "description": "分析師調和需求的衝突。",
+      "domain": ["Requirement_Analysis"],
+      "range": ["Requirement_Conflict"]
+    },
+    {
+      "name": "satisfies_quality_attribute",
+      "description": "系統規格需滿足特定品質屬性。",
+      "domain": ["System_Specification", "Software_Component"],
+      "range": ["Quality_Attribute"]
+    },
+    {
+      "name": "constrained_by",
+      "description": "系統或設計受到約束條件限制。",
+      "domain": ["System", "Design_Document"],
+      "range": ["Constraint"]
+    },
+    {
+      "name": "models_system",
+      "description": "系統建模流程產生系統模型。",
+      "domain": ["System_Modeling"],
+      "range": [
+        "Business_Process_Model",
+        "Domain_Model",
+        "Use_Case",
+        "Use_Case_Diagram",
+        "Sequence_Diagram",
+        "Class_Diagram",
+        "State_Machine_Diagram",
+        "Component_Diagram",
+        "Deployment_Diagram"
+      ]
+    },
+    {
+      "name": "documents_as_usecase",
+      "description": "以使用案例形式記錄系統行為。",
+      "domain": ["Requirement", "System_Specification"],
+      "range": ["Use_Case"]
+    },
+    {
+      "name": "documents_as_userstory",
+      "description": "以用戶故事形式記錄需求。",
+      "domain": ["Requirement", "System_Specification"],
+      "range": ["User_Story"]
+    },
+    {
+      "name": "has_acceptance_criteria",
+      "description": "用戶故事具有驗收標準。",
+      "domain": ["User_Story"],
+      "range": ["Acceptance_Criteria"]
+    },
+    {
+      "name": "describes_diagram",
+      "description": "使用案例描述包含對應的圖形模型。",
+      "domain": ["Use_Case"],
+      "range": [
+        "Use_Case_Diagram",
+        "Sequence_Diagram",
+        "Class_Diagram"
+      ]
+    },
+    {
+      "name": "specifies_system",
+      "description": "系統規格書完整描述系統需求與架構。",
+      "domain": ["System_Specification"],
+      "range": ["System"]
+    },
+    {
+      "name": "has_functional_spec",
+      "description": "系統具有功能規格書。",
+      "domain": ["System"],
+      "range": ["Functional_Specification"]
+    },
+    {
+      "name": "has_interface_spec",
+      "description": "系統或元件具有介面規格書。",
+      "domain": ["System", "Software_Component"],
+      "range": ["Interface_Specification"]
+    },
+    {
+      "name": "traces_requirement",
+      "description": "需求追溯矩陣追蹤需求的完整生命週期。",
+      "domain": ["Requirement_Traceability_Matrix"],
+      "range": [
+        "Business_Requirement",
+        "User_Requirement",
+        "System_Requirement",
+        "Test_Case",
+        "Source_Code"
+      ]
+    },
+    {
+      "name": "performs_gap_analysis",
+      "description": "執行缺口分析比對現況與未來態。",
+      "domain": ["Gap_Analysis"],
+      "range": ["Current_State_Analysis", "To_Be_State_Analysis"]
+    },
+    {
+      "name": "assesses_risk",
+      "description": "風險評估流程識別並記錄風險項目。",
+      "domain": ["Risk_Assessment"],
+      "range": ["Risk_Item"]
+    },
+    {
+      "name": "has_mitigation_strategy",
+      "description": "風險項目具有因應處理策略。",
+      "domain": ["Risk_Item"],
+      "range": ["Requirement"]
+    },
+    {
+      "name": "analyzes_integration",
+      "description": "系統整合分析識別整合點。",
+      "domain": ["System_Integration_Analysis"],
+      "range": ["Integration_Point"]
+    },
+    {
+      "name": "defines_data_integration",
+      "description": "整合點具有資料整合規格。",
+      "domain": ["Integration_Point"],
+      "range": ["Data_Integration_Spec"]
+    },
+    {
+      "name": "defines_api_integration",
+      "description": "整合點具有 API 整合規格。",
+      "domain": ["Integration_Point"],
+      "range": ["API_Integration_Spec"]
+    },
+    {
+      "name": "integrates_with",
+      "description": "系統與既有系統進行整合。",
+      "domain": ["System"],
+      "range": ["System"]
+    },
+    {
+      "name": "generates_prototype",
+      "description": "需求分析過程中產生系統原型。",
+      "domain": ["Requirement_Elicitation", "System_Modeling"],
+      "range": ["Prototype"]
+    },
+    {
+      "name": "evaluates_solution",
+      "description": "方案評估流程比較多個解決方案選項。",
+      "domain": ["Solution_Evaluation"],
+      "range": ["Solution_Option"]
+    },
+    {
+      "name": "recommends_option",
+      "description": "系統分析師推薦最終方案選項。",
+      "domain": ["Feasibility_Study"],
+      "range": ["Solution_Option"]
+    },
+    {
+      "name": "creates_specification",
+      "description": "系統分析師產出系統規格書。",
+      "domain": ["Requirement_Analysis", "System_Modeling"],
+      "range": [
+        "System_Specification",
+        "Functional_Specification",
+        "Interface_Specification"
+      ]
+    },
+    {
+      "name": "elicits_from",
+      "description": "需求獲取流程從利害關係人取得需求。",
+      "domain": ["Requirement_Elicitation"],
+      "range": ["Stakeholder"]
+    },
+    {
+      "name": "belongs_to_system",
+      "description": "分析物件屬於目標系統。",
+      "domain": [
+        "System_Specification",
+        "Use_Case",
+        "User_Story",
+        "Integration_Point",
+        "Risk_Item"
+      ],
+      "range": ["System"]
+    }
+  ],
+
+  "metadata": {
+    "domain": "System_Development",
+    "major_owner": "KA-Agent",
+    "data_classification": "INTERNAL",
+    "ontological_level": "MAJOR",
+    "intended_usage": [
+      "RAG 檢索與需求回答",
+      "KG 三元組抽取（需求→規格→實作→測試）",
+      "AI 輔助系統規格文件生成",
+      "UML 圖輔助生成",
+      "需求一致性檢查",
+      "系統整合介面分析"
+    ],
+    "linked_ai_needs": [
+      "會議記錄 AI → 需求獲取記錄自動生成",
+      "表單 AI 審查 → 需求表單格式檢核",
+      "AI 輔助 Spec 生成 → 需求文件自動轉換為系統規格書",
+      "跨系統整合分析 → API 介面自動比對與衝突檢測"
+    ],
+    "uml_model_types": [
+      "Use_Case_Diagram",
+      "Class_Diagram",
+      "Sequence_Diagram",
+      "State_Machine_Diagram",
+      "Component_Diagram",
+      "Deployment_Diagram",
+      "Activity_Diagram",
+      "Business_Process_Model"
+    ],
+    "framework_references": [
+      "TOGAF 9.2 (Enterprise Architecture)",
+      "BABOK v3 (Business Analysis Body of Knowledge)",
+      "UML 2.5 (Unified Modeling Language)",
+      "BPMN 2.0 (Business Process Model and Notation)",
+      "Agile Alliance (User Story, Acceptance Criteria)"
+    ]
+  }
+}

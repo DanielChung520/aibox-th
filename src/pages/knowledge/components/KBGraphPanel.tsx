@@ -1,9 +1,9 @@
 /**
  * @file        知識庫圖譜面板元件
  * @description 使用 @antv/g6 v5 力導向圖視覺化知識圖譜節點與關聯
- * @lastUpdate  2026-03-26 23:33:21
+ * @lastUpdate  2026-04-08 11:04:46
  * @author      Daniel Chung
- * @version     2.3.0
+ * @version     2.4.0
  */
 
 import { useEffect, useRef, useState, useCallback } from 'react';
@@ -161,6 +161,14 @@ export default function KBGraphPanel({ fileId, graphStatus, onNodeSelect, onGrap
     g.render().catch(() => { });
   }, [layoutMode, getLayout]);
 
+  // Resize graph when container size changes (e.g., when right panel collapses)
+  useEffect(() => {
+    if (layoutMode === '3d') return;
+    const g = graphRef.current;
+    if (!g) return;
+    g.resize(containerSize.w, containerSize.h);
+  }, [containerSize, layoutMode]);
+
   const handleRegenerate = async () => {
     setRegenerating(true);
     try {
@@ -221,7 +229,9 @@ export default function KBGraphPanel({ fileId, graphStatus, onNodeSelect, onGrap
             size: 44,
           },
           inactive: {
-            opacity: 0.25,
+            fillOpacity: 0.15,
+            strokeOpacity: 0.15,
+            labelOpacity: 0.15,
           },
         },
       },
@@ -258,7 +268,8 @@ export default function KBGraphPanel({ fileId, graphStatus, onNodeSelect, onGrap
             lineOpacity: 1,
           },
           inactive: {
-            opacity: 0.15,
+            lineOpacity: 0.08,
+            labelOpacity: 0.1,
           },
         },
       },
@@ -267,7 +278,16 @@ export default function KBGraphPanel({ fileId, graphStatus, onNodeSelect, onGrap
         'drag-canvas',
         'zoom-canvas',
         'drag-element',
-        { type: 'click-select', multiple: true },
+        {
+          type: 'click-select',
+          multiple: true,
+          trigger: ['shift'],
+          state: 'selected',
+          degree: 0,
+          unselectedState: undefined,
+          neighborState: undefined,
+          animation: false,
+        },
       ],
     });
 
@@ -350,16 +370,30 @@ export default function KBGraphPanel({ fileId, graphStatus, onNodeSelect, onGrap
     };
   }, [fileId, onNodeSelect, onGraphReady, onDataLoaded, token]);
 
-  const resetElementStates = () => {
+  const resetElementStates = async () => {
     const g = graphRef.current;
     if (!g) return;
-    const allElements = [...graphDataRef.current.nodes, ...graphDataRef.current.edges];
-    g.setElementState(Object.fromEntries(allElements.map((el) => [el.id, []])));
+
+    const { nodes = [], edges = [] } = g.getData();
+    const stateMap: Record<string, string[]> = {};
+    for (const n of nodes) {
+      stateMap[String(n.id)] = [];
+    }
+    for (const e of edges) {
+      const eid = (e as { id?: string }).id;
+      if (eid) stateMap[String(eid)] = [];
+    }
+    g.setElementState(stateMap);
+    await g.draw();
   };
 
-  const searchShortestPath = () => {
+  const searchShortestPath = async () => {
     const g = graphRef.current;
     if (!g) return;
+
+    // 確保 click-select 狀態已落地
+    await g.draw();
+
     const selectedNodes = g.getElementDataByState('node', 'selected');
     if (selectedNodes.length !== 2) {
       message.warning('請選擇兩個節點（Shift+點擊）');
@@ -373,50 +407,40 @@ export default function KBGraphPanel({ fileId, graphStatus, onNodeSelect, onGrap
       return;
     }
     const pathSet = new Set(path);
-    const states: Record<string, string[]> = {};
-    for (const node of graphDataRef.current.nodes) {
-      const id = String(node.id);
-      states[id] = pathSet.has(id) ? ['highlight'] : ['inactive'];
-    }
-    for (const edge of graphDataRef.current.edges) {
-      const id = String(edge.id);
-      const src = String(edge.source);
-      const tgt = String(edge.target);
-      const srcInPath = pathSet.has(src);
-      const tgtInPath = pathSet.has(tgt);
-      if (!srcInPath && !tgtInPath) {
-        states[id] = ['inactive'];
-      } else {
-        const srcIdx = path.indexOf(src);
-        const tgtIdx = path.indexOf(tgt);
-        if (Math.abs(srcIdx - tgtIdx) === 1) {
-          states[id] = ['highlight'];
-        } else {
-          states[id] = ['inactive'];
-        }
-      }
-    }
-    g.setElementState(states);
-    const pathEdgeIds: string[] = [];
+
+    const pathEdgeIds = new Set<string>();
     for (const edge of graphDataRef.current.edges) {
       const src = String(edge.source);
       const tgt = String(edge.target);
       const srcIdx = path.indexOf(src);
       const tgtIdx = path.indexOf(tgt);
       if (srcIdx !== -1 && tgtIdx !== -1 && Math.abs(srcIdx - tgtIdx) === 1) {
-        pathEdgeIds.push(String(edge.id));
+        pathEdgeIds.add(String(edge.id));
       }
     }
-    for (const id of [...path, ...pathEdgeIds]) {
-      g.frontElement(id);
+
+    const states: Record<string, string[]> = {};
+    for (const node of graphDataRef.current.nodes) {
+      const id = String(node.id);
+      states[id] = pathSet.has(id) ? [] : ['inactive'];
     }
+    for (const edge of graphDataRef.current.edges) {
+      const id = String(edge.id);
+      states[id] = pathEdgeIds.has(id) ? [] : ['inactive'];
+    }
+    g.setElementState(states);
+    await g.draw();
+
+    for (const id of [...pathEdgeIds]) g.frontElement(id);
+    for (const id of path) g.frontElement(id);
+
     message.success(`路徑長度: ${length} 步`);
   };
 
   const togglePathSearchMode = () => {
     if (pathSearchMode) {
-      setPathSearchMode(false);
       resetElementStates();
+      setPathSearchMode(false);
     } else {
       setPathSearchMode(true);
       message.info('Shift+點擊選擇起點和終點，再點「查詢路徑」');
@@ -450,7 +474,7 @@ export default function KBGraphPanel({ fileId, graphStatus, onNodeSelect, onGrap
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           backgroundColor: 'rgba(255,255,255,0.9)', zIndex: 10,
         }}>
-          <Alert type="error" message={error} showIcon style={{ maxWidth: 300 }} />
+          <Alert type="error" title={error} showIcon style={{ maxWidth: 300 }} />
         </div>
       )}
       {!loading && !error && !hasData && (

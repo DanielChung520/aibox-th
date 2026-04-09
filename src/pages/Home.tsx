@@ -1,11 +1,11 @@
 import { useContentTokens, useEffectiveTheme } from '../contexts/AppThemeProvider';
-import logoDark from '../assets/EDGE-logo-icon.png';
-import logoLight from '../assets/EDGE-logo-dark.png';
+import logoDark from '../assets/EDGE-logo-dark.png';
+import logoLight from '../assets/EDGE-logo-light.png';
 
 export default function Home() {
   const contentTokens = useContentTokens();
   const effectiveTheme = useEffectiveTheme();
-  const logoSrc = effectiveTheme === 'dark' ? logoDark : logoLight;
+  const logoSrc = effectiveTheme === 'dark' ? logoLight : logoDark;
 
   return (
     <div style={{
@@ -19,8 +19,9 @@ export default function Home() {
           src={logoSrc}
           alt="logo"
           style={{
-            width: 400,
-            height: 400,
+            width: effectiveTheme === 'dark' ? 500 : 500,
+            height: effectiveTheme === 'dark' ? 'auto' : 'auto',
+            maxHeight: '80%',
             objectFit: 'contain',
           }}
         />

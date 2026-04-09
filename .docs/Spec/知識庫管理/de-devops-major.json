@@ -1,0 +1,429 @@
+{
+  "type": "major",
+  "name": "DevOps_Engineering",
+  "version": "1.0",
+  "default_version": true,
+  "ontology_name": "DevOps_Engineering_Major_Ontology",
+  "description": "DevOps 工程專業本體論，定義軟體交付生命週期中的所有核心概念與實踐，包括持續整合（CI）、持續交付（CD）、基礎設施即代碼（IaC）、容器化、雲原生架構、監控可觀測性、事件管理與站台可靠性工程（SRE）等專業領域。本體論整合 GitOps、Platform Engineering、FinOps 與 Observability 最佳實踐，適用於 DevOps 流程自動化、RAG 輔助部署文件檢索、AI 輔助故障診斷與 CI/CD Pipeline 優化場景。",
+  "author": "Daniel Chung",
+  "last_modified": "2026-04-04 10:01:38",
+  "inherits_from": [
+    "5W1H_Base_Ontology_OWL",
+    "System_Development_Domain_Ontology"
+  ],
+  "tags": [
+    "DevOps",
+    "CICD",
+    "InfrastructureAsCode",
+    "Container",
+    "Kubernetes",
+    "GitOps",
+    "Observability",
+    "SRE",
+    "PlatformEngineering",
+    "FinOps"
+  ],
+  "use_cases": [
+    "CI/CD Pipeline 知識管理",
+    "基礎設施即代碼規範檢索",
+    "容器化部署策略分析",
+    "監控告警優化",
+    "RAG 輔助故障診斷",
+    "AI 輔助部署決策",
+    "站台可靠性工程",
+    "Platform Engineering 知識管理"
+  ],
+
+  "entity_classes": [
+    {
+      "name": "Pipeline_Definition",
+      "base_class": "Document",
+      "description": "Pipeline 定義檔案，如 Jenkinsfile、GitLab CI YAML、GitHub Actions workflow 等，描述軟體從原始碼到生產環境的自動化流程。"
+    },
+    {
+      "name": "Build_Stage",
+      "base_class": "Process",
+      "description": "建構階段，代表 Pipeline 中的編譯、建構、測試階段，如編譯原始碼、執行單元測試、生成建構產出物等。"
+    },
+    {
+      "name": "Test_Stage",
+      "base_class": "Process",
+      "description": "測試階段，代表 Pipeline 中的各類測試執行，如單元測試、整合測試、端對端測試、效能測試、安全掃描等。"
+    },
+    {
+      "name": "Deploy_Stage",
+      "base_class": "Process",
+      "description": "部署階段，代表 Pipeline 中將產出物部署至目標環境的過程，如 Staging 部署、Canary 部署、Blue-Green 部署、Rolling Update 等。"
+    },
+    {
+      "name": "Artifact_Repository",
+      "base_class": "Concept",
+      "description": "產出物倉庫，如 Nexus、Artifactory、Harbor（容器）、GitHub Packages 等，用於存放建構產出物與容器映像檔。"
+    },
+    {
+      "name": "Container_Image",
+      "base_class": "Build_Artifact",
+      "description": "容器映像檔，代表 Docker Image 或 OCI 相容映像，具備標籤（Tag）、摘要（Digest）、層級（Layers）與安全掃描結果等屬性。"
+    },
+    {
+      "name": "Dockerfile",
+      "base_class": "Source_Code",
+      "description": "容器映像檔建構腳本，定義基礎映像、工作目錄、依賴安裝、產出物複製與啟動命令等建構步驟。"
+    },
+    {
+      "name": "Container_Orchestration",
+      "base_class": "Concept",
+      "description": "容器編排系統，如 Kubernetes、Docker Swarm、OpenShift 等，負責容器的部署、擴縮容、網路與服務發現。"
+    },
+    {
+      "name": "Kubernetes_Manifest",
+      "base_class": "Deployment_Artifact",
+      "description": "Kubernetes 資源清單 YAML，如 Deployment、Service、Ingress、ConfigMap、Secret、HorizontalPodAutoscaler 等 Kubernetes 原生資源定義。"
+    },
+    {
+      "name": "Helm_Chart",
+      "base_class": "Deployment_Artifact",
+      "description": "Helm Chart 部署套件，封裝 Kubernetes 資源模板、預設值配置與相依性管理，用於可重複的應用程式部署。"
+    },
+    {
+      "name": "Infrastructure_As_Code",
+      "base_class": "Source_Code",
+      "description": "基礎設施即代碼，如 Terraform HCL、AWS CloudFormation、Azure ARM、Pulumi 等，透過程式碼管理雲端或資料中心基礎設施。"
+    },
+    {
+      "name": "Terraform_State",
+      "base_class": "Document",
+      "description": "Terraform 狀態檔案，記錄基礎設施資源的當前狀態，用於規劃與追蹤基礎設施變更。"
+    },
+    {
+      "name": "Environment",
+      "base_class": "Concept",
+      "description": "部署環境，如 Development、Staging、Production，以及各雲端帳號、區域（Region）與可用區（AZ）的邏輯分組。"
+    },
+    {
+      "name": "Release_Tag",
+      "base_class": "Concept",
+      "description": "發布標籤，代表 Git commit、Image tag 或 SemVer 版本號，用於追蹤特定部署的可部署狀態。"
+    },
+    {
+      "name": "Deployment_Strategy",
+      "base_class": "Concept",
+      "description": "部署策略，如 Rolling Update、Blue-Green、Canary、A/B Testing、Feature Flag 等，控制新版本的上線方式與流量切換邏輯。"
+    },
+    {
+      "name": "Rollback_Procedure",
+      "base_class": "Process",
+      "description": "回滾程序，定義當部署失敗或生產環境出現問題時，如何將系統還原至上一個穩定版本的標準作業流程。"
+    },
+    {
+      "name": "Feature_Flag",
+      "base_class": "Concept",
+      "description": "功能開關，用於在不重新部署的情況下開啟或關閉特定功能，支援 Gradual Rollout、A/B Testing 與 Kill Switch。"
+    },
+    {
+      "name": "Monitoring_Metric",
+      "base_class": "Concept",
+      "description": "監控指標，如 CPU 使用率、記憶體使用率、回應時間、錯誤率、請求率等，用於評估系統健康狀態與效能表現。"
+    },
+    {
+      "name": "Alert_Rule",
+      "base_class": "Concept",
+      "description": "告警規則，定義觸發條件（如 CPU > 80% 持續 5 分鐘）、嚴重性（Critical/Warning/Info）與通知目標（Email/Slack/PagerDuty）。"
+    },
+    {
+      "name": "Log_Aggregation",
+      "base_class": "Concept",
+      "description": "日誌聚合系統，如 ELK Stack（Elasticsearch/Logstash/Kibana）、Loki、Graylog 等，用於集中收集、儲存與搜尋分散式系統日誌。"
+    },
+    {
+      "name": "Distributed_Trace",
+      "base_class": "Concept",
+      "description": "分散式追蹤，如 Jaeger、Zipkin、AWS X-Ray、Datadog APM 等，用於追蹤跨服務的請求路徑與延遲瓶頸分析。"
+    },
+    {
+      "name": "Service_Level_Objective",
+      "base_class": "Concept",
+      "description": "服務等級目標（SLO），定義服務可用性、回應時間、錯誤率等目標值，如 99.9% 可用性（每月 43 分鐘停機時間）。"
+    },
+    {
+      "name": "Service_Level_Indicator",
+      "base_class": "Concept",
+      "description": "服務等級指標（SLI），實際測量的服務品質數據，用於與 SLO 比對以判斷服務是否達標。"
+    },
+    {
+      "name": "Error_Budget",
+      "base_class": "Concept",
+      "description": "錯誤預算，SLO 允許的錯誤範圍（如每月 0.1% = 43 分鐘），用於平衡可靠性與新功能交付速度。"
+    },
+    {
+      "name": "Incident_Record",
+      "base_class": "Document",
+      "description": "事件記錄，記錄生產環境故障或異常事件的完整歷程，包含事件描述、時間線、根因分析（RCA）與改善措施（Retro）。"
+    },
+    {
+      "name": "Change_Record",
+      "base_class": "Document",
+      "description": "變更記錄，記錄基礎設施或應用程式的變更內容，如伺服器更新、網路配置變更、應用版本升級等。"
+    },
+    {
+      "name": "Deployment_History",
+      "base_class": "Document",
+      "description": "部署歷史，記錄每次部署的時間、版本、環境、部署者與結果，用於追蹤變更軌跡與故障關聯分析。"
+    },
+    {
+      "name": "Cloud_Provider",
+      "base_class": "Concept",
+      "description": "雲端服務提供商，如 AWS、Azure、GCP 等，定義不同雲端帳號、服務區域與跨雲端整合策略。"
+    },
+    {
+      "name": "Secret_Management",
+      "base_class": "Concept",
+      "description": "密鑰管理系統，如 HashiCorp Vault、AWS Secrets Manager、Azure Key Vault 等，用於安全儲存與分發敏感資訊（API Key、資料庫密碼、憑證）。"
+    },
+    {
+      "name": "CI_Runner",
+      "base_class": "Infrastructure_Resource",
+      "description": "CI Runner/Agent，如 GitLab Runner、GitHub Actions Runner、Jenkins Agent 等，用於執行 Pipeline 任務的計算資源。"
+    },
+    {
+      "name": "GitOps_Repository",
+      "base_class": "Source_Code",
+      "description": "GitOps 存放庫，如 ArgoCD、Flux 所監聽的 Git Repository，存放宣告式基礎設施與應用程式配置。"
+    },
+    {
+      "name": "Platform_Service",
+      "base_class": "Concept",
+      "description": "平台服務，代表提供給開發團隊使用的內部平台服務，如內部開發工具鏈、自助基礎設施服務、內部 API Gateway 等。"
+    },
+    {
+      "name": "FinOps_Report",
+      "base_class": "Document",
+      "description": "雲端成本報告，記錄雲端資源使用量與費用，包含成本歸屬（Cost Allocation）、預算追蹤與異常偵測。"
+    }
+  ],
+
+  "object_properties": [
+    {
+      "name": "defines_pipeline",
+      "description": "Pipeline 定義檔描述完整的 CI/CD 流程。",
+      "domain": ["Pipeline_Definition"],
+      "range": ["Build_Stage", "Test_Stage", "Deploy_Stage"]
+    },
+    {
+      "name": "executes_on_runner",
+      "description": "Pipeline 階段在特定 CI Runner 上執行。",
+      "domain": ["Build_Stage", "Test_Stage", "Deploy_Stage"],
+      "range": ["CI_Runner"]
+    },
+    {
+      "name": "stores_artifact",
+      "description": "建構產出物存放至 Artifact Repository。",
+      "domain": ["Build_Stage", "Container_Image"],
+      "range": ["Artifact_Repository"]
+    },
+    {
+      "name": "builds_image",
+      "description": "Dockerfile 建構出容器映像檔。",
+      "domain": ["Dockerfile"],
+      "range": ["Container_Image"]
+    },
+    {
+      "name": "scans_image",
+      "description": "容器映像檔接受安全掃描。",
+      "domain": ["Container_Image"],
+      "range": ["Test_Stage"]
+    },
+    {
+      "name": "orchestrated_by",
+      "description": "容器映像檔由容器編排系統管理。",
+      "domain": ["Container_Image"],
+      "range": ["Container_Orchestration"]
+    },
+    {
+      "name": "deployed_via_manifest",
+      "description": "應用程式透過 Kubernetes Manifest 部署。",
+      "domain": ["Container_Image", "Software_Component"],
+      "range": ["Kubernetes_Manifest"]
+    },
+    {
+      "name": "packaged_as_helm",
+      "description": "應用程式封裝為 Helm Chart 部署。",
+      "domain": ["Kubernetes_Manifest"],
+      "range": ["Helm_Chart"]
+    },
+    {
+      "name": "defines_infrastructure",
+      "description": "IaC 腳本定義基礎設施資源。",
+      "domain": ["Infrastructure_As_Code"],
+      "range": ["Infrastructure_Resource"]
+    },
+    {
+      "name": "manages_state",
+      "description": "Terraform State 追蹤基礎設施狀態。",
+      "domain": ["Terraform_State"],
+      "range": ["Infrastructure_As_Code"]
+    },
+    {
+      "name": "deployed_to_environment",
+      "description": "部署產出物部署至特定環境。",
+      "domain": ["Deployment_Artifact", "Container_Image"],
+      "range": ["Environment"]
+    },
+    {
+      "name": "tagged_with_release",
+      "description": "部署產出物標記特定 Release Tag。",
+      "domain": ["Container_Image", "Deployment_Artifact"],
+      "range": ["Release_Tag"]
+    },
+    {
+      "name": "uses_strategy",
+      "description": "部署使用特定部署策略。",
+      "domain": ["Deploy_Stage"],
+      "range": ["Deployment_Strategy"]
+    },
+    {
+      "name": "triggers_rollback",
+      "description": "部署失敗觸發回滾程序。",
+      "domain": ["Deploy_Stage"],
+      "range": ["Rollback_Procedure"]
+    },
+    {
+      "name": "controlled_by_flag",
+      "description": "功能由 Feature Flag 控制啟用與否。",
+      "domain": ["Software_Component", "Feature_Flag"],
+      "range": ["Feature_Flag"]
+    },
+    {
+      "name": "collects_metric",
+      "description": "監控系統收集特定監控指標。",
+      "domain": ["Monitoring_Metric"],
+      "range": ["Software_Component", "Infrastructure_Resource"]
+    },
+    {
+      "name": "triggers_alert",
+      "description": "監控指標觸發告警規則。",
+      "domain": ["Alert_Rule"],
+      "range": ["Monitoring_Metric"]
+    },
+    {
+      "name": "aggregates_logs",
+      "description": "日誌聚合系統收集系統日誌。",
+      "domain": ["Log_Aggregation"],
+      "range": ["Software_Component", "Infrastructure_Resource"]
+    },
+    {
+      "name": "traces_request",
+      "description": "分散式追蹤記錄跨服務請求。",
+      "domain": ["Distributed_Trace"],
+      "range": ["API_Endpoint", "Software_Component"]
+    },
+    {
+      "name": "defines_slo",
+      "description": "服務定義 SLO 目標。",
+      "domain": ["Service_Level_Objective"],
+      "range": ["Software_Component", "System"]
+    },
+    {
+      "name": "measures_sli",
+      "description": "測量 SLI 指標以評估 SLO 達標狀態。",
+      "domain": ["Service_Level_Indicator"],
+      "range": ["Service_Level_Objective"]
+    },
+    {
+      "name": "consumes_budget",
+      "description": "服務錯誤消耗錯誤預算。",
+      "domain": ["Error_Budget"],
+      "range": ["Service_Level_Objective"]
+    },
+    {
+      "name": "records_incident",
+      "description": "事件記錄系統記錄故障事件。",
+      "domain": ["Incident_Record"],
+      "range": ["Software_Component", "Infrastructure_Resource"]
+    },
+    {
+      "name": "tracks_change",
+      "description": "變更記錄追蹤基礎設施或應用變更。",
+      "domain": ["Change_Record"],
+      "range": ["Infrastructure_Resource", "Software_Component"]
+    },
+    {
+      "name": "maintains_history",
+      "description": "部署歷史記錄所有部署事件。",
+      "domain": ["Deployment_History"],
+      "range": ["Environment", "Release_Tag"]
+    },
+    {
+      "name": "provisioned_by_terraform",
+      "description": "雲端資源由 Terraform 配置管理。",
+      "domain": ["Cloud_Provider", "Infrastructure_Resource"],
+      "range": ["Infrastructure_As_Code"]
+    },
+    {
+      "name": "manages_secret",
+      "description": "密鑰管理系統安全儲存與分發密鑰。",
+      "domain": ["Secret_Management"],
+      "range": ["System", "Software_Component"]
+    },
+    {
+      "name": "synchronized_by_gitops",
+      "description": "GitOps 存放庫同步應用程式配置至集群。",
+      "domain": ["GitOps_Repository"],
+      "range": ["Container_Orchestration", "Kubernetes_Manifest"]
+    },
+    {
+      "name": "provides_platform_service",
+      "description": "平台服務提供給開發團隊使用。",
+      "domain": ["Platform_Service"],
+      "range": ["Development_Task", "Software_Component"]
+    },
+    {
+      "name": "reports_cost",
+      "description": "FinOps 報告追蹤雲端成本。",
+      "domain": ["FinOps_Report"],
+      "range": ["Cloud_Provider", "Infrastructure_Resource"]
+    }
+  ],
+
+  "metadata": {
+    "domain": "System_Development",
+    "major_owner": "KA-Agent",
+    "data_classification": "INTERNAL",
+    "ontological_level": "MAJOR",
+    "intended_usage": [
+      "CI/CD Pipeline 知識管理",
+      "RAG 輔助部署故障診斷",
+      "AI 輔助部署決策推薦",
+      "監控告警優化分析",
+      "SLO/SLI 追蹤與評估",
+      "IaC 規範一致性檢查"
+    ],
+    "linked_ai_needs": [
+      "AI 輔助故障診斷（Incident Record + Monitoring + Trace → RAG 問答）",
+      "AI 輔助 Pipeline 優化（Pipeline Definition + Test Report → 建議）",
+      "AI 輔助部署決策（Deployment History + SLO + Error Budget → 建議）",
+      "AI 輔助告警分析（Alert Rule + Incident Record → 根因分析）",
+      "AI 輔助成本優化（FinOps Report + Infrastructure → 建議）"
+    ],
+    "framework_references": [
+      "The Twelve-Factor App (Deployment Best Practices)",
+      "Google SRE Book (SLO/SLI/Error Budget)",
+      "GitOps Principles (ArgoCD/Flux)",
+      "Terraform Best Practices (IaC)",
+      "Kubernetes Production Best Practices",
+      "FinOps Foundation Framework"
+    ],
+    "ai_deployment_stages": [
+      "Build Stage（編譯+測試）",
+      "Security Scan（安全掃描）",
+      "Container Build（容器建構）",
+      "Artifact Push（推送至倉庫）",
+      "Staging Deploy（預發布部署）",
+      "Smoke Test（煙霧測試）",
+      "Production Deploy（生產部署）",
+      "Health Check（健康檢查）",
+      "Monitoring（監控追蹤）",
+      "Rollback（如有必要）"
+    ]
+  }
+}

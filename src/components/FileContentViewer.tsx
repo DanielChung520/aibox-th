@@ -62,7 +62,7 @@ export default function FileContentViewer({
           <Button icon={<SettingOutlined />} onClick={onSettingsClick} size="small" />
         )}
       </div>
-      <div style={{ flex: 1, position: 'relative', minHeight: 0 }}>
+      <div style={{ flex: 1, flexShrink: 0, position: 'relative', minHeight: 0 }}>
         <div style={{ position: 'absolute', inset: 0, overflow: 'auto' }}>
           {activeTab === 'source' && (
             <KBSourcePreview fileId={fileId} fileName={fileName} fileType={fileType} />

@@ -17,25 +17,28 @@ import {
 } from '@ant-design/icons';
 import AgentCard from '../components/AgentCard';
 import ToolFormModal from '../components/ToolFormModal';
-import { toolApi, Tool } from '../services/api';
+import { toolApi, Tool, authApi } from '../services/api';
 import { authStore } from '../stores/auth';
 import { useContentTokens } from '../contexts/AppThemeProvider';
 import { iconMap } from '../utils/icons';
 
 const groupConfig = [
   { key: 'all', label: '全部' },
+  { key: 'oracle', label: '深度顧問' },
+  { key: 'advisor', label: '顧問代理' },
+  { key: 'weather', label: '天氣工具' },
   { key: 'search', label: '搜尋工具' },
   { key: 'data', label: '數據處理' },
   { key: 'utility', label: '實用工具' },
-  { key: 'language', label: '語言處理' },
-  { key: 'automation', label: '自動化' },
 ];
 
 export default function BrowseTools() {
   const { message } = App.useApp();
   const contentTokens = useContentTokens();
-  const isAdmin = authStore.getState().user?.role_key === 'admin';
-  const currentUser = authStore.getState().user;
+  const [currentUser, setCurrentUser] = useState(authStore.getState().user);
+  const isAdmin = (currentUser as any)?.role_keys?.includes('admin') || currentUser?.role_key === 'admin';
+  console.log('[DEBUG] currentUser:', currentUser);
+  console.log('[DEBUG] isAdmin:', isAdmin);
   const [activeTab, setActiveTab] = useState('all');
   const [searchText, setSearchText] = useState('');
   const [loading, setLoading] = useState(false);
@@ -44,6 +47,28 @@ export default function BrowseTools() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingTool, setEditingTool] = useState<Tool | null>(null);
   const [modalMode, setModalMode] = useState<'create' | 'edit'>('create');
+
+  // 重新獲取用戶資料（如果 token 存在但 user 為空）
+  useEffect(() => {
+    const state = authStore.getState();
+    if (!state.user && state.token) {
+      authApi.me().then((res: { data?: { data?: { _key: string; username: string; name: string; role_key: string; role_name: string; tier?: string } } }) => {
+        const userData = res?.data?.data;
+        if (userData) {
+          authStore.login(userData as any, state.token!);
+          setCurrentUser(userData);
+        }
+      }).catch(() => {});
+    }
+  }, []);
+
+  // 監聽 authStore 變化
+  useEffect(() => {
+    const unsubscribe = authStore.subscribe(() => {
+      setCurrentUser(authStore.getState().user);
+    });
+    return unsubscribe;
+  }, []);
 
   const fetchTools = async () => {
     setLoading(true);
@@ -80,8 +105,12 @@ export default function BrowseTools() {
   });
 
   const filteredTools = tools.filter((tool) => {
-    if (activeTab !== 'all' && tool.group_key !== activeTab) {
-      return false;
+    if (activeTab !== 'all') {
+      if (activeTab === 'oracle') {
+        if (tool.tool_type !== 'oracle') return false;
+      } else if (tool.group_key !== activeTab) {
+        return false;
+      }
     }
     if (searchText) {
       const search = searchText.toLowerCase();
@@ -115,6 +144,15 @@ export default function BrowseTools() {
     } catch (err) {
       console.error('Failed to delete tool:', err);
       message.error('刪除失敗');
+    }
+  };
+
+  const handleSyncIntents = async (toolKey: string, data: { intent_tags: string[]; nl_examples: string[] }) => {
+    try {
+      await toolApi.syncIntents(toolKey, data);
+    } catch (err) {
+      console.error('Failed to sync intents:', err);
+      throw err;
     }
   };
 
@@ -296,11 +334,12 @@ export default function BrowseTools() {
                   >
                     <AgentCard
                       agent={cardAgent}
-                      onEdit={isAdmin ? handleEdit : undefined}
+                      onCardClick={handleEdit}
+                      onEdit={handleEdit}
                       onDelete={isAdmin ? handleDelete : undefined}
-                      showMenu={isAdmin}
+                      showMenu={true}
                       {...(isAdmin ? {
-                        actionLabel: '授權',
+                        actionLabel: '設置',
                         actionIcon: <SafetyCertificateOutlined />,
                         onAction: handleAuth,
                       } : isAuthorized(tool) ? {
@@ -355,9 +394,11 @@ export default function BrowseTools() {
         open={modalOpen}
         tool={editingTool}
         mode={modalMode}
+        readOnly={!isAdmin}
         onCancel={() => setModalOpen(false)}
         onSubmit={handleFormSubmit}
         onDelete={isAdmin ? handleDelete : undefined}
+        onSyncIntents={handleSyncIntents}
       />
     </div>
   );

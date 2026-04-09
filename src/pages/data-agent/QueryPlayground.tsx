@@ -254,8 +254,36 @@ export default function QueryPlayground() {
     { label: '進貨單查詢', query: '查詢近30天進貨單', module: 'PUR' },
   ];
   const quickTemplatesSql = [
-    ...(['查詢上個月的採購訂單', '列出所有供應商', '各供應商的採購金額排名', '查詢庫存異動記錄', '本月物料入庫總量']
-      .map(q => ({ label: q, query: q, module: 'MM' }))),
+    ...([
+      '查詢上個月的採購訂單',
+      '列出所有供應商',
+      '各供應商的採購金額排名',
+      '查詢庫存異動記錄',
+      '本月物料入庫總量',
+      // 採購流程
+      '查詢所有詢價單',
+      '查詢一筆詢價單的完整採購流程',
+      '查詢所有採購單(PO)',
+      '查詢近30天收貨單',
+      '查詢所有進貨退出單',
+      // 訂單/報價流程
+      '查詢所有報價單',
+      '查詢所有訂購單(SO)',
+      '查詢一張訂購單的完整生命週期',
+      // 生產需求流程
+      '查詢所有生產需求單',
+      '查詢所有物料需求單(MRP)',
+      '查詢所有採購預算表',
+      // 生產執行流程
+      '查詢所有生產製令單',
+      '查詢所有領料單',
+      '查詢所有派工單',
+      // 品檢與入庫
+      '查詢近30天進貨檢驗(IQC)記錄',
+      '查詢本月成品入庫記錄',
+      // 跨流程追蹤
+      '追蹤一張訂購單從報價到入庫的完整流程',
+    ].map(q => ({ label: q, query: q, module: 'MM' }))),
     ...(['查詢近30天各供應商的進貨明細', '各部門的員工人數', '查詢在職中的員工清單', '查詢品項的基本資訊'].map(q => ({ label: q, query: q, module: 'BASE' }))),
   ];
   const templatesToUse = queryMode === 'SQL' ? quickTemplatesSql : quickTemplatesAql;
@@ -277,7 +305,7 @@ const renderResultTabs = () => {
     );
 
     const items: TabsProps['items'] = [
-      { key: 'result', label: <span><TableOutlined /> 結果</span>, children: rows.length > 0 ? <Table columns={columns} dataSource={rows} rowKey={(_, i) => String(i)} pagination={{ pageSize: 10 }} size="small" scroll={{ x: 'max-content' }} /> : <Empty description="無查詢結果" /> },
+      { key: 'result', label: <span><TableOutlined /> 結果</span>, children: rows.length > 0 ? <Table columns={columns} dataSource={rows} rowKey={(_, index) => String(index)} pagination={{ pageSize: 10 }} size="small" scroll={{ x: 'max-content' }} /> : <Empty description="無查詢結果" /> },
       { key: 'sql', label: <span><BranchesOutlined /> SQL</span>, children: <div><Button type="link" icon={<CopyOutlined />} onClick={handleCopySql} style={{ marginBottom: 8, padding: 0 }}>{sqlCopied ? '已複製!' : '複製 SQL'}</Button><CodeBlock content={sqlText || '-'} /></div> },
       { key: 'intent', label: <span><ThunderboltOutlined /> Intent</span>, children: <CodeBlock content={JSON.stringify(isAql ? aqlQueryResponse?.intent : sqlResponse?.matched_intent, null, 2) || ''} /> },
     ];

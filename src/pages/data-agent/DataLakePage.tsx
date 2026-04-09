@@ -207,7 +207,7 @@ export default function DataLakePage() {
         <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
           {dataError ? (
             <Alert
-              message="資料載入失敗"
+              title="資料載入失敗"
               description={dataError}
               type="warning"
               showIcon
@@ -225,7 +225,7 @@ export default function DataLakePage() {
             <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
               {total > pageSize && (
                 <Alert
-                  message={`顯示第 ${(currentPage - 1) * pageSize + 1}–${Math.min(currentPage * pageSize, total)} 筆記錄，共 ${total.toLocaleString()} 筆記錄`}
+                  title={`顯示第 ${(currentPage - 1) * pageSize + 1}–${Math.min(currentPage * pageSize, total)} 筆記錄，共 ${total.toLocaleString()} 筆記錄`}
                   type="info"
                   showIcon
                   style={{ marginBottom: 8 }}
@@ -365,7 +365,7 @@ export default function DataLakePage() {
               <Card size="small" title={
                 <Space><InfoCircleOutlined /><span>資料表資訊</span></Space>
               } styles={{ body: { flex: 'none' } }}>
-                <Descriptions size="small" column={3} bordered>
+                <Descriptions size="small" column={5} bordered>
                   <Descriptions.Item label="表名">
                     <Text strong>{tableInfo.table_name}</Text>
                   </Descriptions.Item>

@@ -281,7 +281,12 @@ curl http://localhost:6500/api/v1/users \
 | POST | `/api/v1/ai/chat` | AI 對話 | 是 |
 | GET | `/api/v1/ai/chat/stream` | SSE 流式對話 | 是 |
 | POST | `/api/v1/ai/query` | 自然語言查詢 | 是 |
-| POST | `/api/v1/ai/knowledge` | 知識庫搜尋 | 是 |
+| POST | `/api/v1/ai/knowledge` | 知識庫搜尋（傳統 BM25） | 是 |
+| POST | `/api/v1/ai/hybrid-search` | HybridRAG 混合檢索 | 是 |
+| GET | `/api/v1/ai/hybrid-config` | 取得 HybridRAG 權重配置 | 是 |
+| PUT | `/api/v1/ai/hybrid-config` | 更新 HybridRAG 權重配置 | 是 |
+| POST | `/api/v1/intents/knowledge/intent/match` | 知識意圖匹配 | 是 |
+| POST | `/api/v1/intents/knowledge/embed-sync` | 同步知識意圖到向量庫 | 是 |
 
 #### POST /api/v1/ai/chat
 
@@ -375,6 +380,185 @@ Data Agent 服務（Python FastAPI，port 8003）透過 API Gateway 的 `/api/v1
 | 500 | 執行錯誤 | DuckDB/S3 連線失敗 |
 
 > **ETL 說明**：Data Agent 的 ETL（SAP/Ragic → S3 Parquet）屬於獨立專案，不在本系統範圍內。
+
+---
+
+### HybridRAG 混合檢索
+
+HybridRAG 實作向量檢索（Qdrant）與圖譜檢索（ArangoDB）的混合檢索，支援動態權重調整與 RRF 融合。
+
+#### POST /api/v1/ai/hybrid-search
+
+**請求**:
+```json
+{
+  "query": "AI需求分析的步驟是什麼？",
+  "collection": "knowledge_default",
+  "top_k": 10,
+  "strategy": "hybrid",
+  "min_relevance": 0.0
+}
+```
+
+**請求欄位說明**：
+
+| 欄位 | 類型 | 必填 | 預設值 | 說明 |
+|------|------|------|--------|------|
+| `query` | String | 是 | - | 查詢內容 |
+| `collection` | String | 否 | knowledge_default | Qdrant collection 名稱 |
+| `top_k` | Integer | 否 | 10 | 返回結果數量 |
+| `strategy` | String | 否 | hybrid | 檢索策略：hybrid / vector_first / graph_first |
+| `min_relevance` | Float | 否 | 0.0 | 最低相關度閾值 |
+
+**回應**:
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "query": "AI需求分析的步驟是什麼？",
+    "query_type": "structure_query",
+    "strategy": "hybrid",
+    "weights_used": {
+      "vector_weight": 0.4,
+      "graph_weight": 0.6
+    },
+    "results": [
+      {
+        "content": "AI需求分析框架步驟如下：\n1. 需求收集\n2. 需求整理\n3. 需求驗證",
+        "source": "graph",
+        "score": 0.85,
+        "metadata": {
+          "file_id": "file_123",
+          "entity_type": "Process"
+        }
+      }
+    ],
+    "total_vector_hits": 25,
+    "total_graph_hits": 8,
+    "fusion_time_ms": 45
+  }
+}
+```
+
+**查詢類型自動檢測**：
+
+| 類型 | 偵測關鍵詞 | 預設權重（Vector/Graph） |
+|------|-----------|-------------------------|
+| `structure_query` | 框架、步驟、流程、階段、順序、架構 | 0.4 / 0.6 |
+| `entity_query` | 是什麼、關係、連接、包含、之間 | 0.3 / 0.7 |
+| `semantic_query` | 其他所有查詢 | 0.7 / 0.3 |
+
+#### GET /api/v1/ai/hybrid-config
+
+**說明**：取得當前 HybridRAG 權重配置
+
+**回應**:
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "weights": {
+      "default": {"vector_weight": 0.6, "graph_weight": 0.4},
+      "structure_query": {"vector_weight": 0.4, "graph_weight": 0.6},
+      "semantic_query": {"vector_weight": 0.7, "graph_weight": 0.3},
+      "entity_query": {"vector_weight": 0.3, "graph_weight": 0.7}
+    },
+    "scope": "system"
+  }
+}
+```
+
+#### PUT /api/v1/ai/hybrid-config
+
+**請求**:
+```json
+{
+  "query_type": "structure_query",
+  "vector_weight": 0.45,
+  "graph_weight": 0.55
+}
+```
+
+**回應**:
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "status": "ok",
+    "query_type": "structure_query",
+    "weights": {
+      "vector_weight": 0.45,
+      "graph_weight": 0.55
+    }
+  }
+}
+```
+
+**錯誤碼**：
+
+| 狀態碼 | 說明 | 常見原因 |
+|--------|------|----------|
+| 400 | `INVALID_WEIGHTS` | 權重和不等於 1.0 或超出 0-1 範圍 |
+| 500 | `SAVE_FAILED` | 寫入資料庫失敗 |
+
+---
+
+### Knowledge 意圖匹配
+
+#### POST /api/v1/intents/knowledge/intent/match
+
+**說明**：匹配知識領域意圖，用於 HybridRAG 查詢類型路由
+
+**請求**:
+```json
+{
+  "query": "查詢知識庫中關於系統架構的內容",
+  "top_k": 3
+}
+```
+
+**回應**:
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "query": "查詢知識庫中關於系統架構的內容",
+    "matches": [
+      {
+        "intent_id": "knowledge.structured_query.process",
+        "score": 0.82,
+        "intent_data": {
+          "name": "流程步驟查詢",
+          "description": "查詢知識庫中的流程、步驟、階段等結構化內容",
+          "query_type": "structure_query"
+        }
+      }
+    ],
+    "best_match": {...}
+  }
+}
+```
+
+#### POST /api/v1/intents/knowledge/embed-sync
+
+**說明**：同步 Knowledge 意圖從 ArangoDB 到 Qdrant 向量庫
+
+**回應**:
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "synced_count": 13,
+    "collection": "knowledge_intents",
+    "status": "ok"
+  }
+}
+```
 
 ---
 
@@ -967,4 +1151,5 @@ curl -X PATCH http://localhost:6500/api/v1/agents/agent-001/favorite \
 
 | 日期 | 版本 | 更新者 | 變更內容 |
 |------|------|--------|----------|
+| 2026-04-05 | 1.1.0 | Daniel Chung | 新增 HybridRAG 混合檢索 API（/ai/hybrid-search、/ai/hybrid-config）、Knowledge 意圖匹配 API（/intents/knowledge/intent/match、/intents/knowledge/embed-sync） |
 | 2026-03-18 | 1.0.0 | Daniel Chung | 初始版本 |

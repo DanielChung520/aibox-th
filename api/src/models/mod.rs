@@ -31,6 +31,7 @@ pub struct UserInfo {
     pub name: String,
     pub role_keys: Vec<String>,
     pub role_names: Vec<String>,
+    pub tier: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -55,5 +56,6 @@ pub struct UpdateUserRequest {
     pub name: Option<String>,
     pub role_keys: Option<Vec<String>>,
     pub status: Option<String>,
+    pub tier: Option<String>,
     pub password_hash: Option<String>,
 }

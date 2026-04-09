@@ -8,6 +8,7 @@
 
 import { useEffect, useState } from 'react';
 import { Modal, Form, Input, Select, InputNumber, Tabs, Button, Space, App, Radio } from 'antd';
+import { SyncOutlined } from '@ant-design/icons';
 import { iconMap } from '../utils/icons';
 import IconPicker from './IconPicker';
 import { Tool, roleApi } from '../services/api';
@@ -15,6 +16,9 @@ import { Tool, roleApi } from '../services/api';
 const { TextArea } = Input;
 
 const toolTypeOptions = [
+  { value: 'tool', label: '外部工具' },
+  { value: 'advisor', label: '顧問代理' },
+  { value: 'oracle', label: '深度顧問 (Oracle)' },
   { value: 'mcp', label: 'MCP 工具' },
   { value: 'builtin', label: '內建工具' },
   { value: 'custom', label: '自訂工具' },
@@ -31,24 +35,31 @@ interface ToolFormModalProps {
   open: boolean;
   tool?: Tool | null;
   mode: 'create' | 'edit';
+  readOnly?: boolean;
   onCancel: () => void;
   onSubmit: (values: Partial<Tool>) => void;
   onDelete?: (toolKey: string) => void;
+  onSyncIntents?: (toolKey: string, data: { intent_tags: string[]; nl_examples: string[] }) => Promise<void>;
 }
 
 export default function ToolFormModal({
   open,
   tool,
   mode,
+  readOnly = false,
   onCancel,
   onSubmit,
   onDelete,
+  onSyncIntents,
 }: ToolFormModalProps) {
   const { message } = App.useApp();
   const [form] = Form.useForm();
   const [iconPickerVisible, setIconPickerVisible] = useState(false);
   const [roles, setRoles] = useState<{ value: string; label: string }[]>([]);
   const [visibility, setVisibility] = useState<'public' | 'role' | 'account'>('public');
+  const [syncing, setSyncing] = useState(false);
+  const [nlExamples, setNlExamples] = useState<string[]>([]);
+  const [newExample, setNewExample] = useState('');
 
   useEffect(() => {
     roleApi.list().then((res: { data?: { data?: { _key: string; name: string }[] } }) => {
@@ -72,28 +83,31 @@ export default function ToolFormModal({
         timeout_ms: tool.timeout_ms ?? 30000,
         input_schema_str: inputSchemaStr,
         output_schema_str: outputSchemaStr,
-        llm_model: tool.llm_model || '',
+        llm_model: tool.llm_model || 'gemma4:31b',
         temperature: tool.temperature ?? 0.7,
-        max_tokens: tool.max_tokens ?? 2000,
+        max_tokens: tool.max_tokens ?? 32000,
         visibility: tool.visibility || 'public',
         visibility_roles: tool.visibility_roles || [],
         visibility_accounts: tool.visibility_accounts || [],
       });
       setVisibility(tool.visibility || 'public');
+      setNlExamples((tool as any).nl_examples || []);
     } else if (open && mode === 'create') {
       form.resetFields();
       form.setFieldsValue({
         status: 'online',
         tool_type: 'custom',
         visibility: 'public',
+        llm_model: 'gemma4:31b',
         temperature: 0.7,
-        max_tokens: 2000,
+        max_tokens: 32000,
         timeout_ms: 30000,
         intent_tags: [],
         visibility_roles: [],
         visibility_accounts: [],
       });
       setVisibility('public');
+      setNlExamples([]);
     }
   }, [open, tool, mode, form]);
 
@@ -159,12 +173,16 @@ export default function ToolFormModal({
     <>
       <Form.Item label="圖標">
         <Space>
-          <Button onClick={() => setIconPickerVisible(true)}>
-            <Space>
-              <IconPreview />
-              選擇圖標
-            </Space>
-          </Button>
+          {readOnly ? (
+            <IconPreview />
+          ) : (
+            <Button onClick={() => setIconPickerVisible(true)}>
+              <Space>
+                <IconPreview />
+                選擇圖標
+              </Space>
+            </Button>
+          )}
           <span>{form.getFieldValue('icon') || '未設置'}</span>
         </Space>
       </Form.Item>
@@ -172,25 +190,25 @@ export default function ToolFormModal({
         <Input />
       </Form.Item>
       <Form.Item name="name" label="名稱" rules={[{ required: true, message: '請輸入名稱' }]}>
-        <Input placeholder="例如：網路搜尋工具" />
+        <Input placeholder="例如：網路搜尋工具" disabled={readOnly} />
       </Form.Item>
       <Form.Item name="code" label="代碼 (Code)" rules={[{ required: true, message: '請輸入代碼' }]}>
-        <Input placeholder="例如：web_search" />
+        <Input placeholder="例如：web_search" disabled={readOnly} />
       </Form.Item>
       <Form.Item name="description" label="描述">
-        <TextArea rows={3} placeholder="描述這個工具的用途..." />
+        <TextArea rows={3} placeholder="描述這個工具的用途..." disabled={readOnly} />
       </Form.Item>
       <Form.Item name="tool_type" label="工具類型">
-        <Select options={toolTypeOptions} />
+        <Select options={toolTypeOptions} disabled={readOnly} />
       </Form.Item>
       <Form.Item name="status" label="狀態">
-        <Select options={statusOptions} />
+        <Select options={statusOptions} disabled={readOnly} />
       </Form.Item>
       <Form.Item name="group_key" label="分組 Key">
-        <Input placeholder="例如：search, data, utility" />
+        <Input placeholder="例如：search, data, utility" disabled={readOnly} />
       </Form.Item>
       <Form.Item name="intent_tags" label="意圖標籤">
-        <Select mode="tags" placeholder="輸入意圖標籤，按 Enter 確認" />
+        <Select mode="tags" placeholder="輸入意圖標籤，按 Enter 確認" disabled={readOnly} />
       </Form.Item>
     </>
   );
@@ -198,16 +216,16 @@ export default function ToolFormModal({
   const executionTab = (
     <>
       <Form.Item name="endpoint_url" label="Endpoint URL">
-        <Input placeholder="http://localhost:8004/execute" />
+        <Input placeholder="http://localhost:8004/execute" disabled={readOnly} />
       </Form.Item>
       <Form.Item name="timeout_ms" label="超時設定 (ms)">
-        <InputNumber min={1000} max={300000} step={1000} addonAfter="ms" style={{ width: '100%' }} />
+        <InputNumber min={1000} max={300000} step={1000} addonAfter="ms" style={{ width: '100%' }} disabled={readOnly} />
       </Form.Item>
       <Form.Item name="input_schema_str" label="輸入 Schema (JSON)">
-        <TextArea rows={4} placeholder={'{"type":"object","properties":{...}}'} />
+        <TextArea rows={4} placeholder={'{"type":"object","properties":{...}}'} disabled={readOnly} />
       </Form.Item>
       <Form.Item name="output_schema_str" label="輸出 Schema (JSON)">
-        <TextArea rows={4} placeholder={'{"type":"object","properties":{...}}'} />
+        <TextArea rows={4} placeholder={'{"type":"object","properties":{...}}'} disabled={readOnly} />
       </Form.Item>
     </>
   );
@@ -215,13 +233,13 @@ export default function ToolFormModal({
   const modelTab = (
     <>
       <Form.Item name="llm_model" label="LLM 模型">
-        <Input placeholder="例如：llama3, gpt-4" />
+        <Input placeholder="例如：llama3, gpt-4" disabled={readOnly} />
       </Form.Item>
       <Form.Item name="temperature" label="Temperature">
-        <InputNumber min={0} max={2} step={0.1} style={{ width: '100%' }} />
+        <InputNumber min={0} max={2} step={0.1} style={{ width: '100%' }} disabled={readOnly} />
       </Form.Item>
       <Form.Item name="max_tokens" label="最大 Tokens">
-        <InputNumber min={100} max={32000} step={100} style={{ width: '100%' }} />
+        <InputNumber min={100} max={32000} step={100} style={{ width: '100%' }} disabled={readOnly} />
       </Form.Item>
     </>
   );
@@ -229,7 +247,7 @@ export default function ToolFormModal({
   const permissionTab = (
     <>
       <Form.Item label="可見性" name="visibility">
-        <Radio.Group value={visibility} onChange={(e) => setVisibility(e.target.value)}>
+        <Radio.Group value={visibility} onChange={(e) => setVisibility(e.target.value)} disabled={readOnly}>
           <Radio.Button value="public">公開</Radio.Button>
           <Radio.Button value="role">按角色</Radio.Button>
           <Radio.Button value="account">按帳號</Radio.Button>
@@ -237,12 +255,112 @@ export default function ToolFormModal({
       </Form.Item>
       {visibility === 'role' && (
         <Form.Item label="可見角色" name="visibility_roles">
-          <Select mode="multiple" placeholder="選擇可見的角色" options={roles} />
+          <Select mode="multiple" placeholder="選擇可見的角色" options={roles} disabled={readOnly} />
         </Form.Item>
       )}
       {visibility === 'account' && (
         <Form.Item label="可見帳號" name="visibility_accounts">
-          <Select mode="tags" placeholder="輸入用戶帳號，按 Enter 確認" />
+          <Select mode="tags" placeholder="輸入用戶帳號，按 Enter 確認" disabled={readOnly} />
+        </Form.Item>
+      )}
+    </>
+  );
+
+  const intentsTab = (
+    <>
+      <Form.Item label="意圖標籤">
+        <Form.Item name="intent_tags" noStyle>
+          <Select mode="tags" placeholder="輸入意圖標籤，按 Enter 確認" disabled={readOnly} />
+        </Form.Item>
+      </Form.Item>
+      <Form.Item label="自然語言範例" tooltip="這些範例會同步到 Qdrant，用於語意匹配">
+        <div style={{ border: '1px solid #d9d9d9', borderRadius: 8, padding: 16, background: '#fafafa' }}>
+          {nlExamples.map((example, index) => (
+            <div key={index} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+              <span style={{ color: '#666', minWidth: 24 }}>{index + 1}.</span>
+              <Input value={example} disabled />
+              {!readOnly && (
+                <Button
+                  type="text"
+                  danger
+                  size="small"
+                  onClick={() => {
+                    const newExamples = [...nlExamples];
+                    newExamples.splice(index, 1);
+                    setNlExamples(newExamples);
+                    form.setFieldValue('nl_examples', newExamples);
+                  }}
+                >
+                  刪除
+                </Button>
+              )}
+            </div>
+          ))}
+          {nlExamples.length === 0 && (
+            <div style={{ color: '#999', textAlign: 'center', padding: '16px 0' }}>
+              暫無範例，點擊下方按鈕新增
+            </div>
+          )}
+          {!readOnly && (
+            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+              <Input
+                placeholder="輸入新的自然語言範例..."
+                value={newExample}
+                onChange={(e) => setNewExample(e.target.value)}
+                onPressEnter={() => {
+                  if (newExample.trim()) {
+                    const updated = [...nlExamples, newExample.trim()];
+                    setNlExamples(updated);
+                    form.setFieldValue('nl_examples', updated);
+                    setNewExample('');
+                  }
+                }}
+              />
+              <Button
+                onClick={() => {
+                  if (newExample.trim()) {
+                    const updated = [...nlExamples, newExample.trim()];
+                    setNlExamples(updated);
+                    form.setFieldValue('nl_examples', updated);
+                    setNewExample('');
+                  }
+                }}
+              >
+                新增
+              </Button>
+            </div>
+          )}
+        </div>
+      </Form.Item>
+      <Form.Item name="nl_examples" hidden>
+        <Input />
+      </Form.Item>
+      {mode === 'edit' && tool?._key && onSyncIntents && (
+        <Form.Item>
+          <Button
+            type="default"
+            icon={<SyncOutlined />}
+            loading={syncing}
+            onClick={async () => {
+              const values = await form.validateFields();
+              const intentTags = values.intent_tags || [];
+              const nlExamplesList = values.nl_examples || nlExamples;
+              try {
+                setSyncing(true);
+                await onSyncIntents(tool._key as string, {
+                  intent_tags: intentTags,
+                  nl_examples: nlExamplesList,
+                });
+                message.success('已同步到 Qdrant');
+              } catch {
+                message.error('同步失敗');
+              } finally {
+                setSyncing(false);
+              }
+            }}
+          >
+            {syncing ? '同步中...' : '同步到 Qdrant'}
+          </Button>
         </Form.Item>
       )}
     </>
@@ -258,15 +376,21 @@ export default function ToolFormModal({
         forceRender
         footer={
           <Space>
-            {mode === 'edit' && onDelete && (
-              <Button danger onClick={handleDelete}>
-                刪除
-              </Button>
+            {readOnly ? (
+              <Button onClick={onCancel}>關閉</Button>
+            ) : (
+              <>
+                {mode === 'edit' && onDelete && (
+                  <Button danger onClick={handleDelete}>
+                    刪除
+                  </Button>
+                )}
+                <Button onClick={onCancel}>取消</Button>
+                <Button type="primary" onClick={handleSubmit}>
+                  {mode === 'create' ? '建立' : '儲存'}
+                </Button>
+              </>
             )}
-            <Button onClick={onCancel}>取消</Button>
-            <Button type="primary" onClick={handleSubmit}>
-              {mode === 'create' ? '建立' : '儲存'}
-            </Button>
           </Space>
         }
       >
@@ -288,6 +412,11 @@ export default function ToolFormModal({
                 key: 'model',
                 label: '模型配置',
                 children: modelTab,
+              },
+              {
+                key: 'intents',
+                label: '意圖範例',
+                children: intentsTab,
               },
               {
                 key: 'permission',

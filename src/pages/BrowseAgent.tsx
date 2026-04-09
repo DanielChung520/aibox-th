@@ -14,6 +14,7 @@ import AgentCard from '../components/AgentCard';
 import AgentFormModal from '../components/AgentFormModal';
 import { agentApi, Agent as ApiAgent } from '../services/api';
 import { authStore } from '../stores/auth';
+import RagicLogisticProcess from '../../.docs/Spec/智能體/Ragic_Logistic_process';
 
 const groupConfig = [
   { key: 'all', label: '全部', icon: 'AppstoreOutlined' },
@@ -21,7 +22,7 @@ const groupConfig = [
   { key: 'finance', label: '財務管理', icon: 'AccountBookOutlined' },
   { key: 'strategy', label: '企業戰略', icon: 'RadarChartOutlined' },
   { key: 'admin', label: '行政助理', icon: 'TeamOutlined' },
-  { key: 'other', label: '開發中', icon: 'HourglassOutlined' },
+  { key: 'ragic_flow', label: 'Ragic 採購流程', icon: 'FlowchartOutlined' },
 ];
 
 export default function BrowseAgent() {
@@ -200,9 +201,10 @@ export default function BrowseAgent() {
   const tabItems = groupConfig.map((group) => ({
     key: group.key,
     label: group.label,
-    children: (
+    children: group.key === 'ragic_flow' ? (
+      <RagicLogisticProcess />
+    ) : (
       <div>
-        {/* 搜索和操作欄 */}
         <div style={{ marginBottom: 16, display: 'flex', gap: 12 }}>
           <Input
             placeholder="搜索 Agent 名稱或描述..."

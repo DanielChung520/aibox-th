@@ -8,10 +8,11 @@
 
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { Table, Button, Space, Modal, Tag, Input, Upload, Popconfirm, App, Descriptions, Form, Tabs } from 'antd';
-import { ImportOutlined, DeleteOutlined, EyeOutlined, SettingOutlined, PlusOutlined, SaveOutlined } from '@ant-design/icons';
+import { ImportOutlined, DeleteOutlined, SettingOutlined, PlusOutlined, SaveOutlined, NodeIndexOutlined } from '@ant-design/icons';
 import type { UploadProps } from 'antd';
 import { Ontology, OntologyLayer, ontologyApi } from '../../services/api';
 import { useContentTokens } from '../../contexts/AppThemeProvider';
+import OntologyGraphViewer from './components/OntologyGraphViewer';
 
 interface Basic5W1HItem {
   key: string;
@@ -148,11 +149,6 @@ export default function OntologyList() {
   };
 
   // Handlers
-  const handlePreview = (record: Ontology) => {
-    setSelectedOntology(record);
-    setPreviewModalVisible(true);
-  };
-
   const handleDelete = async (record: Ontology) => {
     try {
       await ontologyApi.delete(record._key);
@@ -294,10 +290,10 @@ export default function OntologyList() {
     {
       title: '操作',
       key: 'action',
-      width: 220,
-      render: (_: any, record: Ontology) => (
+      width: 200,
+        render: (_: any, record: Ontology) => (
         <Space>
-          <Button type="link" icon={<EyeOutlined />} onClick={() => handlePreview(record)}>查看</Button>
+          <Button type="link" icon={<NodeIndexOutlined />} onClick={() => { setSelectedOntology(record); setPreviewModalVisible(true); }}>圖譜視圖</Button>
           {record.type === 'domain' && (
             <Button type="link" icon={<PlusOutlined />} onClick={() => handleImportOpen(record)}>匯入 Major</Button>
           )}
@@ -471,78 +467,87 @@ export default function OntologyList() {
 
       {/* Preview Modal */}
       <Modal
-        title="知識本體詳情"
+        title={`圖譜視圖 — ${selectedOntology?.ontology_name || ''}`}
         open={previewModalVisible}
         onCancel={() => setPreviewModalVisible(false)}
-        footer={[<Button key="close" onClick={() => setPreviewModalVisible(false)}>關閉</Button>]}
-        width={900}
-        styles={{ body: { minHeight: '65vh' } }}
+        footer={null}
+        width="95vw"
+        styles={{ body: { padding: 0, maxHeight: '90vh', overflow: 'hidden' } }}
       >
         {selectedOntology && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-            <Descriptions bordered size="small" column={2}>
-              <Descriptions.Item label="名稱" span={2}>{selectedOntology.ontology_name} ({selectedOntology.name})</Descriptions.Item>
-              <Descriptions.Item label="類型">
-                <Tag color={getTagColor(selectedOntology.type)}>{selectedOntology.type.toUpperCase()}</Tag>
-              </Descriptions.Item>
-              <Descriptions.Item label="版本">{selectedOntology.version}</Descriptions.Item>
-              <Descriptions.Item label="作者">{selectedOntology.author}</Descriptions.Item>
-              <Descriptions.Item label="最後修改">{selectedOntology.last_modified}</Descriptions.Item>
-              <Descriptions.Item label="繼承自" span={2}>
-                {selectedOntology.inherits_from?.map(i => <Tag key={i}>{i}</Tag>) || '-'}
-              </Descriptions.Item>
-              <Descriptions.Item label="標籤" span={2}>
-                {selectedOntology.tags?.map(t => <Tag key={t} color="processing">{t}</Tag>) || '-'}
-              </Descriptions.Item>
-              <Descriptions.Item label="用途" span={2}>
-                <ul style={{ margin: 0, paddingLeft: 20 }}>
-                  {selectedOntology.use_cases?.map(u => <li key={u}>{u}</li>)}
-                </ul>
-              </Descriptions.Item>
-            </Descriptions>
-
-            <Tabs
-              defaultActiveKey="entities"
-              items={[
-                {
-                  key: 'entities',
-                  label: `實體類型 (${selectedOntology.entity_classes?.length || 0})`,
-                  children: (
-                    <Table
-                      columns={[
-                        { title: '名稱', dataIndex: 'name', key: 'name', width: '30%' },
-                        { title: '基礎類別', dataIndex: 'base_class', key: 'base_class', width: '20%', render: (t: string) => <Tag>{t}</Tag> },
-                        { title: '說明', dataIndex: 'description', key: 'description' }
-                      ]}
-                      dataSource={selectedOntology.entity_classes}
-                      rowKey="name"
-                      pagination={{ pageSize: 10 }}
-                      scroll={{ y: 400 }}
-                      size="small"
-                    />
-                  ),
-                },
-                {
-                  key: 'properties',
-                  label: `關係類型 (${selectedOntology.object_properties?.length || 0})`,
-                  children: (
-                    <Table
-                      columns={[
-                        { title: '名稱', dataIndex: 'name', key: 'name', width: '20%' },
-                        { title: '說明', dataIndex: 'description', key: 'description', width: '30%' },
-                        { title: '來源 (Domain)', dataIndex: 'domain', key: 'domain', width: '25%', render: (d: string[]) => d?.join('、') || '-' },
-                        { title: '目標 (Range)', dataIndex: 'range', key: 'range', width: '25%', render: (r: string[]) => r?.join('、') || '-' }
-                      ]}
-                      dataSource={selectedOntology.object_properties}
-                      rowKey="name"
-                      pagination={{ pageSize: 10 }}
-                      scroll={{ y: 400 }}
-                      size="small"
-                    />
-                  ),
-                },
-              ]}
-            />
+          <div style={{ display: 'grid', gridTemplateColumns: '25% 1fr', height: '100%' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', borderRight: '1px solid #e2e8f0', overflow: 'hidden' }}>
+              <div style={{ flexShrink: 0, borderBottom: '1px solid #e2e8f0', padding: 12, overflow: 'auto', maxHeight: '40%' }}>
+                <Descriptions bordered size="small" column={1}>
+                  <Descriptions.Item label="名稱">
+                    <span style={{ fontSize: 12, fontWeight: 600 }}>{selectedOntology.ontology_name}</span>
+                  </Descriptions.Item>
+                  <Descriptions.Item label="顯示名">{selectedOntology.name}</Descriptions.Item>
+                  <Descriptions.Item label="類型">
+                    <Tag color={getTagColor(selectedOntology.type)} style={{ fontSize: 11 }}>{selectedOntology.type.toUpperCase()}</Tag>
+                  </Descriptions.Item>
+                  <Descriptions.Item label="版本">{selectedOntology.version}</Descriptions.Item>
+                  <Descriptions.Item label="作者">{selectedOntology.author}</Descriptions.Item>
+                  <Descriptions.Item label="實體數">{selectedOntology.entity_classes?.length || 0}</Descriptions.Item>
+                  <Descriptions.Item label="關係數">{selectedOntology.object_properties?.length || 0}</Descriptions.Item>
+                  <Descriptions.Item label="繼承自">
+                    {selectedOntology.inherits_from?.length
+                      ? selectedOntology.inherits_from.map(i => <Tag key={i} style={{ fontSize: 10 }}>{i}</Tag>)
+                      : '-'}
+                  </Descriptions.Item>
+                </Descriptions>
+              </div>
+              <div style={{ flex: 1, overflow: 'hidden' }}>
+                <Tabs
+                  defaultActiveKey="entities"
+                  size="small"
+                  style={{ height: '100%' }}
+                  items={[
+                    {
+                      key: 'entities',
+                      label: `實體 (${selectedOntology.entity_classes?.length || 0})`,
+                      children: (
+                        <div style={{ overflow: 'auto', height: '100%' }}>
+                          <Table
+                            columns={[
+                              { title: '名稱', dataIndex: 'name', key: 'name', width: 120 },
+                              { title: '類別', dataIndex: 'base_class', key: 'base_class', width: 80 },
+                              { title: '說明', dataIndex: 'description', key: 'description' },
+                            ]}
+                            dataSource={selectedOntology.entity_classes}
+                            rowKey="name"
+                            pagination={{ pageSize: 10 }}
+                            size="small"
+                          />
+                        </div>
+                      ),
+                    },
+                    {
+                      key: 'properties',
+                      label: `關係 (${selectedOntology.object_properties?.length || 0})`,
+                      children: (
+                        <div style={{ overflow: 'auto', height: '100%' }}>
+                          <Table
+                            columns={[
+                              { title: '名稱', dataIndex: 'name', key: 'name', width: 120 },
+                              { title: '來源', dataIndex: 'domain', key: 'domain', width: 100 },
+                              { title: '目標', dataIndex: 'range', key: 'range', width: 100 },
+                            ]}
+                            dataSource={selectedOntology.object_properties}
+                            rowKey="name"
+                            pagination={{ pageSize: 10 }}
+                            size="small"
+                          />
+                        </div>
+                      ),
+                    },
+                  ]}
+                />
+              </div>
+            </div>
+            <div style={{ overflow: 'hidden', height: '100%', border: '1px solid #cbd5e1', borderRadius: 8, boxShadow: '0 2px 8px rgba(0,0,0,0.06)', margin: 4 }}>
+              <OntologyGraphViewer ontology={selectedOntology} />
+            </div>
           </div>
         )}
       </Modal>

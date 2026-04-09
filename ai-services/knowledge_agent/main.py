@@ -144,6 +144,240 @@ def health() -> dict[str, str]:
     return {"status": "ok", "service": "knowledge_agent"}
 
 
+# =============================================================================
+# HybridRAG Endpoints
+# =============================================================================
+
+
+class HybridSearchRequest(BaseModel):
+    """Hybrid search request."""
+
+    query: str
+    collection: Optional[str] = "knowledge_default"
+    top_k: Optional[int] = 10
+    strategy: Optional[str] = "hybrid"  # hybrid | vector_first | graph_first
+    min_relevance: Optional[float] = 0.0
+    tenant_id: Optional[str] = None
+    user_id: Optional[str] = None
+    root_id: Optional[str] = None
+
+
+class HybridSearchResult(BaseModel):
+    """Single hybrid search result."""
+
+    content: str
+    source: str
+    score: float
+    metadata: Optional[dict[str, object]] = None
+
+
+class HybridSearchResponse(BaseModel):
+    """Hybrid search response with fused results."""
+
+    query: str
+    query_type: str
+    strategy: str
+    weights_used: dict[str, float]
+    results: list[HybridSearchResult]
+    total_vector_hits: int
+    total_graph_hits: int
+    fusion_time_ms: int
+
+
+@app.post("/hybrid-search", response_model=HybridSearchResponse)
+async def hybrid_search(request: HybridSearchRequest) -> HybridSearchResponse:
+    """Execute HybridRAG search combining vector and graph retrieval.
+
+    This endpoint performs hybrid search using:
+    - Vector search (Qdrant) for semantic similarity
+    - Graph search (ArangoDB) for entity relationships
+    - RRF fusion to combine results
+
+    Query type is automatically detected:
+    - structure_query: Keywords like 框架, 步驟, 流程
+    - entity_query: Keywords like 關係, 是什麼, 包含
+    - semantic_query: All other queries
+    """
+    from knowledge_agent.hybrid_rag import HybridRAGService
+
+    service = HybridRAGService()
+    result = await service.hybrid_search(
+        query=request.query,
+        collection=request.collection or "knowledge_default",
+        top_k=request.top_k or 10,
+        strategy=request.strategy or "hybrid",
+        min_relevance=request.min_relevance or 0.0,
+        tenant_id=request.tenant_id,
+        user_id=request.user_id,
+        root_id=request.root_id,
+    )
+
+    return HybridSearchResponse(
+        query=result["query"],
+        query_type=result["query_type"],
+        strategy=result["strategy"],
+        weights_used=result["weights_used"],
+        results=[
+            HybridSearchResult(
+                content=r["content"],
+                source=r["source"],
+                score=r["score"],
+                metadata=r.get("metadata"),
+            )
+            for r in result["results"]
+        ],
+        total_vector_hits=result["total_vector_hits"],
+        total_graph_hits=result["total_graph_hits"],
+        fusion_time_ms=result["fusion_time_ms"],
+    )
+
+
+class HybridConfigUpdateRequest(BaseModel):
+    """Request to update hybrid config."""
+
+    query_type: str  # default | structure_query | semantic_query | entity_query
+    vector_weight: float
+    graph_weight: float
+
+
+@app.get("/hybrid-config")
+async def get_hybrid_config() -> dict[str, object]:
+    """Get current HybridRAG configuration."""
+    from knowledge_agent.hybrid_rag import get_config_service
+
+    service = get_config_service()
+    config = service.get_config()
+
+    return {
+        "weights": config.to_dict(),
+        "scope": "system",
+    }
+
+
+@app.put("/hybrid-config")
+async def update_hybrid_config(
+    request: HybridConfigUpdateRequest,
+) -> dict[str, object]:
+    """Update HybridRAG weight configuration.
+
+    Args:
+        request: Contains query_type, vector_weight, graph_weight
+
+    Returns:
+        Success status and updated weights.
+    """
+    from knowledge_agent.hybrid_rag import get_config_service
+
+    service = get_config_service()
+
+    # Validate
+    if not service.validate_weights(request.vector_weight, request.graph_weight):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid weights: must be between 0-1 and sum to 1.0",
+        )
+
+    success = service.save_weights(
+        query_type=request.query_type,
+        vector_weight=request.vector_weight,
+        graph_weight=request.graph_weight,
+        changed_by="api",
+    )
+
+    if success:
+        weights = service.get_weights(request.query_type)
+        return {
+            "status": "ok",
+            "query_type": request.query_type,
+            "weights": weights.to_dict(),
+        }
+    else:
+        raise HTTPException(status_code=500, detail="Failed to save config")
+
+
+@app.get("/hybrid/health")
+async def hybrid_health() -> dict[str, object]:
+    """Check HybridRAG service health."""
+    from knowledge_agent.hybrid_rag import get_hybrid_rag_service
+
+    service = get_hybrid_rag_service()
+    health = await service.health_check()
+    return health
+
+
+# =============================================================================
+# Knowledge Intent RAG Endpoints
+# =============================================================================
+
+
+@app.post("/intent/embed-sync")
+async def intent_embed_sync() -> dict[str, object]:
+    """Sync knowledge intents from ArangoDB to Qdrant.
+
+    This endpoint should be called after updating intent_catalog
+    for the knowledge scope.
+    """
+    from knowledge_agent.knowledge_intent_rag import embed_sync
+
+    result = await embed_sync()
+    return result
+
+
+class IntentMatchRequest(BaseModel):
+    """Knowledge intent match request."""
+
+    query: str
+    top_k: Optional[int] = 3
+
+
+class IntentMatchResult(BaseModel):
+    """Single intent match result."""
+
+    intent_id: str
+    score: float
+    intent_data: dict[str, object]
+
+
+class IntentMatchResponse(BaseModel):
+    """Intent match response."""
+
+    query: str
+    matches: list[IntentMatchResult]
+    best_match: Optional[IntentMatchResult] = None
+
+
+@app.post("/intent/match", response_model=IntentMatchResponse)
+async def intent_match(request: IntentMatchRequest) -> IntentMatchResponse:
+    """Match a query to knowledge domain intents."""
+    from knowledge_agent.knowledge_intent_rag import (
+        IntentMatchResponse as KGIntentMatchResponse,
+        IntentMatchResult as KGIntentMatchResult,
+        match_intent,
+    )
+
+    result = await match_intent(
+        query=request.query,
+        top_k=request.top_k or 3,
+    )
+
+    return IntentMatchResponse(
+        query=result.query,
+        matches=[
+            IntentMatchResult(
+                intent_id=m.intent_id,
+                score=m.score,
+                intent_data=m.intent_data,
+            )
+            for m in result.matches
+        ],
+        best_match=IntentMatchResult(
+            intent_id=result.best_match.intent_id,
+            score=result.best_match.score,
+            intent_data=result.best_match.intent_data,
+        ) if result.best_match else None,
+    )
+
+
 @app.post("/search", response_model=KnowledgeResponse)
 async def search(request: KnowledgeRequest) -> KnowledgeResponse:
     """Search knowledge base and generate answer."""
@@ -429,6 +663,26 @@ async def retry_pipeline(file_id: str) -> dict[str, object]:
         "vector_task_id": v_result.id,
         "graph_task_id": g_result.id,
     }
+
+
+@app.get("/pipeline/active-tasks")
+async def get_active_celery_tasks() -> dict[str, object]:
+    from celery_app.app import app as celery_app
+
+    try:
+        inspector = celery_app.control.inspect()
+        active = inspector.active() or {}
+        reserved = inspector.reserved() or {}
+
+        task_ids: list[str] = []
+        for worker_tasks in list(active.values()) + list(reserved.values()):
+            for task in worker_tasks:
+                if task_id := task.get("id"):
+                    task_ids.append(task_id)
+
+        return {"active_task_ids": task_ids}
+    except Exception:
+        return {"active_task_ids": []}
 
 
 @app.post("/pipeline/abort")

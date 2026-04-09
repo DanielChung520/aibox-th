@@ -1,21 +1,24 @@
 //! Knowledge Base API
 //!
-//! # Last Update: 2026-03-25 11:47:06
+//! # Last Update: 2026-04-07 11:18:19
 //! # Author: Daniel Chung
-//! # Version: 1.0.0
+//! # Version: 5.0.0
 
-
+use arangors::client::reqwest::ReqwestClient;
+use arangors::Database;
+use crate::auth::verify_jwt;
 use crate::db::{
     get_db,
     knowledge::{KnowledgeFile, KnowledgeRoot},
 };
 use axum::{
-    extract::{Path, Query},
-    http::StatusCode,
+    extract::{DefaultBodyLimit, Path, Query},
+    http::{HeaderMap, StatusCode},
     response::IntoResponse,
     routing::{delete, get, post},
     Json, Router,
 };
+use futures::StreamExt;
 use serde_json::json;
 use std::collections::HashMap;
 use uuid::Uuid;
@@ -335,6 +338,7 @@ pub async fn delete_file(
 
 pub async fn upload_file(
     Path(root_id): Path<String>,
+    headers: HeaderMap,
     mut multipart: axum::extract::Multipart,
 ) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
     let db = get_db();
@@ -353,11 +357,15 @@ pub async fn upload_file(
 
     // Extract file from multipart
     let field = multipart.next_field().await.map_err(|_| err_400("no file provided"))?;
-    let field = field.ok_or_else(|| err_400("no file provided"))?;
+    let mut field = field.ok_or_else(|| err_400("no file provided"))?;
 
     let filename = field.file_name().unwrap_or("unknown").to_string();
     let content_type = field.content_type().unwrap_or("application/octet-stream").to_string();
-    let bytes = field.bytes().await.map_err(|_| err_500())?;
+
+    // Determine user tier and max upload size
+    let tier = extract_user_tier(&headers, &db).await;
+    let max_size = get_upload_max_size(&db, &tier).await;
+    let tier_display = if tier == "vip" { "VIP" } else { "一般用户" };
 
     // Generate unique file key and local path
     let file_key = Uuid::new_v4().to_string();
@@ -370,15 +378,63 @@ pub async fn upload_file(
         .join("data/uploads")
         .join(&root_id);
     let local_path = local_dir.join(format!("{}.{}", file_key, ext));
-    let s3_path = format!("bucket-aibox-assets/{}/{}.{}", root_id, file_key, ext);
 
-    // Save to local disk (for Celery pipeline to read)
+    // Create upload directory
     tokio::fs::create_dir_all(&local_dir).await.map_err(|e| {
         (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "code": 500, "message": e.to_string() })))
     })?;
-    tokio::fs::write(&local_path, &bytes).await.map_err(|e| {
+
+    // Stream file using StreamExt next() (avoids chunk() internal buffer limits)
+    let mut file = tokio::fs::File::create(&local_path).await.map_err(|e| {
         (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "code": 500, "message": e.to_string() })))
     })?;
+    let mut total_bytes: usize = 0;
+    let mut stream = field;
+
+    loop {
+        match stream.next().await {
+            Some(Ok(chunk)) => {
+                total_bytes += chunk.len();
+                if total_bytes > max_size {
+                    drop(file);
+                    let _ = tokio::fs::remove_file(&local_path).await;
+                    return Err((
+                        StatusCode::PAYLOAD_TOO_LARGE,
+                        Json(json!({
+                            "success": false,
+                            "error": "FILE_TOO_LARGE",
+                            "message": format!(
+                                "上傳檔案大小（{} bytes）超過會員「{}」限制（{} bytes）。請升級至更高會員等級。",
+                                total_bytes, tier_display, max_size
+                            ),
+                            "tier": tier,
+                            "max_size_bytes": max_size,
+                        })),
+                    ));
+                }
+                if let Err(e) = tokio::io::AsyncWriteExt::write_all(&mut file, &chunk).await {
+                    let _ = tokio::fs::remove_file(&local_path).await;
+                    return Err((
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(json!({ "code": 500, "message": e.to_string() })),
+                    ));
+                }
+            }
+            Some(Err(e)) => {
+                let _ = tokio::fs::remove_file(&local_path).await;
+                return Err((StatusCode::BAD_REQUEST, Json(json!({ "code": 400, "message": format!("failed to read upload stream: {}", e) }))));
+            }
+            None => break,
+        }
+    }
+    drop(file);
+
+    let bytes_to_upload = tokio::fs::read(&local_path).await.map_err(|e| {
+        let _ = tokio::fs::remove_file(&local_path);
+        (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "code": 500, "message": e.to_string() })))
+    })?;
+
+    let s3_path = format!("bucket-aibox-assets/{}/{}.{}", root_id, file_key, ext);
 
     // Upload to SeaweedFS ai-box cluster (backup / long-term storage)
     let seaweed_user = std::env::var("SEAWEED_USER").unwrap_or_else(|_| "admin".to_string());
@@ -389,7 +445,7 @@ pub async fn upload_file(
     let _ = client
         .put(&seaweed_url)
         .basic_auth(&seaweed_user, Some(&seaweed_pass))
-        .body(bytes.clone())
+        .body(bytes_to_upload.clone())
         .timeout(std::time::Duration::from_secs(30))
         .send()
         .await;
@@ -399,7 +455,7 @@ pub async fn upload_file(
     let doc: serde_json::Value = json!({
         "_key": file_key,
         "filename": filename,
-        "file_size": bytes.len() as i64,
+        "file_size": total_bytes as i64,
         "file_type": content_type,
         "upload_time": now,
         "vector_status": "pending",
@@ -443,8 +499,75 @@ pub async fn upload_file(
     Ok(Json(json!({ "code": 0, "data": { "fileId": file_id } })))
 }
 
+/// Extract user tier from optional JWT token.
+/// Falls back to "general" if no token or user not found.
+async fn extract_user_tier(headers: &HeaderMap, db: &Database<ReqwestClient>) -> String {
+    let token = headers
+        .get(axum::http::header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.strip_prefix("Bearer "));
+
+    let Some(token) = token else {
+        return "general".to_string();
+    };
+
+    let Ok(token_data) = verify_jwt(token) else {
+        return "general".to_string();
+    };
+
+    let username = &token_data.claims.username;
+    let users: Vec<serde_json::Value> = db
+        .aql_bind_vars(
+            "FOR u IN users FILTER u.username == @username LIMIT 1 RETURN u",
+            [("username", json!(username))].into(),
+        )
+        .await
+        .unwrap_or_default();
+
+    if let Some(user) = users.first() {
+        user.get("tier")
+            .and_then(|v: &serde_json::Value| v.as_str())
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| "general".to_string())
+    } else {
+        "general".to_string()
+    }
+}
+
+/// Look up max upload size for the given tier from system_params.
+/// Falls back to DEFAULT_MAX_SIZE if not found.
+async fn get_upload_max_size(
+    db: &Database<ReqwestClient>,
+    tier: &str,
+) -> usize {
+    let param_key = format!("upload_max_size_{}", tier);
+    let params: Vec<serde_json::Value> = db
+        .aql_bind_vars(
+            "FOR p IN system_params FILTER p.param_key == @k LIMIT 1 RETURN p",
+            [("k", json!(&param_key))].into(),
+        )
+        .await
+        .unwrap_or_default();
+
+    params
+        .first()
+        .and_then(|p: &serde_json::Value| p.get("param_value"))
+        .and_then(|v: &serde_json::Value| v.as_str())
+        .and_then(|s: &str| s.parse::<usize>().ok())
+        .unwrap_or_else(|| {
+            if tier == "vip" {
+                52428800 // 50 MB for vip
+            } else {
+                5242880 // 5 MB for general
+            }
+        })
+}
+
 pub fn create_upload_router() -> Router {
-    Router::new().route("/api/v1/knowledge/roots/{root_id}/files/upload", post(upload_file))
+    Router::new()
+        .route("/api/v1/knowledge/roots/{root_id}/files/upload", post(upload_file))
+        // Override Axum's internal 2MB multipart body limit to 100MB
+        .layer(DefaultBodyLimit::max(100 * 1024 * 1024))
 }
 
 pub async fn list_jobs(
@@ -543,6 +666,66 @@ pub async fn clear_jobs(
     Ok(Json(json!({ "code": 200, "message": format!("已清除 {} 筆記錄", deleted.len()) })))
 }
 
+/// List stuck jobs: processing in DB but no active Celery task backing them.
+/// A job is stuck if vector_status or graph_status is "processing" for > STUCK_TIMEOUT_SECS
+/// without a corresponding active Celery task.
+const STUCK_TIMEOUT_SECS: i64 = 600; // 10 minutes
+
+pub async fn list_jobs_stuck() -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
+    let db = get_db();
+
+    // Get all processing jobs
+    let processing: Vec<serde_json::Value> = db
+        .aql_str(
+            "FOR f IN knowledge_files \
+             FILTER f.vector_status == 'processing' OR f.graph_status == 'processing' \
+             RETURN { _key: f._key, filename: f.filename, vector_status: f.vector_status, \
+             graph_status: f.graph_status, vector_task_id: f.vector_task_id, \
+             graph_task_id: f.graph_task_id, failed_reason: f.failed_reason }",
+        )
+        .await
+        .map_err(|_| err_500())?;
+
+    if processing.is_empty() {
+        return Ok(Json(json!({ "code": 200, "data": [] })));
+    }
+
+    // Call knowledge agent to get active Celery tasks
+    let agent_url = std::env::var("KNOWLEDGE_AGENT_URL")
+        .unwrap_or_else(|_| "http://localhost:8007".to_string());
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .build()
+        .unwrap_or_else(|_| reqwest::Client::new());
+
+    let active_tasks_url = format!("{}/pipeline/active-tasks", agent_url);
+    let agent_active: Vec<String> = match client.get(&active_tasks_url).send().await {
+        Ok(resp) => resp.json().await.unwrap_or_default(),
+        Err(_) => Vec::new(),
+    };
+
+    let stuck: Vec<serde_json::Value> = processing
+        .into_iter()
+        .filter(|job| {
+            let vt_id = job
+                .get("vector_task_id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let gt_id = job
+                .get("graph_task_id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            // Stuck if neither task ID is in active tasks
+            let vt_active = agent_active.iter().any(|t| t == vt_id);
+            let gt_active = agent_active.iter().any(|t| t == gt_id);
+            !vt_active && !gt_active
+        })
+        .collect();
+
+    Ok(Json(json!({ "code": 200, "data": stuck })))
+}
+
 fn err_400(msg: &str) -> (StatusCode, Json<serde_json::Value>) {
     (
         StatusCode::BAD_REQUEST,
@@ -550,29 +733,126 @@ fn err_400(msg: &str) -> (StatusCode, Json<serde_json::Value>) {
     )
 }
 
+/// Revoke Celery tasks via knowledge agent (which has Celery SDK access).
+async fn revoke_celery_tasks(
+    file_key: &str,
+    vector_task_id: Option<&str>,
+    graph_task_id: Option<&str>,
+) -> (Vec<String>, bool) {
+    let agent_url = std::env::var("KNOWLEDGE_AGENT_URL")
+        .unwrap_or_else(|_| "http://localhost:8007".to_string());
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .build()
+        .unwrap_or_else(|_| reqwest::Client::new());
+
+    let mut revoked = Vec::new();
+    let mut any_success = false;
+
+    for task_id in vector_task_id.into_iter().chain(graph_task_id.into_iter()) {
+        if task_id.is_empty() {
+            continue;
+        }
+        // Call knowledge agent's abort endpoint for each task
+        let url = format!("{}/pipeline/abort?file_id={}", agent_url, file_key);
+        if let Ok(resp) = client.post(&url).send().await {
+            if resp.status().is_success() {
+                revoked.push(task_id.to_string());
+                any_success = true;
+            }
+        }
+    }
+    (revoked, any_success)
+}
+
 pub async fn abort_job(
     Path(file_key): Path<String>,
 ) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
-    let agent_url = std::env::var("KNOWLEDGE_AGENT_URL")
-        .unwrap_or_else(|_| "http://localhost:8007".to_string());
-    let url = format!("{}/pipeline/abort?file_id={}", agent_url, file_key);
+    let db = get_db();
+    let col = db
+        .collection("knowledge_files")
+        .await
+        .map_err(|_| err_500())?;
 
-    let client = reqwest::Client::new();
-    match client
-        .post(&url)
-        .timeout(std::time::Duration::from_secs(10))
+    // Read current doc to get task IDs
+    let doc_url = format!(
+        "{}/_db/{}/_api/document/knowledge_files/{}",
+        std::env::var("DATABASE_URL").unwrap_or_else(|_| "http://localhost:8529".to_string()),
+        std::env::var("DATABASE_NAME").unwrap_or_else(|_| "abc_desktop".to_string()),
+        file_key
+    );
+    let arango_user = std::env::var("DATABASE_USER").unwrap_or_else(|_| "root".to_string());
+    let arango_pass = std::env::var("DATABASE_PASSWORD").unwrap_or_else(|_| "abc_desktop_2026".to_string());
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(5))
+        .build()
+        .unwrap_or_else(|_| reqwest::Client::new());
+
+    let (vector_task_id, graph_task_id): (Option<String>, Option<String>) = match client
+        .get(&doc_url)
+        .basic_auth(&arango_user, Some(&arango_pass))
         .send()
         .await
     {
         Ok(resp) => {
-            let body: serde_json::Value = resp.json().await.unwrap_or_default();
-            Ok(Json(json!({ "code": 200, "data": body })))
+            if resp.status().is_success() {
+                if let Ok(doc) = resp.json::<serde_json::Value>().await {
+                    let vt = doc
+                        .get("vector_task_id")
+                        .and_then(|v| v.as_str())
+                        .filter(|s| !s.is_empty())
+                        .map(String::from);
+                    let gt = doc
+                        .get("graph_task_id")
+                        .and_then(|v| v.as_str())
+                        .filter(|s| !s.is_empty())
+                        .map(String::from);
+                    (vt, gt)
+                } else {
+                    (None, None)
+                }
+            } else {
+                (None, None)
+            }
         }
-        Err(e) => Err((
-            StatusCode::BAD_GATEWAY,
-            Json(json!({ "code": 502, "message": format!("failed to abort task: {}", e) })),
-        )),
-    }
+        Err(_) => (None, None),
+    };
+
+    let agent_url = std::env::var("KNOWLEDGE_AGENT_URL")
+        .unwrap_or_else(|_| "http://localhost:8007".to_string());
+    let agent_abort_url = format!("{}/pipeline/abort?file_id={}", agent_url, file_key);
+    let agent_result: serde_json::Value = match client.post(&agent_abort_url).send().await {
+        Ok(resp) => resp.json().await.unwrap_or_default(),
+        Err(_) => serde_json::Value::Null,
+    };
+
+    let (revoked, _) = revoke_celery_tasks(
+        &file_key,
+        vector_task_id.as_deref(),
+        graph_task_id.as_deref(),
+    )
+    .await;
+
+    // Reset DB status to pending so job can be retried
+    let patch = serde_json::json!({
+        "vector_status": "pending",
+        "graph_status": "pending",
+        "failed_reason": serde_json::Value::Null,
+    });
+    let _ = col
+        .update_document(&file_key, patch, Default::default())
+        .await;
+
+    Ok(Json(json!({
+        "code": 200,
+        "data": {
+            "file_id": file_key,
+            "agent_abort": agent_result,
+            "revoked_tasks": revoked,
+        }
+    })))
 }
 
 pub async fn job_logs(
@@ -681,6 +961,53 @@ pub async fn preview_file(
     }
 }
 
+pub async fn download_file_proxy(
+    Path(file_key): Path<String>,
+) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
+    let agent_url = std::env::var("KNOWLEDGE_AGENT_URL")
+        .unwrap_or_else(|_| "http://localhost:8007".to_string());
+    let url = format!("{}/pipeline/download?file_id={}", agent_url, file_key);
+
+    let client = reqwest::Client::new();
+    match client
+        .get(&url)
+        .timeout(std::time::Duration::from_secs(120))
+        .send()
+        .await
+    {
+        Ok(resp) => {
+            if !resp.status().is_success() {
+                return Err((
+                    StatusCode::BAD_GATEWAY,
+                    Json(json!({ "code": 502, "message": "failed to download file from upstream" })),
+                ));
+            }
+
+            let mut response_builder = axum::response::Response::builder()
+                .status(StatusCode::OK);
+
+            if let Some(v) = resp.headers().get("content-type").and_then(|v| v.to_str().ok()) {
+                response_builder = response_builder.header("content-type", v);
+            }
+            if let Some(v) = resp.headers().get("content-disposition").and_then(|v| v.to_str().ok()) {
+                response_builder = response_builder.header("content-disposition", v);
+            }
+            if let Some(v) = resp.headers().get("content-length").and_then(|v| v.to_str().ok()) {
+                response_builder = response_builder.header("content-length", v);
+            }
+
+            let stream = resp.bytes_stream();
+            let body = axum::body::Body::from_stream(stream);
+
+            Ok(response_builder.body(body).unwrap())
+        }
+        Err(e) => Err((
+            StatusCode::BAD_GATEWAY,
+            Json(json!({ "code": 502, "message": format!("failed to download file: {}", e) })),
+        )),
+    }
+}
+
 fn err_500() -> (StatusCode, Json<serde_json::Value>) {
     (
         StatusCode::INTERNAL_SERVER_ERROR,
@@ -784,21 +1111,38 @@ pub async fn delete_job(
     let url = format!("{}/pipeline/delete?file_id={}", agent_url, file_key);
 
     let client = reqwest::Client::new();
-    match client
+    let agent_result: serde_json::Value = match client
         .post(&url)
         .timeout(std::time::Duration::from_secs(30))
         .send()
         .await
     {
-        Ok(resp) => {
-            let body: serde_json::Value = resp.json().await.unwrap_or_default();
-            Ok(Json(json!({ "code": 200, "data": body })))
+        Ok(resp) => resp.json().await.unwrap_or_default(),
+        Err(e) => {
+            return Err((
+                StatusCode::BAD_GATEWAY,
+                Json(json!({ "code": 502, "message": format!("failed to delete job: {}", e) })),
+            ));
         }
-        Err(e) => Err((
-            StatusCode::BAD_GATEWAY,
-            Json(json!({ "code": 502, "message": format!("failed to delete job: {}", e) })),
-        )),
-    }
+    };
+
+    let db = get_db();
+    let col = db
+        .collection("knowledge_files")
+        .await
+        .map_err(|_| err_500())?;
+    let _removed = col
+        .remove_document::<serde_json::Value>(&file_key, Default::default(), None)
+        .await
+        .ok();
+
+    Ok(Json(json!({
+        "code": 200,
+        "data": {
+            "agent": agent_result,
+            "arangodb_removed": true
+        }
+    })))
 }
 
 pub async fn retry_job(

@@ -6,3 +6,5 @@ celery[redis]
 openpyxl
 python-docx
 pdfplumber
+PyMuPDF>=1.24.0
+Pillow>=10.0.0

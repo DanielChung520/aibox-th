@@ -28,6 +28,7 @@ AI_SERVICES=(
   "mcp_tools:8004:mcp_tools.main:app"
   "bpa_mm_agent:8005:bpa.mm_agent.main:app"
   "knowledge_agent:8007:knowledge_agent.main:app"
+  "memory_agent:8008:memory_agent.main:app"
 )
 
 # ─── 共用函數 ────────────────────────────────────────────────────────────────
@@ -78,6 +79,11 @@ start_api() {
   echo "═══════════════════════════════════════"
 
   kill_port "$API_PORT"
+
+  # Export all .env vars for the cargo process
+  set -a
+  source "$API_DIR/.env"
+  set +a
 
   cd "$API_DIR"
   cargo watch -x 'run --release' > /tmp/abc-api.log 2>&1 &

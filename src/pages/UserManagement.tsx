@@ -91,6 +91,7 @@ export default function UserManagement() {
       name: record.name,
       role_keys: record.role_keys,
       status: record.status,
+      tier: record.tier || 'general',
     });
     setModalVisible(true);
   };
@@ -172,6 +173,15 @@ export default function UserManagement() {
       render: (status: string, record: User) => (
         <StatusSwitch userKey={record._key} status={status} onStatusChange={handleStatusChange} message={message} />
       ),
+    },
+    {
+      title: '会员等级',
+      dataIndex: 'tier',
+      key: 'tier',
+      render: (tier: string) => {
+        const text = tier === 'vip' ? 'VIP' : '一般';
+        return <span style={{ color: tier === 'vip' ? '#faad14' : undefined, fontWeight: 500 }}>{text}</span>;
+      },
     },
     {
       title: '创建时间',
@@ -288,6 +298,13 @@ export default function UserManagement() {
             <Select>
               <Select.Option value="enabled">启用</Select.Option>
               <Select.Option value="disabled">禁用</Select.Option>
+            </Select>
+          </Form.Item>
+
+          <Form.Item name="tier" label="会员等级" initialValue="general">
+            <Select>
+              <Select.Option value="general">一般用户</Select.Option>
+              <Select.Option value="vip">VIP</Select.Option>
             </Select>
           </Form.Item>
         </Form>

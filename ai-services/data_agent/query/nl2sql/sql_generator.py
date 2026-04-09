@@ -86,6 +86,22 @@ async def generate_sql(
     )
 
 
+def _extract_placeholder(plan: QueryPlan, key: str) -> str:
+    for f in plan.filters:
+        if key in f.field.lower() or key in f.value.lower():
+            return f.value
+    return ""
+
+
+def _extract_entity_from_query(query: str, patterns: list[tuple[str, ...]]) -> str:
+    for entry in patterns:
+        pattern = entry[0]
+        m = re.search(pattern, query, re.IGNORECASE)
+        if m:
+            return m.group(1)
+    return ""
+
+
 def _fill_template(
     query: str, plan: QueryPlan, intent: IntentMatch, config: PipelineConfig
 ) -> str:
@@ -93,23 +109,59 @@ def _fill_template(
     if not template:
         raise SQLGenerationError("No sql_template found for template-tier intent")
 
+    po_val = (
+        _extract_placeholder(plan, "po_number")
+        or _extract_entity_from_query(query, [
+            (r"(?:PO|po)\s*#?\s*(\d+)",),
+            (r"採購單[號]?\s*[:：]?\s*(?:PO)?(\d+)",),
+        ])
+    )
+    if po_val:
+        po_val = "PO" + po_val
+    vendor_val = (
+        _extract_placeholder(plan, "vendor")
+        or _extract_placeholder(plan, "vendor_list")
+        or _extract_entity_from_query(query, [
+            # Use (?![A-Za-z0-9]) instead of \b because Python \b considers
+            # Unicode chars (including CJK) as \w, breaking boundary detection
+            (r"(?<![A-Za-z0-9])V(\d{5})(?:(?![A-Za-z0-9])|$)",),
+            (r"(?<![A-Za-z0-9])V(\d+)(?:(?![A-Za-z0-9])|$)",),
+            (r"供應商[號]?\s*[:：]?\s*([A-Za-z0-9\-_]+)",),
+        ])
+    )
+    if vendor_val and not vendor_val.startswith("V"):
+        vendor_val = "V" + vendor_val.zfill(5)
+
     template = template.replace("{time_range}", "*")
-    template = template.replace("{po_number}", _extract_placeholder(plan, "po_number"))
+    template = template.replace("{po_number}", po_val)
     template = template.replace("{vendor_list}", _extract_placeholder(plan, "vendor_list"))
 
-    if "read_parquet" not in intent.sql_template and config.data_source != "ragic":
-        for table in plan.tables:
-            module = table.split("_")[0].lower() if "_" in table else "mm"
-            tbl_name = table.split("_")[-1].lower() if "_" in table else table.lower()
-            parquet_ref = (
-                f"read_parquet('s3://{config.s3_bucket}/{module}/{tbl_name}/*.parquet')"
-            )
-            template = re.sub(
-                rf"\b{re.escape(table)}\b",
-                parquet_ref,
-                template,
-                count=1,
-            )
+    # Fix CONTAINS→LIKE/equality for vendor filters.
+    # ArangoDB CONTAINS(str, sub, true) returns INT (position or -1), not boolean.
+    # - Numeric field IDs = vendor codes → use == for exact match
+    # - Non-numeric field names = vendor names → use LIKE for partial match
+    if vendor_val:
+        # Pattern: CONTAINS(d['<field>'], '{vendor}', true)
+        # Transform to: d['<field>'] == 'V00039'  (for numeric field IDs)
+        #          or: LIKE(d['<field>'], '%V00039%', true)  (for names)
+        def _fix_vendor_contains(match: re.Match[str]) -> str:
+            field_arg = match.group(1)  # e.g. d['1018422'] or d['供應商名稱']
+            # Extract field key: d['1018422'] → '1018422'
+            key_m = re.search(r"\[\s*['\"]?(.+?)['\"]?\s*\]", field_arg)
+            field_key = key_m.group(1) if key_m else ""
+            is_numeric_field = field_key.isdigit()
+            if is_numeric_field:
+                return f"{field_arg} == '{vendor_val}'"
+            else:
+                return f"LIKE({field_arg}, '%{vendor_val}%', true)"
+
+        template = re.sub(
+            r"CONTAINS\(\s*(d\[[^\]]+\])\s*,\s*'\{vendor\}'\s*,\s*true\s*\)",
+            _fix_vendor_contains,
+            template,
+        )
+    else:
+        template = template.replace("{vendor}", vendor_val)
 
     if plan.filters:
         conditions = " AND ".join(
@@ -126,13 +178,6 @@ def _fill_template(
     template = template.replace("{end_date}", end_date)
 
     return template.strip()
-
-
-def _extract_placeholder(plan: QueryPlan, key: str) -> str:
-    for f in plan.filters:
-        if key in f.field.lower() or key in f.value.lower():
-            return f.value
-    return ""
 
 
 async def _generate_sql_with_llm(

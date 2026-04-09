@@ -3,7 +3,7 @@
  * @description Header 服務總燈號：合併 /health（基礎設施）與 /api/v1/services（AI 服務）
  *              的狀態。全綠 → 綠燈，任一延遲 → 黃三角，任一異常或 API 不可達 → 紅燈。
  *              點擊展開 Popover 分區列出基礎設施與 AI 服務的名稱、燈號與延遲。
- * @lastUpdate  2026-03-28 10:42:20
+ * @lastUpdate  2026-04-05 22:05:00
  * @author      Daniel Chung
  * @version     3.1.0
  */
@@ -79,19 +79,34 @@ export default function ServiceStatusBar() {
   };
 
   const fetchStatuses = useCallback(async () => {
-    const results = await Promise.allSettled([
-      healthApi.check(),
-      servicesApi.list(),
-    ]);
+    const TIMEOUT_MS = 8_000;
 
-    const healthResult = results[0];
-    const servicesResult = results[1];
+    const withTimeout = async <T,>(p: Promise<T>): Promise<'timeout' | T> => {
+      return Promise.race([
+        p,
+        new Promise<'timeout'>((resolve) => setTimeout(() => resolve('timeout'), TIMEOUT_MS)),
+      ]);
+    };
+
+    const [healthResult, servicesResult] = await Promise.all([
+      withTimeout(healthApi.check()),
+      withTimeout(servicesApi.list()),
+    ]);
 
     let reachable = false;
 
-    if (healthResult.status === 'fulfilled') {
+    if (healthResult === 'timeout') {
+      setInfraLights(
+        (Object.keys(INFRA_DISPLAY_NAMES) as (keyof HealthServices)[]).map((key) => ({
+          name: key,
+          displayName: INFRA_DISPLAY_NAMES[key] ?? key,
+          color: 'red' as LightColor,
+          latencyMs: null,
+        }))
+      );
+    } else if (healthResult.status >= 200 && healthResult.status < 300) {
       reachable = true;
-      const h = healthResult.value.data;
+      const h = healthResult.data;
       const entries = Object.entries(h.services ?? {}) as [keyof HealthServices, boolean][];
       setInfraLights(
         entries.map(([key, ok]) => ({
@@ -101,19 +116,50 @@ export default function ServiceStatusBar() {
           latencyMs: null,
         }))
       );
+    } else {
+      setInfraLights(
+        (Object.keys(INFRA_DISPLAY_NAMES) as (keyof HealthServices)[]).map((key) => ({
+          name: key,
+          displayName: INFRA_DISPLAY_NAMES[key] ?? key,
+          color: 'red' as LightColor,
+          latencyMs: null,
+        }))
+      );
     }
 
-    if (servicesResult.status === 'fulfilled') {
+    if (servicesResult === 'timeout') {
+      setAiLights([
+        {
+          name: 'ai_services',
+          displayName: 'AI 服務群組',
+          color: 'red' as LightColor,
+          latencyMs: null,
+        },
+      ]);
+    } else if (servicesResult.status >= 200 && servicesResult.status < 300) {
       reachable = true;
-      const services = servicesResult.value.data.services ?? [];
+      const services = servicesResult.data.services ?? [];
       setAiLights(
-        services.map((svc) => ({
+        services.map((svc: { name: string; display_name: string; status: ServiceStatus; latency_ms: number | null }) => ({
           name: svc.name,
           displayName: svc.display_name,
           color: svcStatusToColor(svc.status, svc.latency_ms ?? null),
           latencyMs: svc.latency_ms ?? null,
         }))
       );
+    } else {
+      setAiLights([
+        {
+          name: 'ai_services',
+          displayName: 'AI 服務群組',
+          color: 'red' as LightColor,
+          latencyMs: null,
+        },
+      ]);
+    }
+
+    if (healthResult === 'timeout') {
+      reachable = false;
     }
 
     setApiUnreachable(!reachable);

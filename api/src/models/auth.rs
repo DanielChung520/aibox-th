@@ -21,7 +21,14 @@ pub struct Claims {
 }
 
 impl Claims {
-    pub fn new(user_key: &str, username: &str, role: &str, permissions: Vec<String>, exp: u64, iat: u64) -> Self {
+    pub fn new(
+        user_key: &str,
+        username: &str,
+        role: &str,
+        permissions: Vec<String>,
+        exp: u64,
+        iat: u64,
+    ) -> Self {
         Self {
             sub: user_key.to_string(),
             username: username.to_string(),

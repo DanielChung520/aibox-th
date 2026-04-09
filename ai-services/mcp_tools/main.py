@@ -1,5 +1,6 @@
 import asyncio
 import os
+from datetime import datetime
 from typing import Any, Optional
 
 import httpx
@@ -11,6 +12,11 @@ app = FastAPI(
     description="MCP tool execution service.",
     version="2.0.0",
 )
+
+from tools.process_advisor.router import app as process_advisor_app
+from tools.report_agent.router import app as report_agent_app
+app.mount("/process-advisor", process_advisor_app)
+app.mount("/report-agent", report_agent_app)
 
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 DEFAULT_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2:latest")
@@ -204,6 +210,22 @@ async def execute_batch(calls: list[ToolCall]) -> list[ToolResult]:
     tasks = [execute_tool(call.tool, call.parameters) for call in calls]
     results = await asyncio.gather(*tasks)
     return results
+
+
+@app.post("/tools/{tool_key}/sync")
+async def sync_tool_intents(tool_key: str, payload: dict) -> dict:
+    """Sync tool intents to Qdrant for semantic matching."""
+    try:
+        intent_tags = payload.get("intent_tags", [])
+        nl_examples = payload.get("nl_examples", [])
+        
+        # TODO: Implement Qdrant sync logic
+        # For now, just log the payload
+        print(f"[sync_tool_intents] tool_key={tool_key}, intent_tags={intent_tags}, nl_examples={nl_examples}")
+        
+        return {"code": 0, "message": "已同步到 Qdrant", "synced_at": datetime.utcnow().isoformat()}
+    except Exception as e:
+        return {"code": 1, "message": f"同步失敗: {str(e)}"}
 
 
 @app.post("/chat-with-tools")

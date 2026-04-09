@@ -1,0 +1,471 @@
+{
+  "type": "major",
+  "name": "AI_Development",
+  "version": "1.0",
+  "default_version": true,
+  "ontology_name": "AI_Development_Major_Ontology",
+  "description": "AI 開發專業本體論，定義人工智慧系統從研究到生產的生命週期中的所有核心概念與實踐，包括機器學習模型訓練、Prompt 工程、RAG Pipeline 建構、微調策略、模型評估與監控、AI Agent 設計與 MLOps 等專業領域。本體論整合 LLM 应用开发、Agent 设计模式、RAG 最佳實踐與 MLOps 流程，適用於 AI 系統開發、RAG 知識庫建構、AI Agent 流程設計、模型選型決策與 Prompt 版本管理等場景。",
+  "author": "Daniel Chung",
+  "last_modified": "2026-04-04 10:01:38",
+  "inherits_from": [
+    "5W1H_Base_Ontology_OWL",
+    "System_Development_Domain_Ontology"
+  ],
+  "tags": [
+    "AIDevelopment",
+    "MachineLearning",
+    "LLM",
+    "PromptEngineering",
+    "RAG",
+    "Agent",
+    "MLOps",
+    "FineTuning",
+    "ModelEvaluation",
+    "AIInfrastructure"
+  ],
+  "use_cases": [
+    "AI 模型選型與評估",
+    "RAG Pipeline 設計與優化",
+    "AI Agent 流程建模",
+    "Prompt 版本管理與 A/B 測試",
+    "模型訓練與微調流程管理",
+    "AI 輸出品質監控",
+    "RAG 輔助 AI 開發知識檢索",
+    "多模態 AI 應用整合"
+  ],
+
+  "entity_classes": [
+    {
+      "name": "Training_Dataset",
+      "base_class": "Concept",
+      "description": "訓練資料集，用於模型訓練的結構化資料集合，包含資料收集、清洗、標註、分割（Train/Val/Test）與版本管理的完整生命週期。"
+    },
+    {
+      "name": "Validation_Dataset",
+      "base_class": "Concept",
+      "description": "驗證資料集，用於模型訓練過程中的超參數調優與early stopping，避免模型過擬合（Overfitting）。"
+    },
+    {
+      "name": "Test_Dataset",
+      "base_class": "Concept",
+      "description": "測試資料集，用於模型最終評估的未見過資料集，確保模型泛化能力（Generalization）的公正度量。"
+    },
+    {
+      "name": "Model_Training_Job",
+      "base_class": "Process",
+      "description": "模型訓練任務，包含訓練配置（超參數、學習率、Epochs、Batch Size）、訓練環境（GPU 型號、分散式策略）與訓練監控（日誌、曲線圖）。"
+    },
+    {
+      "name": "Hyperparameter",
+      "base_class": "Concept",
+      "description": "超參數，控制模型訓練過程的配置參數，如學習率、正則化強度、網路深度、注意力頭數等，需透過調參（Hyperparameter Tuning）找到最優值。"
+    },
+    {
+      "name": "Model_Checkpoint",
+      "base_class": "Build_Artifact",
+      "description": "模型檢查點，訓練過程中保存的模型權重快照，用於中斷後恢復訓練或選取最佳checkpoint進行部署。"
+    },
+    {
+      "name": "Base_Model",
+      "base_class": "Concept",
+      "description": "基礎模型，代表預訓練（Pre-trained）的大型語言模型或視覺模型，如 GPT-4、Claude、Gemini、LLaMA、Stable Diffusion 等。"
+    },
+    {
+      "name": "Fine_Tuned_Model",
+      "base_class": "Concept",
+      "description": "微調模型，透過 LoRA、QLoRA、Adapter 或 Full Fine-tuning 技術在基礎模型上進行任務特定訓練的模型。"
+    },
+    {
+      "name": "LoRA_Config",
+      "base_class": "Document",
+      "description": "LoRA（Low-Rank Adaptation）配置，定義低秩適配的秩（Rank）、Alpha、目標模組與訓練超參數，是輕量級微調的主流方法。"
+    },
+    {
+      "name": "Prompt_Template",
+      "base_class": "Document",
+      "description": "Prompt 範本，定義與 LLM 互動的結構化提示詞，包含系統提示（System Prompt）、使用者提示（User Prompt）、few-shot 範例與輸出格式約束。"
+    },
+    {
+      "name": "System_Prompt",
+      "base_class": "Concept",
+      "description": "系統提示詞，定義 AI Agent 的角色定位、行為規範、能力邊界與安全約束，是 Prompt Engineering 的核心組件。"
+    },
+    {
+      "name": "Few_Shot_Example",
+      "base_class": "Concept",
+      "description": "Few-shot 範例，在 Prompt 中提供少量輸入-輸出配對範例，幫助 LLM 理解任務目標與輸出格式。"
+    },
+    {
+      "name": "Chain_Of_Thought",
+      "base_class": "Concept",
+      "description": "思維鏈（CoT）技術，在 Prompt 中引導模型逐步推理，透過中間步驟提高複雜推理任務的準確性。"
+    },
+    {
+      "name": "Prompt_Version",
+      "base_class": "Concept",
+      "description": "Prompt 版本，追蹤 Prompt 範本的不同版本迭代，包含版本號、修訂內容、變更原因與 A/B 測試結果。"
+    },
+    {
+      "name": "Prompt_Evaluation",
+      "base_class": "Process",
+      "description": "Prompt 評估流程，透過自動化指標（如 ROUGE、BERTScore）或人工評估比較不同 Prompt 的輸出品質。"
+    },
+    {
+      "name": "RAG_Pipeline",
+      "base_class": "Process",
+      "description": "檢索增強生成 Pipeline，完整的 RAG 系統，包含文件攝入（Ingestion）、分塊（Chunking）、向量化（Embedding）、向量檢索（Retrieval）與生成（Generation）五大階段。"
+    },
+    {
+      "name": "Document_Chunking",
+      "base_class": "Process",
+      "description": "文件分塊策略，定義如何將長文件分割為較小的文本塊，方法包括固定長度分塊、語義分塊（Sentence Splitting）、遞迴字元分割與標題分塊等。"
+    },
+    {
+      "name": "Embedding_Model",
+      "base_class": "Concept",
+      "description": "向量化模型，用於將文本轉換為高維向量表示的模型，如 OpenAI text-embedding-3-small、Sentence-Transformers、Cohere 等。"
+    },
+    {
+      "name": "Vector_Index",
+      "base_class": "Concept",
+      "description": "向量索引，用於加速向量相似性搜尋的資料結構，如 FAISS、HNSW、IVF、PQ 等，支援近似最近鄰（ANN）搜尋。"
+    },
+    {
+      "name": "Retrieval_Strategy",
+      "base_class": "Concept",
+      "description": "檢索策略，定義如何從向量資料庫中取得相關文件，包括純向量搜尋、混合搜尋（Hybrid Search）、Multi-Vector、Parent Document 與 ColBERT 等進階策略。"
+    },
+    {
+      "name": "Retrieval_Evaluation",
+      "base_class": "Process",
+      "description": "檢索評估，評估 RAG Pipeline 中檢索階段的品質，常用指標包括 Precision@K、Recall@K、MRR 與 NDCG。"
+    },
+    {
+      "name": "Generation_Model",
+      "base_class": "Concept",
+      "description": "生成模型，用於根據檢索結果生成最終回答的大型語言模型（LLM），如 GPT-4、Claude、DeepSeek 等。"
+    },
+    {
+      "name": "Context_Window",
+      "base_class": "Concept",
+      "description": "上下文窗口，LLM 能夠處理的最大輸入長度（以 Token 計），影響 Prompt、檢索文件與對話歷史的容納量。"
+    },
+    {
+      "name": "Token_Budget",
+      "base_class": "Concept",
+      "description": "Token 配額，管理 AI API 的使用量，包含輸入 Token、輸出 Token 與成本的追蹤與限額控制。"
+    },
+    {
+      "name": "AI_Agent",
+      "base_class": "Agent",
+      "description": "AI Agent，代表具備自主規劃、工具使用與環境互動能力的智慧代理人，如 Data Agent、Knowledge Agent、BPA Agent 等。"
+    },
+    {
+      "name": "Agent_Tool",
+      "base_class": "Concept",
+      "description": "Agent 工具，AI Agent 可呼叫的外部工具，如 API 呼叫、資料庫查詢、程式碼執行、檔案操作與網頁搜尋等。"
+    },
+    {
+      "name": "Tool_Calling_Schema",
+      "base_class": "Document",
+      "description": "工具呼叫綱要，定義 Agent 工具的輸入輸出結構，通常使用 JSON Schema 或 Function Calling 格式（如 OpenAI Function Calling）。"
+    },
+    {
+      "name": "Agent_Memory",
+      "base_class": "Concept",
+      "description": "Agent 記憶機制，定義 Agent 如何保存與使用對話歷史，包含短期記憶（Short-term / Conversation Context）與長期記憶（Long-term / Persistent Memory）。"
+    },
+    {
+      "name": "Agent_Planning",
+      "base_class": "Process",
+      "description": "Agent 規劃能力，定義 Agent 如何將複雜任務分解為子任務並逐步執行，常用模式包括 ReAct、CoT、ToT（Tree of Thoughts）與 GoT（Graph of Thoughts）。"
+    },
+    {
+      "name": "Multi_Agent_Orchestration",
+      "base_class": "Process",
+      "description": "多 Agent 編排，定義多個 AI Agent 之間的協作模式，如 Supervisor Chain、Hierarchical Team、Debate 與 Consensus 等協作機制。"
+    },
+    {
+      "name": "Model_Evaluation_Metric",
+      "base_class": "Concept",
+      "description": "模型評估指標，用於量化 AI 模型輸出品質的度量標準，如 BLEU、ROUGE、BERTScore、F1、Exact Match 與 LLM-as-a-Judge 等。"
+    },
+    {
+      "name": "Benchmark_Dataset",
+      "base_class": "Concept",
+      "description": "基準測試資料集，用於標準化評估模型能力的公開資料集，如 MMLU、HellaSwag、TruthfulQA、HumanEval 與 GSM8K 等。"
+    },
+    {
+      "name": "Hallucination_Detection",
+      "base_class": "Process",
+      "description": "幻覺偵測，識別 LLM 輸出中事實不一致或虛構內容的技術，包含自我一致性檢查、資訊溯源與外部知識比對等方法。"
+    },
+    {
+      "name": "AI_Output_Validation",
+      "base_class": "Process",
+      "description": "AI 輸出驗證，在 LLM 生成回答後進行格式驗證、語意一致性檢查與安全合規審查，確保輸出符合預期品質標準。"
+    },
+    {
+      "name": "Model_Monitoring",
+      "base_class": "Process",
+      "description": "模型監控，在模型部署後持續追蹤其輸入/輸出分佈、延遲、成本與品質指標，及時發現模型退化（Model Degeneration）。"
+    },
+    {
+      "name": "Model_Drift",
+      "base_class": "Concept",
+      "description": "模型漂移，代表模型效能隨時間下降的現象，包含資料漂移（Data Drift）與概念漂移（Concept Drift），需觸發模型重新訓練或微調。"
+    },
+    {
+      "name": "AI_Safety_Filter",
+      "base_class": "Concept",
+      "description": "AI 安全過濾器，對 LLM 輸入輸出進行內容安全檢查，過濾仇恨言論、個人資料、犯罪指導與不當內容，包含 PII 偵測與 Content Safety。"
+    },
+    {
+      "name": "Multimodal_Input",
+      "base_class": "Concept",
+      "description": "多模態輸入，支援文字、圖像、音頻、影片等多種輸入類型的 AI 模型應用場景，如 VLM（Vision Language Model）與 TTS/ASR。"
+    }
+  ],
+
+  "object_properties": [
+    {
+      "name": "trains_model",
+      "description": "訓練資料集用於模型訓練任務。",
+      "domain": ["Training_Dataset"],
+      "range": ["Model_Training_Job"]
+    },
+    {
+      "name": "validates_model",
+      "description": "驗證資料集用於模型調參與驗證。",
+      "domain": ["Validation_Dataset"],
+      "range": ["Model_Training_Job"]
+    },
+    {
+      "name": "tests_model",
+      "description": "測試資料集用於最終模型評估。",
+      "domain": ["Test_Dataset"],
+      "range": ["Model_Evaluation_Metric"]
+    },
+    {
+      "name": "optimizes_hyperparameters",
+      "description": "超參數調優過程優化訓練配置。",
+      "domain": ["Hyperparameter"],
+      "range": ["Model_Training_Job"]
+    },
+    {
+      "name": "saves_checkpoint",
+      "description": "模型訓練任務保存檢查點。",
+      "domain": ["Model_Training_Job"],
+      "range": ["Model_Checkpoint"]
+    },
+    {
+      "name": "fine_tunes_base_model",
+      "description": "微調模型由基礎模型衍生。",
+      "domain": ["Fine_Tuned_Model"],
+      "range": ["Base_Model"]
+    },
+    {
+      "name": "configures_lora",
+      "description": "LoRA 配置定義微調技術參數。",
+      "domain": ["LoRA_Config"],
+      "range": ["Fine_Tuned_Model"]
+    },
+    {
+      "name": "defines_prompt",
+      "description": "Prompt 範本定義與 LLM 的互動方式。",
+      "domain": ["Prompt_Template"],
+      "range": ["System_Prompt", "Few_Shot_Example"]
+    },
+    {
+      "name": "includes_cot",
+      "description": "Prompt 包含思維鏈引導逐步推理。",
+      "domain": ["Prompt_Template"],
+      "range": ["Chain_Of_Thought"]
+    },
+    {
+      "name": "tracks_version",
+      "description": "Prompt 版本追蹤範本的迭代變更。",
+      "domain": ["Prompt_Version"],
+      "range": ["Prompt_Template"]
+    },
+    {
+      "name": "evaluates_prompt",
+      "description": "Prompt 評估流程比較不同範本的輸出品質。",
+      "domain": ["Prompt_Evaluation"],
+      "range": ["Prompt_Template"]
+    },
+    {
+      "name": "executes_rag",
+      "description": "RAG Pipeline 執行檢索增強生成流程。",
+      "domain": ["RAG_Pipeline"],
+      "range": ["Document_Chunking", "Embedding_Model", "Vector_Index", "Retrieval_Strategy", "Generation_Model"]
+    },
+    {
+      "name": "chunks_documents",
+      "description": "文件分塊策略將文件切分為文本塊。",
+      "domain": ["Document_Chunking"],
+      "range": ["Source_Code", "Technical_Documentation"]
+    },
+    {
+      "name": "generates_embeddings",
+      "description": "向量化模型將文本轉換為向量。",
+      "domain": ["Embedding_Model"],
+      "range": ["Vector_Index"]
+    },
+    {
+      "name": "indexes_vectors",
+      "description": "向量索引加速相似性搜尋。",
+      "domain": ["Vector_Index"],
+      "range": ["Embedding_Model"]
+    },
+    {
+      "name": "retrieves_documents",
+      "description": "檢索策略從向量索引取得相關文件。",
+      "domain": ["Retrieval_Strategy"],
+      "range": ["Vector_Index"]
+    },
+    {
+      "name": "evaluates_retrieval",
+      "description": "檢索評估衡量檢索結果品質。",
+      "domain": ["Retrieval_Evaluation"],
+      "range": ["Retrieval_Strategy", "Test_Dataset"]
+    },
+    {
+      "name": "generates_response",
+      "description": "生成模型根據檢索結果產生回答。",
+      "domain": ["Generation_Model"],
+      "range": ["Retrieval_Strategy"]
+    },
+    {
+      "name": "constrained_by_context",
+      "description": "Prompt 受 LLM 上下文窗口大小限制。",
+      "domain": ["Prompt_Template", "RAG_Pipeline"],
+      "range": ["Context_Window"]
+    },
+    {
+      "name": "manages_token_budget",
+      "description": "Token 配額管理 AI API 使用量。",
+      "domain": ["Token_Budget"],
+      "range": ["Generation_Model"]
+    },
+    {
+      "name": "uses_tools",
+      "description": "AI Agent 呼叫外部工具。",
+      "domain": ["AI_Agent"],
+      "range": ["Agent_Tool"]
+    },
+    {
+      "name": "defines_tool_schema",
+      "description": "工具呼叫綱要定義工具的介面規格。",
+      "domain": ["Tool_Calling_Schema"],
+      "range": ["Agent_Tool"]
+    },
+    {
+      "name": "maintains_memory",
+      "description": "Agent 記憶機制保存對話與長期記憶。",
+      "domain": ["Agent_Memory"],
+      "range": ["AI_Agent"]
+    },
+    {
+      "name": "plans_subtasks",
+      "description": "Agent 規劃能力將複雜任務分解為子任務。",
+      "domain": ["Agent_Planning"],
+      "range": ["AI_Agent"]
+    },
+    {
+      "name": "orchestrates_agents",
+      "description": "多 Agent 編排協調多個 Agent 協作。",
+      "domain": ["Multi_Agent_Orchestration"],
+      "range": ["AI_Agent"]
+    },
+    {
+      "name": "measures_evaluation",
+      "description": "模型評估指標量化模型輸出品質。",
+      "domain": ["Model_Evaluation_Metric"],
+      "range": ["Fine_Tuned_Model", "Base_Model"]
+    },
+    {
+      "name": "benchmarks_model",
+      "description": "基準測試資料集用於標準化模型評估。",
+      "domain": ["Benchmark_Dataset"],
+      "range": ["Model_Evaluation_Metric"]
+    },
+    {
+      "name": "detects_hallucination",
+      "description": "幻覺偵測識別 LLM 輸出中的虛構內容。",
+      "domain": ["Hallucination_Detection"],
+      "range": ["Generation_Model"]
+    },
+    {
+      "name": "validates_output",
+      "description": "AI 輸出驗證檢查生成結果的品質與安全。",
+      "domain": ["AI_Output_Validation"],
+      "range": ["Generation_Model"]
+    },
+    {
+      "name": "monitors_model",
+      "description": "模型監控追蹤部署後的模型效能。",
+      "domain": ["Model_Monitoring"],
+      "range": ["Fine_Tuned_Model", "Base_Model"]
+    },
+    {
+      "name": "triggers_retraining",
+      "description": "模型漂移觸發重新訓練或微調。",
+      "domain": ["Model_Drift"],
+      "range": ["Model_Training_Job"]
+    },
+    {
+      "name": "filters_content",
+      "description": "AI 安全過濾器檢查輸入輸出內容安全。",
+      "domain": ["AI_Safety_Filter"],
+      "range": ["AI_Agent", "Generation_Model"]
+    },
+    {
+      "name": "processes_multimodal",
+      "description": "多模態輸入支援處理多種類型的輸入資料。",
+      "domain": ["Multimodal_Input"],
+      "range": ["Base_Model", "Prompt_Template"]
+    }
+  ],
+
+  "metadata": {
+    "domain": "System_Development",
+    "major_owner": "KA-Agent",
+    "data_classification": "INTERNAL",
+    "ontological_level": "MAJOR",
+    "intended_usage": [
+      "AI 模型選型決策支援",
+      "RAG Pipeline 設計與優化",
+      "AI Agent 流程建模",
+      "Prompt 版本管理與 A/B 測試",
+      "模型訓練流程管理",
+      "AI 輸出品質監控"
+    ],
+    "linked_ai_needs": [
+      "Data Agent 知識查詢（Natural Language → SQL/RAG → Answer）",
+      "Knowledge Agent 知識上架（RAG Pipeline → Knowledge Graph）",
+      "BPA Agent 流程自動化（AI Agent → Tool Calling → Business Process）",
+      "會議記錄 AI（Audio → Transcript → Summary → Action Items）",
+      "AI 輔助程式碼生成（Prompt + Context → Code Generation）"
+    ],
+    "framework_references": [
+      "OpenAI Function Calling (Tool Use)",
+      "LangChain / LlamaIndex (RAG Frameworks)",
+      "ReAct / CoT / ToT / GoT (Agent Reasoning Patterns)",
+      "FAISS / HNSW (Vector Indexing)",
+      "LoRA / QLoRA (Efficient Fine-tuning)",
+      "RAGAS / Trulens (RAG Evaluation)",
+      "MLflow / Weights & Biases (MLOps Tracking)"
+    ],
+    "rag_pipeline_stages": [
+      "Document Ingestion（文件攝入）",
+      "Chunking（分塊）",
+      "Embedding（向量化）",
+      "Indexing（建立索引）",
+      "Retrieval（檢索）",
+      "Reranking（重排）",
+      "Generation（生成）",
+      "Validation（驗證）"
+    ]
+  }
+}

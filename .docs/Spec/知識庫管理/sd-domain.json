@@ -1,0 +1,419 @@
+{
+  "type": "domain",
+  "name": "System_Development",
+  "version": "1.0",
+  "default_version": true,
+  "ontology_name": "System_Development_Domain_Ontology",
+  "description": "系統開發知識領域本體論，定義軟體開發生命週期（SDLC）中的核心抽象概念與跨領域關係。所有專業 Major（System_Analysis、DevOps_Engineering、Security_Engineering、AI_Development、Database_Engineering）皆繼承自本體論。本體論涵蓋系統、元件、需求、程式碼、架構等頂層抽象實體，以及它們之間的結構關係與組合關係，適用於系統開發知識管理、RAG 檢索、軟體工程流程自動化與 AI 輔助開發場景。",
+  "author": "Daniel Chung",
+  "last_modified": "2026-04-04 10:01:38",
+  "inherits_from": ["5W1H_Base_Ontology_OWL"],
+  "compatible_domains": [
+    "Knowledge_Assets",
+    "Business_Process",
+    "Material_Management"
+  ],
+  "tags": [
+    "SoftwareEngineering",
+    "SDLC",
+    "SystemDevelopment",
+    "DevOps",
+    "Agile",
+    "Requirements",
+    "Architecture",
+    "Testing",
+    "Deployment",
+    "Maintenance"
+  ],
+  "use_cases": [
+    "系統開發知識管理",
+    "軟體工程流程自動化",
+    "AI 輔助程式碼生成與審查",
+    "系統架構決策支援",
+    "RAG 輔助開發文件檢索",
+    "DevOps 流程整合",
+    "技術債管理",
+    "跨系統整合分析"
+  ],
+
+  "entity_classes": [
+    {
+      "name": "System",
+      "base_class": "Concept",
+      "description": "系統實體，代表一個完整的軟體系統或子系統，是 SDLC 的頂層容器。包含目標系統（Greenfield）、既有系統（Brownfield）與外接系統（External）三種類型。文件常見 pattern：「CRM 系統」、「既有 ERP 系統」、「第三方支付系統」。"
+    },
+    {
+      "name": "Software_Product",
+      "base_class": "Concept",
+      "description": "軟體產品實體，代表交付給用戶的最終產品，包含產品名稱、版本號、發布日期與功能概要。文件 pattern：「AIBox 桌面應用程式 v2.0」、「產品名稱：ABC 系統」。"
+    },
+    {
+      "name": "Software_Component",
+      "base_class": "Concept",
+      "description": "軟體元件實體，代表系統中可獨立部署或測試的單元，如微服務、模組、程式庫、API 服務、前端頁面等。文件 pattern：「使用者認證服務」、「庫存查詢 API 元件」、「結帳模組」。"
+    },
+    {
+      "name": "Source_Code",
+      "base_class": "Document",
+      "description": "原始碼文件，包含程式碼、腳本、設定檔等具體實作產出。文件 pattern：「Python 爬蟲程式」、「src/auth/login.ts」、「config/database.yml」。"
+    },
+    {
+      "name": "Project",
+      "base_class": "Concept",
+      "description": "開發專案實體，代表一個有範圍、時程、團隊與交付目標的開發工作單元，通常對應一個 Git Repository 或 Jira Project。文件 pattern：「SAL-01 專案」、「代號 Project-X」、「本專案为期 6 個月」。"
+    },
+    {
+      "name": "Requirement",
+      "base_class": "Concept",
+      "description": "需求實體，代表用戶或利害關係人對系統的期望，包含功能需求、非功能需求與系統約束。文件 pattern：「功能需求 FR-001」、「需支援 Excel 匯出」、「NFR-效能：回應時間 < 200ms」。"
+    },
+    {
+      "name": "Functional_Requirement",
+      "base_class": "Requirement",
+      "description": "功能需求，描述系統應提供的特定功能或行為，通常具備 ID（如 FR-001）、名稱與驗收標準。文件 pattern：「FR-002：系統應自動寄送 email 通知」。"
+    },
+    {
+      "name": "Non_Functional_Requirement",
+      "base_class": "Requirement",
+      "description": "非功能需求，描述系統的品質屬性約束，如效能、安全性、可用性、可擴展性等。文件 pattern：「NFR-安全性：所有 API 需 JWT 驗證」、「NFR-可用性：系統 uptime > 99.9%」。"
+    },
+    {
+      "name": "System_Architecture",
+      "base_class": "Document",
+      "description": "系統架構文件，描述系統的高層結構、元件劃分、介面定義、通訊模式與部署架構。文件 pattern：「系統架構如圖所示」、「採用三層式架構」、「如 Architecture.pdf 所述」。"
+    },
+    {
+      "name": "Architecture_Pattern",
+      "base_class": "Concept",
+      "description": "架構模式，代表已被驗證的設計方案，如微服務（Microservices）、事件驅動（Event-Driven）、分層架構（Layered）、Hexagon（Ports & Adapters）等。文件 pattern：「採用微服務架構」、「使用 CQRS 模式」。"
+    },
+    {
+      "name": "Design_Document",
+      "base_class": "Document",
+      "description": "設計文件，包含詳細設計說明書、介面規格、資料庫結構定義、API 合約等。文件 pattern：「詳見設計文件 SDD-001」、「設計規格書如附檔所示」。"
+    },
+    {
+      "name": "Data_Model",
+      "base_class": "Concept",
+      "description": "資料模型，定義系統中的資料結構，包括訊息格式與 API payload 結構。與 Database_Schema 不同，Data_Model 專注應用層的資料抽象。文件 pattern：「會員資料模型」、「API 回應資料格式」。"
+    },
+    {
+      "name": "Interface_Specification",
+      "base_class": "Document",
+      "description": "介面規格，定義系統內外部 API 的請求/回應格式、通訊協定、驗證規則與錯誤處理方式。文件 pattern：「API 規格」、「Interface Spec v1.2」、「如 OpenAPI 文件所述」。"
+    },
+    {
+      "name": "Module",
+      "base_class": "Concept",
+      "description": "程式模組，代表原始碼中的組織單元，如類別、函式、套件、名稱空間等。文件 pattern：「UserService 類別」、「tools/validator.py」。"
+    },
+    {
+      "name": "API_Endpoint",
+      "base_class": "Concept",
+      "description": "API 端點，代表系統對外暴露的 REST/GraphQL/gRPC 介面，具備 HTTP 方法、路徑、認證方式等屬性。文件 pattern：「POST /api/v1/users」、「GET /auth/login」。"
+    },
+    {
+      "name": "Database_Schema",
+      "base_class": "Concept",
+      "description": "資料庫結構定義，包含資料表、視圖、索引、預存程序、觸發程序等資料庫物件的結構描述。文件 pattern：「users 資料表」、「Table: orders」。"
+    },
+    {
+      "name": "Bug_Report",
+      "base_class": "Document",
+      "description": "錯誤報告，記錄發現的缺陷，包含嚴重性、等級、發生步驟、重現環境與指派資訊。文件 pattern：「Bug ID: #2043」、「嚴重性：高」、「再現步驟如附件」。"
+    },
+    {
+      "name": "Change_Request",
+      "base_class": "Document",
+      "description": "變更請求，記錄系統的修改需求，包含變更原因、受影響範圍、實作計畫與核准記錄。文件 pattern：「CR-2024-001」、「需求變更申請單」。"
+    },
+    {
+      "name": "Technical_Documentation",
+      "base_class": "Document",
+      "description": "技術文件，涵蓋開發者指南、操作手冊、API 文件、部署手冊、效能調校指南等輔助文件。文件 pattern：「開發者文件」、「操作手冊」、「如 README.md 所述」。"
+    },
+    {
+      "name": "Code_Standard",
+      "base_class": "Concept",
+      "description": "程式碼標準，定義命名規範、程式碼風格、静態分析規則、Lint 規則與程式碼審查標準。文件 pattern：「命名規範：駝峰式命名」、「Linting 規則：ESLint」。"
+    },
+    {
+      "name": "Technical_Debt",
+      "base_class": "Concept",
+      "description": "技術債，代表為加速短期交付而選擇的次優實作，包含技術債描述、影響範圍、還款成本估算與優先級。文件 pattern：「技術債：使用 eval()」、「建議時程：1 sprint」。"
+    },
+    {
+      "name": "Dependency_Graph",
+      "base_class": "Concept",
+      "description": "依賴關係圖，描述軟體元件、套件、系統之間的依賴關係網路，用於分析影響範圍與循環依賴。文件 pattern：「如圖所示的依賴關係圖」、「package.json 依賴」。"
+    },
+    {
+      "name": "Release_Version",
+      "base_class": "Concept",
+      "description": "發布版本，代表系統的特定可部署狀態，包含版本號（如 SemVer：v1.2.3）、發布日期、變更摘要與相容性資訊。文件 pattern：「版本 v2.1.0」、「Release Note v3.0」。"
+    },
+    {
+      "name": "Integration_Point",
+      "base_class": "Concept",
+      "description": "整合點，代表兩個系統之間的具體連接位置，包含上游系統、下游系統、資料流向與轉換邏輯。是跨系統整合的核心抽象。文件 pattern：「PLM-SAP 整合點」、「CRM 與 ERP 的同步點」。"
+    },
+    {
+      "name": "Functional_Specification",
+      "base_class": "Document",
+      "description": "功能規格書，描述系統各個功能模組的詳細行為、輸入輸出、錯誤處理與業務規則。文件中最常被抽取的核心實體。文件 pattern：「功能規格書 FS-001」、「如附錄 A 所定義的功能」。"
+    },
+    {
+      "name": "Test_Case",
+      "base_class": "Concept",
+      "description": "測試個案，代表一個具體的測試情境，包含測試目的、輸入資料、預期輸出與通過條件。文件 pattern：「TC-001：登入功能測試」、「測試個案：驗證庫存警示通知」。"
+    },
+    {
+      "name": "Test_Suite",
+      "base_class": "Concept",
+      "description": "測試套件，代表一組相關測試個案的集合，如單元測試、整合測試、系統測試、接受測試等。文件 pattern：「迴歸測試套件」、「自動化測試 Suite A」。"
+    },
+    {
+      "name": "Test_Report",
+      "base_class": "Document",
+      "description": "測試報告，包含測試執行結果、覆蓋率統計、缺陷清單與品質指標。文件 pattern：「測試報告：通過率 95%」、「UT 覆蓋率報告」。"
+    },
+    {
+      "name": "Infrastructure_Resource",
+      "base_class": "Concept",
+      "description": "基礎設施資源，代表部署環境中的計算、儲存、網路資源，如伺服器、容器、資料庫實例、訊息佇列、負載平衡器等。文件 pattern：「AWS EC2 執行個體」、「Kubernetes Pod」、「RDS 資料庫實例」。"
+    },
+    {
+      "name": "Deployment_Artifact",
+      "base_class": "Document",
+      "description": "部署產出物，如 Helm Chart、Kubernetes Manifest、Terraform Plan、Docker Compose 檔案等。文件 pattern：「部署清單：deployment.yaml」、「Helm Chart v2.1.0」。"
+    },
+    {
+      "name": "Deployment_Configuration",
+      "base_class": "Document",
+      "description": "部署設定，包含環境設定（dev/staging/prod）、基礎設施即代碼（IaC）、容器化設定與 CI/CD pipeline 定義。文件 pattern：「CI/CD 設定檔」、「staging 環境變數設定」。"
+    },
+    {
+      "name": "Development_Task",
+      "base_class": "Concept",
+      "description": "開發任務，代表可被追蹤與管理的工作單元，通常與 Issue Tracker（如 Jira）中的任務或 Story 相關聯。文件 pattern：「Task #204」、「Jira Story: SAL-01」。"
+    },
+    {
+      "name": "Stakeholder",
+      "base_class": "Agent",
+      "description": "利害關係人，與系統有直接或間接利益的個人或團體，如系統用戶、業務主管、IT 部門、外部廠商、監管單位等。文件 pattern：「利害關係人：業務主管王大明」、「系統使用者：客服部門」。"
+    },
+    {
+      "name": "Pipeline_Definition",
+      "base_class": "Document",
+      "description": "Pipeline 定義檔案，如 Jenkinsfile、GitLab CI YAML、GitHub Actions workflow 等，描述軟體從原始碼到生產環境的自動化流程。文件 pattern：「Jenkinsfile」、「.github/workflows/ci.yml」。"
+    }
+  ],
+
+  "object_properties": [
+    {
+      "name": "decomposes_into",
+      "description": "上層元件分解為下層子元件的結構關係（組成）。",
+      "domain": ["System", "Software_Component"],
+      "range": ["Software_Component"]
+    },
+    {
+      "name": "satisfies_requirement",
+      "description": "元件或功能滿足特定需求。文件高頻抽取關係。",
+      "domain": ["Software_Component", "Source_Code", "Module"],
+      "range": ["Requirement"]
+    },
+    {
+      "name": "implements",
+      "description": "軟體元件或模組實作需求或介面。",
+      "domain": ["Software_Component", "Source_Code", "Module"],
+      "range": ["Requirement", "Interface_Specification"]
+    },
+    {
+      "name": "belongs_to_system",
+      "description": "實體所屬的系統。Domain 層的通用從屬關係。",
+      "domain": [
+        "Software_Component",
+        "Software_Product",
+        "Source_Code",
+        "Requirement",
+        "Design_Document",
+        "Module",
+        "Database_Schema",
+        "Change_Request"
+      ],
+      "range": ["System"]
+    },
+    {
+      "name": "belongs_to_project",
+      "description": "實體所屬的開發專案。",
+      "domain": [
+        "System",
+        "Software_Component",
+        "Requirement",
+        "Change_Request",
+        "Bug_Report",
+        "Technical_Documentation"
+      ],
+      "range": ["Project"]
+    },
+    {
+      "name": "satisfies_non_functional",
+      "description": "系統或元件滿足非功能需求（如效能、安全性、可用性）。",
+      "domain": ["System", "Software_Component"],
+      "range": ["Non_Functional_Requirement"]
+    },
+    {
+      "name": "specifies_architecture",
+      "description": "架構文件描述系統結構。",
+      "domain": ["System"],
+      "range": ["System_Architecture"]
+    },
+    {
+      "name": "conforms_to_pattern",
+      "description": "系統或元件採用特定架構模式。",
+      "domain": ["System", "Software_Component", "System_Architecture"],
+      "range": ["Architecture_Pattern"]
+    },
+    {
+      "name": "has_design_document",
+      "description": "系統或元件具有對應的設計文件。",
+      "domain": ["System", "Software_Component"],
+      "range": ["Design_Document"]
+    },
+    {
+      "name": "defines_data_model",
+      "description": "資料模型定義系統的資料結構（應用層視角）。",
+      "domain": ["System", "Software_Component"],
+      "range": ["Data_Model"]
+    },
+    {
+      "name": "defines_api",
+      "description": "元件或系統定義了 API 介面（Domain 層通用 API 定義關係）。",
+      "domain": ["Software_Component", "System"],
+      "range": ["API_Endpoint", "Interface_Specification"]
+    },
+    {
+      "name": "has_schema",
+      "description": "系統或元件具有資料庫結構定義。",
+      "domain": ["System", "Software_Component"],
+      "range": ["Database_Schema"]
+    },
+    {
+      "name": "exposes_endpoint",
+      "description": "元件對外暴露 API 端點。",
+      "domain": ["Software_Component"],
+      "range": ["API_Endpoint"]
+    },
+    {
+      "name": "calls",
+      "description": "模組或元件之間的呼叫關係（方法/函式呼叫）。",
+      "domain": ["Module", "API_Endpoint"],
+      "range": ["Module", "API_Endpoint"]
+    },
+    {
+      "name": "depends_on",
+      "description": "元件或模組之間的依賴關係（軟體依賴）。",
+      "domain": ["Software_Component", "Module", "Source_Code"],
+      "range": ["Software_Component", "Module", "Source_Code"]
+    },
+    {
+      "name": "has_dependency_graph",
+      "description": "元件或系統具有依賴關係圖。",
+      "domain": ["Software_Component", "System"],
+      "range": ["Dependency_Graph"]
+    },
+    {
+      "name": "contains_module",
+      "description": "元件包含多個程式模組。",
+      "domain": ["Software_Component"],
+      "range": ["Module"]
+    },
+    {
+      "name": "integrates_with",
+      "description": "系統與其他系統進行整合（跨系統整合的通用關係）。",
+      "domain": ["System"],
+      "range": ["System"]
+    },
+    {
+      "name": "has_integration_point",
+      "description": "系統具有特定的整合點。",
+      "domain": ["System"],
+      "range": ["Integration_Point"]
+    },
+    {
+      "name": "connected_via",
+      "description": "兩個整合點之間的連接關係。",
+      "domain": ["Integration_Point"],
+      "range": ["Integration_Point"]
+    },
+    {
+      "name": "initiates_change",
+      "description": "變更請求啟動系統修改。",
+      "domain": ["Change_Request"],
+      "range": ["Source_Code", "Design_Document", "System_Architecture"]
+    },
+    {
+      "name": "conforms_to_standard",
+      "description": "程式碼遵守程式碼標準。",
+      "domain": ["Source_Code", "Module"],
+      "range": ["Code_Standard"]
+    },
+    {
+      "name": "has_technical_debt",
+      "description": "元件或系統存在技術債。",
+      "domain": ["Software_Component", "Source_Code", "System"],
+      "range": ["Technical_Debt"]
+    },
+    {
+      "name": "documented_in",
+      "description": "技術文件記錄實作或設計。",
+      "domain": ["Source_Code", "Software_Component", "API_Endpoint"],
+      "range": ["Technical_Documentation"]
+    },
+    {
+      "name": "version_is",
+      "description": "系統具有特定的發布版本。",
+      "domain": ["System"],
+      "range": ["Release_Version"]
+    },
+    {
+      "name": "version_includes",
+      "description": "發布版本包含特定變更或元件。",
+      "domain": ["Release_Version"],
+      "range": ["Software_Component", "Change_Request"]
+    },
+    {
+      "name": "specifies_functionality",
+      "description": "功能規格書描述系統的具體功能。",
+      "domain": ["Functional_Specification"],
+      "range": ["System"]
+    }
+  ],
+
+  "metadata": {
+    "domain_owner": "KA-Agent",
+    "data_classification": "INTERNAL",
+    "ontological_level": "DOMAIN",
+    "intended_usage": [
+      "RAG 檢索與回答",
+      "知識圖譜三元組抽取",
+      "軟體工程決策支援",
+      "AI 輔助程式碼生成",
+      "系統整合分析"
+    ],
+    "linked_ai_needs": [
+      "會議記錄 AI（會議討論 → 系統規格文件）",
+      "知識庫 Q&A（開發規範查詢）",
+      "表單 AI 審查（需求表單審核）",
+      "PLM↔SAP 整合（系統介面定義）",
+      "簡報自動生成（技術報告產出）"
+    ],
+    "integration_points": [
+      "CRM 系統（系統與業務流程整合）",
+      "SCM 系統（供應商報價與系統整合）",
+      "PLM 系統（產品生命週期與系統版本管理）",
+      "HRM 系統（開發團隊組織與權限）",
+      "ERP/SAP（企業資源規劃與系統介接）"
+    ]
+  }
+}

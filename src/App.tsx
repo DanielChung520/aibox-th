@@ -28,11 +28,13 @@ import TaskSessionScheduled from './pages/TaskSessionScheduled';
 import UnderDevelopment from './pages/UnderDevelopment';
 import SchemaPage from './pages/data-agent/SchemaPage';
 import QueryPlayground from './pages/data-agent/QueryPlayground';
+import LeadManagement from './pages/LeadManagement';
 import DataLakePage from './pages/data-agent/DataLakePage';
 import OntologyList from './pages/knowledge/OntologyList';
 import KnowledgeBaseManagement from './pages/knowledge/KnowledgeBaseManagement';
 import KnowledgeBaseDetail from './pages/knowledge/KnowledgeBaseDetail';
 import IntentCatalog from './pages/IntentCatalog';
+import MermaidVerification from './pages/MermaidVerification';
 import { authStore } from './stores/auth';
 import AppUpdater from './components/AppUpdater';
 
@@ -147,8 +149,9 @@ function AppContent() {
               <Route path="home" element={<Home />} />
               <Route path="users" element={<UserManagement />} />
               <Route path="roles" element={<RoleManagement />} />
-              <Route path="params" element={<SystemParams />} />
-              <Route path="functions" element={<FunctionManagement />} />
+            <Route path="params" element={<SystemParams />} />
+            <Route path="functions" element={<FunctionManagement />} />
+            <Route path="lead-management" element={<LeadManagement />} />
               <Route path="browse-agent" element={<BrowseAgent />} />
               <Route path="browse-tools" element={<BrowseTools />} />
               <Route path="task-session/chat/:sessionKey?" element={<TaskSessionChat />} />
@@ -163,6 +166,7 @@ function AppContent() {
               <Route path="knowledge/management" element={<KnowledgeBaseManagement />} />
               <Route path="knowledge/management/:id" element={<KnowledgeBaseDetail />} />
               <Route path="intent-orchestration" element={<IntentCatalog />} />
+              <Route path="mermaid-verification" element={<MermaidVerification />} />
             </Route>
           </Routes>
         </AntApp>

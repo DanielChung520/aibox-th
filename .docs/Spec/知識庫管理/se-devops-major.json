@@ -1,0 +1,438 @@
+{
+  "type": "major",
+  "name": "Security_Engineering",
+  "version": "1.0",
+  "default_version": true,
+  "ontology_name": "Security_Engineering_Major_Ontology",
+  "description": "資訊安全工程專業本體論，定義軟體系統安全開發生命週期（Secure SDLC）中的所有核心概念與實踐，包括威脅建模、安全需求、安全設計審查、程式碼安全分析、滲透測試、漏洞管理、安全合規與事件回應等專業領域。本體論整合 OWASP、SAMM（Building Security In Maturity Model）、NIST CSF 與 ISO 27001 等國際安全框架，適用於安全開發流程管理、RAG 輔助安全政策檢索、AI 輔助威脅分析與滲透測試報告生成場景。",
+  "author": "Daniel Chung",
+  "last_modified": "2026-04-04 10:01:38",
+  "inherits_from": [
+    "5W1H_Base_Ontology_OWL",
+    "System_Development_Domain_Ontology"
+  ],
+  "tags": [
+    "SecurityEngineering",
+    "ThreatModeling",
+    "SecureCoding",
+    "PenetrationTesting",
+    "VulnerabilityManagement",
+    "OWASP",
+    "SAMM",
+    "NIST",
+    "ISMS",
+    "DevSecOps"
+  ],
+  "use_cases": [
+    "安全開發生命週期管理",
+    "威脅建模與風險評估",
+    "RAG 輔助安全政策檢索",
+    "漏洞優先級排序與追蹤",
+    "AI 輔助滲透測試報告生成",
+    "合規審查自動化",
+    "安全事件回應流程管理",
+    "第三方元件安全審查"
+  ],
+
+  "entity_classes": [
+    {
+      "name": "Threat_Model",
+      "base_class": "Document",
+      "description": "威脅模型文件，系統化描述系統的攻擊面、威脅來源、可能的攻擊路徑與現有安全控制措施，常用方法包括 STRIDE、PASTA、ATT&CK 等。"
+    },
+    {
+      "name": "Attack_Surface",
+      "base_class": "Concept",
+      "description": "攻擊面，代表系統中所有可能被攻擊者利用的入口點，包括網路介面、API 端點、使用者輸入點、特權操作介面與第三方依賴等。"
+    },
+    {
+      "name": "Security_Requirement",
+      "base_class": "Requirement",
+      "description": "安全需求，源自威脅模型與合規要求的系統安全屬性需求，如身份驗證、授權、資料加密、稽核記錄與輸入驗證等。"
+    },
+    {
+      "name": "Security_Control",
+      "base_class": "Concept",
+      "description": "安全控制措施，對抗特定威脅的技術或管理控制，如存取控制矩陣、加密演算法、WAF 規則、Rate Limiting 與 CSP Header 等。"
+    },
+    {
+      "name": "Secure_Design_Review",
+      "base_class": "Process",
+      "description": "安全設計審查，在系統設計階段評估架構安全性，識別設計缺陷並提出緩解措施，是安全開發生命週期的關鍵前置把關環節。"
+    },
+    {
+      "name": "Security_Architecture",
+      "base_class": "System_Architecture",
+      "description": "安全架構文件，描述系統的安全設計，包括網路分段、身份驗證授權架構、資料加密策略、金鑰管理架構與零信任網路模型等。"
+    },
+    {
+      "name": "Zero_Trust_Model",
+      "base_class": "Concept",
+      "description": "零信任安全模型，假設網路內部與外部皆不可信，所有存取請求皆需驗證與授權，強調微分段（Micro-segmentation）與最小權限原則。"
+    },
+    {
+      "name": "Security_Code_Review",
+      "base_class": "Process",
+      "description": "安全程式碼審查，針對原始碼進行的安全性審查，識別如 SQL Injection、XSS、CSRF、密碼硬編碼、敏感資料外洩等程式碼層級漏洞。"
+    },
+    {
+      "name": "SAST_Tool",
+      "base_class": "Tool",
+      "description": "靜態應用程式安全測試工具（SAST），如 SonarQube、Semgrep、Checkmarx、Fortify 等，在不執行程式的情況下分析原始碼安全性。"
+    },
+    {
+      "name": "DAST_Tool",
+      "base_class": "Tool",
+      "description": "動態應用程式安全測試工具（DAST），如 OWASP ZAP、Burp Suite、Acunetix 等，透過模擬攻擊測試執行中應用程式的安全性。"
+    },
+    {
+      "name": "SCA_Tool",
+      "base_class": "Tool",
+      "description": "軟體組成分析工具（SCA），如 Snyk、Dependabot、OWASP Dependency-Check 等，用於識別第三方元件中的已知漏洞（CVE）與授權合規問題。"
+    },
+    {
+      "name": "Vulnerability_Scan_Report",
+      "base_class": "Document",
+      "description": "漏洞掃描報告，包含掃描發現的所有漏洞，依 CVSS 分數、影響程度與利用可能性進行優先級排序。"
+    },
+    {
+      "name": "Vulnerability_Record",
+      "base_class": "Concept",
+      "description": "漏洞記錄，代表一個具體的安全漏洞，包含 CVE 編號（若有）、CVSS 分數、影響範圍、利用難度、修補狀態與修復期限。"
+    },
+    {
+      "name": "CVSS_Score",
+      "base_class": "Concept",
+      "description": "通用漏洞評分系統（CVSS）分數，提供標準化的漏洞嚴重性度量，分數範圍 0.0-10.0，分為 Low（0.1-3.9）、Medium（4.0-6.9）、High（7.0-8.9）、Critical（9.0-10.0）。"
+    },
+    {
+      "name": "Penetration_Test",
+      "base_class": "Process",
+      "description": "滲透測試，由安全專家模擬真實攻擊者對系統進行測試，包含網路滲透、網頁應用滲透、社交工程與物理安全測試等類型。"
+    },
+    {
+      "name": "Penetration_Test_Report",
+      "base_class": "Document",
+      "description": "滲透測試報告，包含測試範圍、方法論、發現的漏洞（含 PoC）、攻擊路徑圖與修復建議，是安全驗證的關鍵產出文件。"
+    },
+    {
+      "name": "Security_Test_Case",
+      "base_class": "Test_Case",
+      "description": "安全測試個案，驗證特定安全控制的正確性，如驗證 SQL Injection 防護、XSS 過濾邏輯、Session Timeout 行為與權限邊界檢查等。"
+    },
+    {
+      "name": "Security_Scan_Pipeline",
+      "base_class": "Process",
+      "description": "安全掃描 Pipeline，整合 SAST/DAST/SCA 工具至 CI/CD 流程，在建構階段自動執行安全掃描並阻擋不符合安全標準的部署。"
+    },
+    {
+      "name": "Penetration_Test_Engagement",
+      "base_class": "Process",
+      "description": "滲透測試專案，包含測試範圍界定（Rules of Engagement）、時間表、參與方、約束條件與交付物定義。"
+    },
+    {
+      "name": "Security_Compliance_Framework",
+      "base_class": "Concept",
+      "description": "安全合規框架，如 ISO 27001、SOC 2 Type II、GDPR、PCI-DSS、NIST CSF、ISO 62443 等，定義組織需要遵守的安全控制要求。"
+    },
+    {
+      "name": "Compliance_Audit_Report",
+      "base_class": "Document",
+      "description": "合規稽核報告，記錄組織是否符合特定安全合規框架的評估結果，包含控制項執行情形、差距分析與改善建議。"
+    },
+    {
+      "name": "Security_Policy",
+      "base_class": "System_Security_Policy",
+      "description": "安全政策文件，定義組織的安全原則與規範，如密碼複雜度要求、資料分類政策、遠端存取政策與事件回應政策等。"
+    },
+    {
+      "name": "Data_Classification",
+      "base_class": "Concept",
+      "description": "資料分類標準，將組織資料依機密性分級，如公開（Public）、內部（Internal）、機密（Confidential）與極機密（Restricted）等等級。"
+    },
+    {
+      "name": "Encryption_Standard",
+      "base_class": "Concept",
+      "description": "加密標準，定義資料加密演算法與金鑰管理要求，如 AES-256-GCM（靜態加密）、TLS 1.3（傳輸加密）與現代雜湊演算法（密碼儲存）。"
+    },
+    {
+      "name": "Key_Management_System",
+      "base_class": "Concept",
+      "description": "金鑰管理系統（KMS），如 HashiCorp Vault、AWS KMS、Azure Key Vault，用於安全生成、儲存、分發與撤銷加密金鑰。"
+    },
+    {
+      "name": "Security_Incident",
+      "base_class": "Event",
+      "description": "安全事件，代表對系統安全造成影響的實際或疑似事件，包含未授權存取、資料外洩、DoS 攻擊、勒索軟體與內部威脅等。"
+    },
+    {
+      "name": "Incident_Response_Playbook",
+      "base_class": "Document",
+      "description": "事件回應劇本，定義特定類型安全事件的標準回應程序，包含發現、確認、遏制、根因分析、清除與復原等階段的具體動作。"
+    },
+    {
+      "name": "Root_Cause_Analysis",
+      "base_class": "Process",
+      "description": "根因分析（RCA），在安全事件結束後進行的結構化分析，識別事件發生的根本原因並制定防止再次發生的改善措施。"
+    },
+    {
+      "name": "Security_Awareness_Training",
+      "base_class": "Process",
+      "description": "安全意識培訓，針對組織全員或特定角色進行資訊安全培訓，涵蓋社交工程辨識、密碼管理、資料保護與合規要求等主題。"
+    },
+    {
+      "name": "Third_Party_Security_Assessment",
+      "base_class": "Process",
+      "description": "第三方安全評估，對外包廠商、軟體供應商與雲端服務商進行安全評估，確保其安全控制符合組織要求。"
+    },
+    {
+      "name": "Bug_Bounty_Program",
+      "base_class": "Process",
+      "description": "漏洞懸賞計畫，透過獎勵外部安全研究人員發現並回報漏洞，擴展滲透測試覆蓋範圍。"
+    },
+    {
+      "name": "Security_Metrics",
+      "base_class": "Concept",
+      "description": "安全指標，用於追蹤安全計畫成效，如漏洞修補平均時間（MTTR）、漏洞密度（Vulnerabilities per KLOC）、合規覆蓋率與安全事件數等。"
+    },
+    {
+      "name": "Identity_Access_Management",
+      "base_class": "Concept",
+      "description": "身份識別與存取管理（IAM），定義使用者身份驗證（Authentication）與授權（Authorization）的架構與政策，包含 SSO、MFA、RBAC 與 ABAC 等機制。"
+    },
+    {
+      "name": "Secrets_Scanning",
+      "base_class": "Process",
+      "description": "機密資訊掃描，在原始碼、設定檔與日誌中識別意外提交的敏感資訊，如 API Key、私鑰、資料庫憑證與個人資料等。"
+    }
+  ],
+
+  "object_properties": [
+    {
+      "name": "identifies_attack_surface",
+      "description": "威脅模型識別系統的攻擊面。",
+      "domain": ["Threat_Model"],
+      "range": ["Attack_Surface"]
+    },
+    {
+      "name": "mitigates_threat",
+      "description": "安全控制措施緩解特定威脅。",
+      "domain": ["Security_Control"],
+      "range": ["Threat_Model"]
+    },
+    {
+      "name": "satisfies_security_requirement",
+      "description": "安全控制滿足安全需求。",
+      "domain": ["Security_Control", "Software_Component"],
+      "range": ["Security_Requirement"]
+    },
+    {
+      "name": "reviews_design",
+      "description": "安全設計審查評估系統架構安全性。",
+      "domain": ["Secure_Design_Review"],
+      "range": ["Security_Architecture", "System_Architecture"]
+    },
+    {
+      "name": "defines_architecture",
+      "description": "安全架構定義系統的安全設計。",
+      "domain": ["Security_Architecture"],
+      "range": ["System"]
+    },
+    {
+      "name": "implements_zero_trust",
+      "description": "系統實作零信任安全模型。",
+      "domain": ["System"],
+      "range": ["Zero_Trust_Model"]
+    },
+    {
+      "name": "performs_code_review",
+      "description": "安全程式碼審查檢查原始碼安全性。",
+      "domain": ["Security_Code_Review"],
+      "range": ["Source_Code"]
+    },
+    {
+      "name": "runs_sast",
+      "description": "SAST 工具分析原始碼安全性。",
+      "domain": ["SAST_Tool"],
+      "range": ["Source_Code"]
+    },
+    {
+      "name": "runs_dast",
+      "description": "DAST 工具測試執行中應用程式安全性。",
+      "domain": ["DAST_Tool"],
+      "range": ["API_Endpoint", "Software_Component"]
+    },
+    {
+      "name": "runs_sca",
+      "description": "SCA 工具識別第三方元件漏洞。",
+      "domain": ["SCA_Tool"],
+      "range": ["Dependency_Graph", "Source_Code"]
+    },
+    {
+      "name": "generates_vulnerability_report",
+      "description": "漏洞掃描產生漏洞報告。",
+      "domain": ["SAST_Tool", "DAST_Tool", "SCA_Tool"],
+      "range": ["Vulnerability_Scan_Report"]
+    },
+    {
+      "name": "contains_vulnerability",
+      "description": "漏洞掃描報告包含具體漏洞記錄。",
+      "domain": ["Vulnerability_Scan_Report"],
+      "range": ["Vulnerability_Record"]
+    },
+    {
+      "name": "rated_by_cvss",
+      "description": "漏洞依 CVSS 分數評定嚴重性。",
+      "domain": ["Vulnerability_Record"],
+      "range": ["CVSS_Score"]
+    },
+    {
+      "name": "executes_pentest",
+      "description": "滲透測試專案執行安全測試。",
+      "domain": ["Penetration_Test_Engagement"],
+      "range": ["Penetration_Test"]
+    },
+    {
+      "name": "generates_pentest_report",
+      "description": "滲透測試產生測試報告。",
+      "domain": ["Penetration_Test"],
+      "range": ["Penetration_Test_Report"]
+    },
+    {
+      "name": "validates_security_control",
+      "description": "安全測試個案驗證安全控制有效性。",
+      "domain": ["Security_Test_Case"],
+      "range": ["Security_Control"]
+    },
+    {
+      "name": "integrated_in_pipeline",
+      "description": "安全掃描整合至 CI/CD Pipeline。",
+      "domain": ["Security_Scan_Pipeline"],
+      "range": ["Pipeline_Definition"]
+    },
+    {
+      "name": "assesses_compliance",
+      "description": "合規框架評估組織安全狀態。",
+      "domain": ["Security_Compliance_Framework"],
+      "range": ["System", "Security_Policy"]
+    },
+    {
+      "name": "generates_audit_report",
+      "description": "合規稽核產生稽核報告。",
+      "domain": ["Compliance_Audit_Report"],
+      "range": ["Security_Compliance_Framework"]
+    },
+    {
+      "name": "classifies_data",
+      "description": "資料依資料分類標準分級。",
+      "domain": ["Data_Classification"],
+      "range": ["Requirement"]
+    },
+    {
+      "name": "encrypts_data",
+      "description": "資料依加密標準加密保護。",
+      "domain": ["Encryption_Standard"],
+      "range": ["Data_Model", "Source_Code"]
+    },
+    {
+      "name": "manages_keys",
+      "description": "金鑰管理系統管理加密金鑰。",
+      "domain": ["Key_Management_System"],
+      "range": ["System", "Software_Component"]
+    },
+    {
+      "name": "triggers_incident",
+      "description": "安全事件由安全事件觸發。",
+      "domain": ["Security_Incident"],
+      "range": ["Vulnerability_Record", "Threat_Model"]
+    },
+    {
+      "name": "executes_playbook",
+      "description": "事件回應劇本指導事件回應。",
+      "domain": ["Incident_Response_Playbook"],
+      "range": ["Security_Incident"]
+    },
+    {
+      "name": "conducts_rca",
+      "description": "根因分析檢討安全事件。",
+      "domain": ["Root_Cause_Analysis"],
+      "range": ["Security_Incident"]
+    },
+    {
+      "name": "trains_employees",
+      "description": "安全意識培訓提升員工安全能力。",
+      "domain": ["Security_Awareness_Training"],
+      "range": ["Stakeholder"]
+    },
+    {
+      "name": "assesses_third_party",
+      "description": "第三方安全評估檢查廠商安全狀態。",
+      "domain": ["Third_Party_Security_Assessment"],
+      "range": ["Software_Component", "Infrastructure_Resource"]
+    },
+    {
+      "name": "rewards_vulnerability",
+      "description": "漏洞懸賞計畫獎勵漏洞發現者。",
+      "domain": ["Bug_Bounty_Program"],
+      "range": ["Vulnerability_Record"]
+    },
+    {
+      "name": "tracks_metrics",
+      "description": "安全指標追蹤安全計畫成效。",
+      "domain": ["Security_Metrics"],
+      "range": ["System", "Security_Control"]
+    },
+    {
+      "name": "manages_identity",
+      "description": "IAM 系統管理使用者身份與存取權限。",
+      "domain": ["Identity_Access_Management"],
+      "range": ["System", "Stakeholder"]
+    },
+    {
+      "name": "detects_secrets",
+      "description": "機密資訊掃描偵測意外暴露的敏感資訊。",
+      "domain": ["Secrets_Scanning"],
+      "range": ["Source_Code", "Deployment_Configuration"]
+    }
+  ],
+
+  "metadata": {
+    "domain": "System_Development",
+    "major_owner": "KA-Agent",
+    "data_classification": "INTERNAL",
+    "ontological_level": "MAJOR",
+    "intended_usage": [
+      "威脅建模與風險評估",
+      "RAG 輔助安全政策檢索",
+      "AI 輔助漏洞優先級排序",
+      "AI 輔助滲透測試報告生成",
+      "合規審查自動化",
+      "安全事件回應流程管理"
+    ],
+    "linked_ai_needs": [
+      "AI 輔助威脅建模（System Architecture → STRIDE Threat Model）",
+      "AI 輔助滲透測試報告生成（Pentest Report + CVE → 結構化報告）",
+      "AI 輔助漏洞優先級排序（Vulnerability Record + CVSS + Context → Triage）",
+      "AI 輔助安全事件分類（Incident Record + Playbook → 建議回應）",
+      "AI 輔助合規檢查（Compliance Framework + System → 差距分析）"
+    ],
+    "framework_references": [
+      "OWASP Top 10 (Web Application Security)",
+      "STRIDE Threat Modeling (Microsoft)",
+      "PASTA (Process for Attack Simulation and Threat Analysis)",
+      "NIST Cybersecurity Framework (CSF)",
+      "ISO/IEC 27001 (ISMS)",
+      "OWASP SAMM (Software Assurance Maturity Model)",
+      "CVSS 3.1 (Common Vulnerability Scoring System)"
+    ],
+    "secure_sdlc_phases": [
+      "Training（安全培訓）",
+      "Requirements（安全需求）",
+      "Design（安全設計審查）",
+      "Implementation（安全編碼規範）",
+      "Verification（SAST/DAST/SCA/程式碼審查）",
+      "Release（安全發布審查）",
+      "Response（事件回應）"
+    ]
+  }
+}

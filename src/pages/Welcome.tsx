@@ -73,8 +73,8 @@ export default function Welcome() {
             src={logoSrc} 
             alt="logo" 
             style={{ 
-              width: 128, 
-              height: 128, 
+              width: 200, 
+              height: 50, 
               objectFit: 'contain',
               margin: '0 auto 24px',
               animation: 'logoScale 1.2s ease-out forwards',
