@@ -958,7 +958,7 @@ export default function RagicLogisticProcess() {
       clearSelection();
     });
 
-    graph.on('after:render', () => {
+    graph.on('afterrender', () => {
       if (!graphReadyRef.current) return;
       const g = graphRef.current;
       if (!g) return;
