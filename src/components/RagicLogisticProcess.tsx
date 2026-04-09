@@ -7,7 +7,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Avatar, Button, Card, Col, Divider, Input, List, message, Modal, Row, Select, Space, Spin, Tag, Typography, theme } from 'antd';
+import { Avatar, Button, Card, Col, Divider, Dropdown, Input, List, message, Modal, Row, Space, Spin, Tag, Typography, theme } from 'antd';
 import { SendOutlined, UserOutlined, RobotOutlined, CompressOutlined, EyeOutlined, ZoomInOutlined, ZoomOutOutlined, InfoCircleOutlined } from '@ant-design/icons';
 import { CanvasEvent, Graph, NodeEvent } from '@antv/g6';
 import type { ComboData, EdgeData, IElementEvent, NodeData } from '@antv/g6';
@@ -686,7 +686,6 @@ export default function RagicLogisticProcess() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [llmOptions, setLlmOptions] = useState<LLMOption[]>([]);
   const [selectedLlm, setSelectedLlm] = useState<string>('');
-  const [loadingModels, setLoadingModels] = useState(false);
   const [infoModalNode, setInfoModalNode] = useState<typeof rawNodes[0] | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const sseRef = useRef<SSEConnection | null>(null);
@@ -698,7 +697,6 @@ export default function RagicLogisticProcess() {
   );
 
   useEffect(() => {
-    setLoadingModels(true);
     modelProviderApi.list()
       .then((res) => {
         const options: LLMOption[] = [];
@@ -721,8 +719,7 @@ export default function RagicLogisticProcess() {
           setSelectedLlm(options[0].value);
         }
       })
-      .catch(() => undefined)
-      .finally(() => setLoadingModels(false));
+      .catch(() => undefined);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -1074,14 +1071,6 @@ export default function RagicLogisticProcess() {
               <Title level={4} style={{ marginTop: 0, marginBottom: 10, flexShrink: 0 }}>
                 AI 流程問答
               </Title>
-               <Select
-                style={{ width: '100%', marginBottom: 10, flexShrink: 0 }}
-                value={selectedLlm}
-                onChange={setSelectedLlm}
-                loading={loadingModels}
-                options={llmOptions.map((o) => ({ label: o.label, value: o.value }))}
-                placeholder={loadingModels ? '載入模型...' : (llmOptions.length === 0 ? '暫無可用模型' : '選擇 AI 模型')}
-              />
               <div
                 style={{
                   flex: 1,
@@ -1120,42 +1109,54 @@ export default function RagicLogisticProcess() {
                 )}
                 <div ref={chatEndRef} />
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                <span style={{ fontSize: 13, color: '#666' }}>模型：</span>
-                <Select
-                  size="small"
-                  style={{ flex: 1 }}
-                  value={selectedLlm}
-                  onChange={setSelectedLlm}
-                  loading={loadingModels}
-                  options={llmOptions.map((o) => ({ label: o.label, value: o.value }))}
-                  placeholder={loadingModels ? '載入中...' : '選擇模型'}
+              <div style={{ position: 'relative' }}>
+                <Input.TextArea
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSendChat();
+                    }
+                  }}
+                  placeholder="輸入問題，Enter 發送"
+                  autoSize={{ minRows: 3, maxRows: 3 }}
+                  disabled={isStreaming}
+                  style={{ width: '100%', paddingRight: 110 }}
                 />
-              </div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <div style={{ position: 'relative', flex: 1 }}>
-                  <Input.TextArea
-                    value={chatInput}
-                    onChange={(e) => setChatInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        handleSendChat();
-                      }
+                <div style={{ position: 'absolute', top: 6, right: 8, display: 'flex', gap: 4, alignItems: 'center' }}>
+                  <Dropdown
+                    menu={{
+                      items: llmOptions.map((o) => ({ key: o.value, label: o.label })),
+                      onClick: ({ key }) => setSelectedLlm(key),
                     }}
-                    placeholder="輸入問題，Ctrl+Enter 發送"
-                    autoSize={{ minRows: 3, maxRows: 3 }}
-                    disabled={isStreaming}
-                    style={{ width: '100%', paddingRight: 44 }}
-                  />
+                    trigger={['click']}
+                  >
+                    <span style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 4,
+                      padding: '2px 8px',
+                      borderRadius: 4,
+                      background: '#1677ff18',
+                      color: '#1677ff',
+                      fontSize: 11,
+                      cursor: 'pointer',
+                      whiteSpace: 'nowrap',
+                      maxWidth: 100,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      border: '1px solid #1677ff40',
+                    }}>
+                      <RobotOutlined style={{ fontSize: 10, flexShrink: 0 }} />
+                      {llmOptions.find((o) => o.value === selectedLlm)?.providerName || '選擇模型'}
+                    </span>
+                  </Dropdown>
                   <div
                     onClick={() => { if (chatInput.trim() && !isStreaming) handleSendChat(); }}
                     style={{
-                      position: 'absolute',
-                      right: 4,
-                      top: 4,
-                      width: 32,
-                      height: 32,
+                      width: 28,
+                      height: 28,
                       background: '#1677ff',
                       borderRadius: 6,
                       display: 'flex',
@@ -1168,7 +1169,7 @@ export default function RagicLogisticProcess() {
                     {isStreaming ? (
                       <Spin size="small" />
                     ) : (
-                      <SendOutlined style={{ color: '#fff', fontSize: 14 }} />
+                      <SendOutlined style={{ color: '#fff', fontSize: 13 }} />
                     )}
                   </div>
                 </div>
