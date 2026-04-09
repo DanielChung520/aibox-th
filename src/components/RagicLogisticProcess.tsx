@@ -8,7 +8,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Avatar, Button, Card, Col, Divider, Input, List, Modal, Row, Select, Space, Spin, Tag, Typography, theme } from 'antd';
-import { SendOutlined, UserOutlined, RobotOutlined, CompressOutlined, EyeOutlined, ZoomInOutlined, ZoomOutOutlined } from '@ant-design/icons';
+import { SendOutlined, UserOutlined, RobotOutlined, CompressOutlined, EyeOutlined, ZoomInOutlined, ZoomOutOutlined, InfoCircleOutlined } from '@ant-design/icons';
 import { CanvasEvent, Graph, NodeEvent } from '@antv/g6';
 import type { ComboData, EdgeData, IElementEvent, NodeData } from '@antv/g6';
 import { modelProviderApi, type SendMessageRequest } from '../services/api';
@@ -679,7 +679,6 @@ export default function RagicLogisticProcess() {
   const graphRef = useRef<Graph | null>(null);
   const graphReadyRef = useRef(false);
   const instanceRef = useRef(0);
-  const infoIconPositionsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [containerSize, setContainerSize] = useState({ w: 1200, h: suggestedGraphHeight });
   const [chatMessages, setChatMessages] = useState<ChatMessageItem[]>([]);
@@ -689,7 +688,6 @@ export default function RagicLogisticProcess() {
   const [selectedLlm, setSelectedLlm] = useState<string>('');
   const [loadingModels, setLoadingModels] = useState(false);
   const [infoModalNode, setInfoModalNode] = useState<typeof rawNodes[0] | null>(null);
-  const [infoIconPositions, setInfoIconPositions] = useState<Map<string, { x: number; y: number }>>(new Map());
   const chatEndRef = useRef<HTMLDivElement>(null);
   const sseRef = useRef<SSEConnection | null>(null);
   const SESSION_KEY = 'ragic-flow-chat';
@@ -958,23 +956,6 @@ export default function RagicLogisticProcess() {
       clearSelection();
     });
 
-    graph.on('afterrender', () => {
-      if (!graphReadyRef.current) return;
-      const g = graphRef.current;
-      if (!g) return;
-      const positions = new Map<string, { x: number; y: number }>();
-      for (const node of rawNodes) {
-        if (node.id === 'entry') continue;
-        const bounds = g.getElementRenderBounds(node.id);
-        if (!bounds) continue;
-        const topRightViewport = [bounds.max[0], bounds.min[1]] as [number, number];
-        const topRightCanvas = g.getCanvasByViewport(topRightViewport);
-        positions.set(node.id, { x: topRightCanvas[0] - 10, y: topRightCanvas[1] + 10 });
-      }
-      infoIconPositionsRef.current = positions;
-      setInfoIconPositions(positions);
-    });
-
     const renderGraph = async () => {
       const origError = console.error;
       console.error = () => undefined;
@@ -1060,6 +1041,9 @@ export default function RagicLogisticProcess() {
                 <Button icon={<EyeOutlined />} size="small" onClick={clearSelection} disabled={!selectedNodeId}>
                   全部顯示
                 </Button>
+                <Button icon={<InfoCircleOutlined />} size="small" onClick={() => { if (selectedNode) setInfoModalNode(selectedNode); }} disabled={!selectedNode}>
+                  流程詳情
+                </Button>
                 <Button icon={<ZoomOutOutlined />} size="small" onClick={zoomOut} />
                 <Button icon={<CompressOutlined />} size="small" onClick={resetView}>
                   歸位
@@ -1075,54 +1059,8 @@ export default function RagicLogisticProcess() {
                 borderRadius: 16,
                 background: '#ffffff',
                 overflow: 'hidden',
-                position: 'relative',
               }}
-            >
-              <div
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  width: '100%',
-                  height: '100%',
-                  pointerEvents: 'none',
-                  zIndex: 10,
-                }}
-              >
-                {Array.from(infoIconPositions.entries()).map(([nodeId, pos]) => (
-                  <button
-                    key={nodeId}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      const node = rawNodes.find((n) => n.id === nodeId);
-                      if (node) setInfoModalNode(node);
-                    }}
-                    style={{
-                      position: 'absolute',
-                      left: pos.x - 9,
-                      top: pos.y - 9,
-                      width: 18,
-                      height: 18,
-                      borderRadius: '50%',
-                      background: '#1677ff',
-                      border: 'none',
-                      color: '#fff',
-                      fontSize: 12,
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      pointerEvents: 'auto',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      padding: 0,
-                      lineHeight: 1,
-                    }}
-                  >
-                    i
-                  </button>
-                ))}
-              </div>
-            </div>
+            />
           </Card>
         </Col>
 
