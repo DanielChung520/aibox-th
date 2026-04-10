@@ -11,6 +11,7 @@ import { useNavigate } from 'react-router-dom';
 import { Form, Input, Button, Checkbox, Typography, App } from 'antd';
 import type { InputRef } from 'antd';
 import { UserOutlined, LockOutlined } from '@ant-design/icons';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import { authApi } from '../services/api';
 import { authStore } from '../stores/auth';
 import { useEffectiveTheme, useContentTokens } from '../contexts/AppThemeProvider';
@@ -51,6 +52,12 @@ export default function Login() {
         const { user, token } = response.data.data;
         authStore.login(user, token);
         message.success('登录成功');
+        try {
+          const win = getCurrentWindow();
+          await win.maximize();
+        } catch (_) {
+          // non-Tauri environment - ignore
+        }
         navigate('/app');
       }
     } catch (error: any) {

@@ -1,13 +1,13 @@
 ---
-lastUpdate: 2026-03-27 15:00:00
-author: Prometheus (AI Planning Agent)
-version: 1.0.0
+lastUpdate: 2026-04-10 21:15:31
+author: Daniel Chung
+version: 1.1.0
 status: 正式版
 ---
 
 # 任務聊天室功能規格書 — 索引與閱讀指南
 
-> **版本**: 1.0.0  
+> **版本**: 1.1.0  
 > **狀態**: 正式版  
 > **範疇**: 前端 + Top Orchestrator + LangGraph + BPA 整合  
 > **目標讀者**: AI Coder Agent（用於實作開發）
@@ -18,7 +18,7 @@ status: 正式版
 
 任務聊天室是 AIBox 的核心對話介面，提供兩條對話路徑：
 
-- **Path A（開放聊天）**：使用者直接輸入自然語言，經由 LangGraph 驅動的 Top Orchestrator 進行意圖分類、指代消解、工具調用、多輪對話記憶管理，並透過 SSE 串流回應。
+- **Path A（開放聊天）**：使用者直接輸入自然語言，經由 LangGraph 驅動的 Top Orchestrator 進行意圖分類、指代消解、工具調用，多輪對話記憶管理，並透過 SSE 串流回應。
 - **Path B（BPA 代理工作流）**：使用者從「瀏覽代理」頁面選擇企業流程代理（BPA Agent），前端 ChatOrchestrator 協調分析後，透過 Top Orchestrator 發送 TASK_HANDOVER 給 BPA，執行結構化企業流程。
 - **附屬功能：檔案上傳 + 知識向量化**：使用者在聊天中上傳檔案，系統自動呼叫知識庫向量及圖譜產生代碼，透過 Celery Queue Work 异步處理，資料落地至 SeaWeedFS（原始檔）、ArangoDB（圖譜資料）、Qdrant（向量檢索），綁定至當前任務會話（task session）。
 
@@ -31,6 +31,16 @@ status: 正式版
 | 前端編排 | ChatOrchestrator 狀態機（模式：`open_chat` / `bpa_workflow` / `bpa_param_collection`） |
 | 對話持久化 | ArangoDB（自訂 LangGraph Checkpointer 適配器） |
 | 協議版本 | Handoff Protocol v2.0（與現有 Top/BPA 規格一致） |
+| **工作區隔離 (v1.1)** | 所有 API 透過 JWT `sub` claim 提取 `user_key`，按此過濾資料 |
+| **模型選擇 (v1.1)** | 優先使用所選 provider 的第一個模型，而非系統預設 |
+| **Multi-Provider (v1.1)** | aitask 支援 Ollama/MiniMax/OpenAI/Gemini/Anthropic，透過 `provider` + `provider_base_url` 參數動態路由 |
+
+**v1.1 更新內容 (2026-04-10)**：
+1. 新增 `user_key` 欄位用於多租戶隔離
+2. 所有 API 端點增加 `user_key` 過濾
+3. 修復模型選擇邏輯：優先使用所選 provider 的模型
+4. Ragic 聊天使用獨立命名空間 store (`ragicChatStore`)
+5. **Multi-Provider 支援**：aitask 支援 Ollama、MiniMax、OpenAI、Gemini、Anthropic 五種 AI Provider
 
 **參考標準**：
 - Agent Protocol（Task/Step/Artifact 模型）

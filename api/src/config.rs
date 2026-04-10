@@ -44,6 +44,11 @@ pub struct AiServicesConfig {
     pub bpa_mm_agent_url: String,
     pub ollama_base_url: String,
     pub lm_studio_url: String,
+    pub qdrant_url: String,
+    pub seaweed_aibox_url: String,
+    pub seaweed_user: String,
+    pub seaweed_pass: String,
+    pub intent_router_enabled: bool,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -97,6 +102,16 @@ impl Config {
                     .unwrap_or_else(|_| "http://localhost:11434".to_string()),
                 lm_studio_url: env::var("LM_STUDIO_URL")
                     .unwrap_or_else(|_| "http://localhost:1234".to_string()),
+                qdrant_url: env::var("QDRANT_URL")
+                    .unwrap_or_else(|_| "http://localhost:6333".to_string()),
+                seaweed_aibox_url: env::var("SEAWEED_AIBOX_URL")
+                    .unwrap_or_else(|_| "http://localhost:8888".to_string()),
+                seaweed_user: env::var("SEAWEED_USER").unwrap_or_else(|_| "admin".to_string()),
+                seaweed_pass: env::var("SEAWEED_PASS").unwrap_or_else(|_| "admin123".to_string()),
+                intent_router_enabled: env::var("INTENT_ROUTER_ENABLED")
+                    .unwrap_or_else(|_| "true".to_string())
+                    .parse()
+                    .unwrap_or(true),
             },
             rate_limit: RateLimitConfig {
                 max_requests: env::var("RATE_LIMIT_MAX_REQUESTS")

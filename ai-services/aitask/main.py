@@ -4,9 +4,9 @@ AITask Service - AI Chat Service
 Provides natural language conversation with streaming support,
 and 5W1H tagging for chat sessions.
 
-# Last Update: 2026-03-27 12:23:10
+# Last Update: 2026-04-10 21:30:00
 # Author: Daniel Chung
-# Version: 1.1.0
+# Version: 1.2.0
 """
 
 import json
@@ -23,11 +23,23 @@ logger = logging.getLogger("aitask")
 
 app = FastAPI(
     title="AIBox AITask Service",
-    description="AI Chat service with streaming support and 5W1H tagging.",
-    version="1.1.0",
+    description="AI Chat service with multi-provider streaming support.",
+    version="1.2.0",
 )
 
+# Provider base URLs (can be overridden by environment variables)
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
+ANTHROPIC_BASE_URL = os.getenv("ANTHROPIC_BASE_URL", "https://api.anthropic.com")
+GEMINI_BASE_URL = os.getenv("GEMINI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta")
+MINIMAX_BASE_URL = os.getenv("MINIMAX_BASE_URL", "https://api.minimaxi.com/v1")
+
+# Provider API Keys
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+MINIMAX_API_KEY = os.getenv("MINIMAX_API_KEY", "")
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+
 DEFAULT_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2:latest")
 
 
@@ -42,6 +54,9 @@ class ChatRequest(BaseModel):
     stream: bool = True
     temperature: float = 0.7
     max_tokens: Optional[int] = None
+    provider: Optional[str] = "ollama"
+    provider_base_url: Optional[str] = None  # Override default base URL
+    api_key: Optional[str] = None  # API key from model_providers
 
 
 class ChatResponse(BaseModel):
@@ -83,8 +98,8 @@ class Tag5W1HResponse(BaseModel):
 def root() -> ServiceInfo:
     return ServiceInfo(
         service="aitask",
-        description="AI Chat service with streaming",
-        version="1.0.0",
+        description="AI Chat service with multi-provider streaming",
+        version="1.2.0",
         port=8001,
         status="running",
     )
@@ -95,11 +110,43 @@ def health() -> HealthResponse:
     return HealthResponse(status="ok", service="aitask")
 
 
-async def stream_chat(ollama_url: str, model: str, messages: list[dict], temperature: float) -> AsyncGenerator[str, None]:
+def get_provider_config(provider: str, provider_base_url: Optional[str]) -> tuple[str, str]:
+    """Get the API base URL and model prefix for a provider."""
+    if provider_base_url:
+        # Use the provided base URL
+        base_url = provider_base_url.rstrip("/")
+    elif provider == "ollama":
+        base_url = OLLAMA_BASE_URL.rstrip("/")
+    elif provider == "openai":
+        base_url = OPENAI_BASE_URL.rstrip("/")
+    elif provider == "anthropic":
+        base_url = ANTHROPIC_BASE_URL.rstrip("/")
+    elif provider == "gemini":
+        base_url = GEMINI_BASE_URL.rstrip("/")
+    elif provider == "minimax":
+        base_url = MINIMAX_BASE_URL.rstrip("/")
+    else:
+        base_url = OLLAMA_BASE_URL.rstrip("/")
+
+    # Model prefix for API path
+    if provider in ("openai", "anthropic", "minimax"):
+        model_prefix = "/chat/completions"
+    elif provider == "gemini":
+        model_prefix = "/models"
+    else:
+        model_prefix = "/api/chat"
+
+    return base_url, model_prefix
+
+
+async def stream_ollama(
+    base_url: str, model: str, messages: list[dict], temperature: float
+) -> AsyncGenerator[str, None]:
+    """Stream chat from Ollama."""
     async with httpx.AsyncClient(timeout=120.0) as client:
         try:
             response = await client.post(
-                f"{ollama_url}/api/chat",
+                f"{base_url}/api/chat",
                 json={
                     "model": model,
                     "messages": messages,
@@ -120,67 +167,366 @@ async def stream_chat(ollama_url: str, model: str, messages: list[dict], tempera
             yield f'data: {{"error": "Ollama connection failed: {str(e)}"}}\n\n'
 
 
-@app.post("/v1/chat/completions")
-async def chat_completions(request: ChatRequest) -> StreamingResponse:
-    model = request.model or DEFAULT_MODEL
-    messages = [{"role": m.role, "content": m.content} for m in request.messages]
-
-    if request.stream:
-        return StreamingResponse(
-            stream_chat(OLLAMA_BASE_URL, model, messages, request.temperature),
-            media_type="text/event-stream",
-        )
-
+async def stream_openai_compatible(
+    base_url: str, model: str, messages: list[dict], temperature: float, max_tokens: Optional[int] = None, api_key: str = ""
+) -> AsyncGenerator[str, None]:
+    """Stream chat from OpenAI-compatible API (OpenAI, MiniMax, etc.)."""
     async with httpx.AsyncClient(timeout=120.0) as client:
         try:
+            payload = {
+                "model": model,
+                "messages": messages,
+                "stream": True,
+                "temperature": temperature,
+            }
+            if max_tokens:
+                payload["max_tokens"] = max_tokens
+
+            headers = {}
+            if api_key:
+                headers["Authorization"] = f"Bearer {api_key}"
+
             response = await client.post(
-                f"{OLLAMA_BASE_URL}/api/chat",
-                json={
-                    "model": model,
-                    "messages": messages,
-                    "stream": False,
-                    "temperature": request.temperature,
-                },
+                f"{base_url}/chat/completions",
+                json=payload,
+                headers=headers,
+                timeout=120.0,
+            )
+            response.raise_for_status()
+
+            async for line in response.aiter_lines():
+                if line.strip() and not line.startswith(":"):
+                    if line.startswith("data:"):
+                        yield f"{line}\n\n"
+                    else:
+                        yield f"data: {line}\n\n"
+
+            yield "data: [DONE]\n\n"
+
+        except httpx.HTTPError as e:
+            yield f'data: {{"error": "API connection failed: {str(e)}"}}\n\n'
+
+
+async def stream_gemini(
+    base_url: str, model: str, messages: list[dict], temperature: float, api_key: str = ""
+) -> AsyncGenerator[str, None]:
+    """Stream chat from Google Gemini API."""
+    async with httpx.AsyncClient(timeout=120.0) as client:
+        try:
+            gemini_contents = []
+            for msg in messages:
+                if msg["role"] == "user":
+                    gemini_contents.append({"role": "user", "parts": [{"text": msg["content"]}]})
+                elif msg["role"] == "assistant":
+                    gemini_contents.append({"role": "model", "parts": [{"text": msg["content"]}]})
+                elif msg["role"] == "system":
+                    gemini_contents.append({"role": "user", "parts": [{"text": msg["content"]}]})
+
+            payload = {
+                "contents": gemini_contents,
+                "generation_config": {
+                    "temperature": temperature,
+                }
+            }
+
+            headers = {}
+            if api_key:
+                headers["x-goog-api-key"] = api_key
+
+            response = await client.post(
+                f"{base_url}/models/{model}:generateContent",
+                json=payload,
+                headers=headers,
+                timeout=120.0,
             )
             response.raise_for_status()
             data = response.json()
+
+            if "candidates" in data:
+                for candidate in data["candidates"]:
+                    if "content" in candidate and "parts" in candidate["content"]:
+                        for part in candidate["content"]["parts"]:
+                            if "text" in part:
+                                text = part["text"]
+                                yield f'data: {{"choices": [{{"delta": {{"content": {json.dumps(text)}}}]}}\n\n'
+
+            yield "data: [DONE]\n\n"
+
+        except httpx.HTTPError as e:
+            yield f'data: {{"error": "Gemini API connection failed: {str(e)}"}}\n\n'
+
+
+async def stream_anthropic(
+    base_url: str, model: str, messages: list[dict], temperature: float, max_tokens: Optional[int] = None
+) -> AsyncGenerator[str, None]:
+    """Stream chat from Anthropic Claude API."""
+    async with httpx.AsyncClient(timeout=120.0) as client:
+        try:
+            # Convert messages to Claude format
+            # Anthropic uses system, user, assistant roles
+            anthropic_messages = []
+            system_prompt = ""
+            for msg in messages:
+                if msg["role"] == "system":
+                    system_prompt = msg["content"]
+                elif msg["role"] == "user":
+                    anthropic_messages.append({"role": "user", "content": msg["content"]})
+                elif msg["role"] == "assistant":
+                    anthropic_messages.append({"role": "assistant", "content": msg["content"]})
+
+            payload = {
+                "model": model,
+                "messages": anthropic_messages,
+                "stream": True,
+                "temperature": temperature,
+            }
+            if max_tokens:
+                payload["max_tokens"] = max_tokens
+            if system_prompt:
+                payload["system"] = system_prompt
+
+            # Anthropic streaming endpoint
+            response = await client.post(
+                f"{base_url}/v1/messages",
+                json=payload,
+                headers={
+                    "x-api-key": os.getenv("ANTHROPIC_API_KEY", ""),
+                    "anthropic-version": "2023-06-01",
+                    "content-type": "application/json",
+                },
+                timeout=120.0,
+            )
+            response.raise_for_status()
+
+            async for line in response.aiter_lines():
+                if line.strip() and line.startswith("data:"):
+                    yield f"{line}\n\n"
+
+            yield "data: [DONE]\n\n"
+
+        except httpx.HTTPError as e:
+            yield f'data: {{"error": "Anthropic API connection failed: {str(e)}"}}\n\n'
+
+
+def get_streaming_generator(
+    provider: str, base_url: str, model: str, messages: list[dict], temperature: float, max_tokens: Optional[int] = None, api_key: Optional[str] = None
+) -> AsyncGenerator[str, None]:
+    """Get the appropriate streaming generator based on provider."""
+    if provider == "ollama":
+        return stream_ollama(base_url, model, messages, temperature)
+    elif provider == "openai":
+        return stream_openai_compatible(base_url, model, messages, temperature, max_tokens, api_key or OPENAI_API_KEY)
+    elif provider == "minimax":
+        return stream_openai_compatible(base_url, model, messages, temperature, max_tokens, api_key or MINIMAX_API_KEY)
+    elif provider == "gemini":
+        return stream_gemini(base_url, model, messages, temperature, api_key or GEMINI_API_KEY)
+    elif provider == "anthropic":
+        return stream_anthropic(base_url, model, messages, temperature, max_tokens)
+    else:
+        return stream_ollama(base_url, model, messages, temperature)
+
+
+@app.post("/v1/chat/completions")
+async def chat_completions(request: ChatRequest) -> StreamingResponse:
+    provider = request.provider or "ollama"
+    model = request.model or DEFAULT_MODEL
+    messages = [{"role": m.role, "content": m.content} for m in request.messages]
+    base_url, _ = get_provider_config(provider, request.provider_base_url)
+
+    if request.stream:
+        return StreamingResponse(
+            get_streaming_generator(provider, base_url, model, messages, request.temperature, request.max_tokens, request.api_key),
+            media_type="text/event-stream",
+        )
+
+    # Non-streaming mode
+    async with httpx.AsyncClient(timeout=120.0) as client:
+        try:
+            if provider == "ollama":
+                response = await client.post(
+                    f"{base_url}/api/chat",
+                    json={
+                        "model": model,
+                        "messages": messages,
+                        "stream": False,
+                        "temperature": request.temperature,
+                    },
+                    timeout=120.0,
+                )
+            elif provider == "openai" or provider == "minimax":
+                payload = {
+                    "model": model,
+                    "messages": messages,
+                    "temperature": request.temperature,
+                }
+                if request.max_tokens:
+                    payload["max_tokens"] = request.max_tokens
+                headers = {}
+                api_key = request.api_key or (OPENAI_API_KEY if provider == "openai" else MINIMAX_API_KEY)
+                if api_key:
+                    headers["Authorization"] = f"Bearer {api_key}"
+                response = await client.post(
+                    f"{base_url}/chat/completions",
+                    json=payload,
+                    headers=headers,
+                    timeout=120.0,
+                )
+            elif provider == "gemini":
+                gemini_contents = []
+                for msg in messages:
+                    if msg["role"] == "user":
+                        gemini_contents.append({"role": "user", "parts": [{"text": msg["content"]}]})
+                    elif msg["role"] == "assistant":
+                        gemini_contents.append({"role": "model", "parts": [{"text": msg["content"]}]})
+                headers = {}
+                api_key = request.api_key or GEMINI_API_KEY
+                if api_key:
+                    headers["x-goog-api-key"] = api_key
+                response = await client.post(
+                    f"{base_url}/models/{model}:generateContent",
+                    json={
+                        "contents": gemini_contents,
+                        "generation_config": {"temperature": request.temperature},
+                    },
+                    headers=headers,
+                    timeout=120.0,
+                )
+            elif provider == "anthropic":
+                anthropic_messages = []
+                for msg in messages:
+                    if msg["role"] == "user":
+                        anthropic_messages.append({"role": "user", "content": msg["content"]})
+                    elif msg["role"] == "assistant":
+                        anthropic_messages.append({"role": "assistant", "content": msg["content"]})
+                payload = {
+                    "model": model,
+                    "messages": anthropic_messages,
+                    "temperature": request.temperature,
+                }
+                if request.max_tokens:
+                    payload["max_tokens"] = request.max_tokens
+                response = await client.post(
+                    f"{base_url}/v1/messages",
+                    json=payload,
+                    headers={
+                        "x-api-key": os.getenv("ANTHROPIC_API_KEY", ""),
+                        "anthropic-version": "2023-06-01",
+                    },
+                    timeout=120.0,
+                )
+            else:
+                raise HTTPException(status_code=400, detail=f"Unsupported provider: {provider}")
+
+            response.raise_for_status()
+            data = response.json()
             return StreamingResponse(
-                iter([f'data: {data}\n\n']),
+                iter([f'data: {json.dumps(data)}\n\n']),
                 media_type="text/event-stream",
             )
+
         except httpx.HTTPError as e:
-            raise HTTPException(status_code=502, detail=f"Ollama connection failed: {str(e)}")
+            raise HTTPException(status_code=502, detail=f"Provider API failed: {str(e)}")
 
 
 @app.post("/chat")
 async def chat(request: ChatRequest) -> dict:
+    provider = request.provider or "ollama"
     model = request.model or DEFAULT_MODEL
     messages = [{"role": m.role, "content": m.content} for m in request.messages]
+    base_url, _ = get_provider_config(provider, request.provider_base_url)
 
     async with httpx.AsyncClient(timeout=120.0) as client:
         try:
-            response = await client.post(
-                f"{OLLAMA_BASE_URL}/api/chat",
-                json={
+            if provider == "ollama":
+                response = await client.post(
+                    f"{base_url}/api/chat",
+                    json={
+                        "model": model,
+                        "messages": messages,
+                        "stream": False,
+                        "temperature": request.temperature,
+                    },
+                    timeout=120.0,
+                )
+            elif provider == "openai" or provider == "minimax":
+                payload = {
                     "model": model,
                     "messages": messages,
-                    "stream": False,
                     "temperature": request.temperature,
-                },
-            )
+                }
+                if request.max_tokens:
+                    payload["max_tokens"] = request.max_tokens
+                headers = {}
+                api_key = request.api_key or (OPENAI_API_KEY if provider == "openai" else MINIMAX_API_KEY)
+                if api_key:
+                    headers["Authorization"] = f"Bearer {api_key}"
+                response = await client.post(
+                    f"{base_url}/chat/completions",
+                    json=payload,
+                    headers=headers,
+                    timeout=120.0,
+                )
+            elif provider == "gemini":
+                gemini_contents = []
+                for msg in messages:
+                    if msg["role"] == "user":
+                        gemini_contents.append({"role": "user", "parts": [{"text": msg["content"]}]})
+                    elif msg["role"] == "assistant":
+                        gemini_contents.append({"role": "model", "parts": [{"text": msg["content"]}]})
+                headers = {}
+                api_key = request.api_key or GEMINI_API_KEY
+                if api_key:
+                    headers["x-goog-api-key"] = api_key
+                response = await client.post(
+                    f"{base_url}/models/{model}:generateContent",
+                    json={
+                        "contents": gemini_contents,
+                        "generation_config": {"temperature": request.temperature},
+                    },
+                    headers=headers,
+                    timeout=120.0,
+                )
+            else:
+                raise HTTPException(status_code=400, detail=f"Unsupported provider: {provider}")
+
             response.raise_for_status()
             data = response.json()
-            return {
-                "model": data.get("model", model),
-                "message": data.get("message", {}),
-                "done": data.get("done", True),
-            }
+
+            # Normalize response format
+            if provider == "ollama":
+                return {
+                    "model": data.get("model", model),
+                    "message": data.get("message", {}),
+                    "done": data.get("done", True),
+                }
+            elif provider == "gemini":
+                # Extract text from Gemini response
+                text = ""
+                if "candidates" in data:
+                    for candidate in data["candidates"]:
+                        if "content" in candidate and "parts" in candidate["content"]:
+                            for part in candidate["content"]["parts"]:
+                                if "text" in part:
+                                    text += part["text"]
+                return {
+                    "model": model,
+                    "message": {"role": "assistant", "content": text},
+                    "done": True,
+                }
+            else:
+                return {
+                    "model": data.get("model", model),
+                    "message": data.get("choices", [{}])[0].get("message", {}),
+                    "done": True,
+                }
+
         except httpx.HTTPError as e:
-            raise HTTPException(status_code=502, detail=f"Ollama connection failed: {str(e)}")
+            raise HTTPException(status_code=502, detail=f"Provider API failed: {str(e)}")
 
 
 @app.get("/models")
 async def list_models() -> dict:
+    """List available models from Ollama."""
     async with httpx.AsyncClient(timeout=30.0) as client:
         try:
             response = await client.get(f"{OLLAMA_BASE_URL}/api/tags")

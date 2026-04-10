@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import Markdown from 'markdown-to-jsx';
 import { Button, message as antdMsg } from 'antd';
 import { CaretRightOutlined, LoadingOutlined, CopyOutlined } from '@ant-design/icons';
@@ -80,7 +80,7 @@ function parseSegments(raw: string): Segment[] {
   return segments;
 }
 
-function TextRenderer({ body, tokens, linkCounter }: { body: string; tokens: Record<string, string>; linkCounter: React.MutableRefObject<number> }) {
+function TextRenderer({ body, tokens }: { body: string; tokens: Record<string, string> }) {
   const options = {
     overrides: {
       code: {
@@ -153,27 +153,45 @@ function TextRenderer({ body, tokens, linkCounter }: { body: string; tokens: Rec
         ),
       },
       a: {
-        component: ({ href }: { children: React.ReactNode; href?: string }) => {
-          const n = ++linkCounter.current;
+        component: ({ children, href }: { children: React.ReactNode; href?: string }) => {
+          const text = typeof children === 'string' ? children : '';
+          const isInlineRef = /^\[\d+\]$/.test(text.trim());
+          if (isInlineRef) {
+            return (
+              <sup>
+                <a
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title={href}
+                  style={{
+                    color: tokens.primaryColor,
+                    textDecoration: 'none',
+                    fontSize: '0.75em',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    padding: '0 1px',
+                  }}
+                >
+                  {text}
+                </a>
+              </sup>
+            );
+          }
           return (
-            <sup>
-              <a
-                href={href}
-                target="_blank"
-                rel="noopener noreferrer"
-                title={href}
-                style={{
-                  color: tokens.primaryColor,
-                  textDecoration: 'none',
-                  fontSize: '0.75em',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  padding: '0 1px',
-                }}
-              >
-                [{n}]
-              </a>
-            </sup>
+            <a
+              href={href}
+              target="_blank"
+              rel="noopener noreferrer"
+              title={href}
+              style={{
+                color: tokens.primaryColor,
+                textDecoration: 'underline',
+                cursor: 'pointer',
+              }}
+            >
+              {children}
+            </a>
           );
         },
       },
@@ -237,8 +255,6 @@ export default function MessageBubble({ message, streamingContent, streamingThin
   const codeBg = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';
 
   const tokens = { textColor, textSecondary, borderColor, tableHeaderBg, tableRowBorder, blockquoteBorder, primaryColor, codeBg };
-  const linkCounter = useRef(0);
-  linkCounter.current = 0;
   const segments = parseSegments(content);
 
   const zebraBg = isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)';
@@ -362,7 +378,7 @@ export default function MessageBubble({ message, streamingContent, streamingThin
                 }
                 return (
                   <div key={i} style={{ padding: '2px 0' }}>
-                    <TextRenderer body={seg.body} tokens={tokens} linkCounter={linkCounter} />
+                    <TextRenderer body={seg.body} tokens={tokens} />
                   </div>
                 );
               })}

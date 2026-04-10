@@ -8,9 +8,9 @@ keeping separate Qdrant collections.
 ArangoDB source: unified `intent_catalog` collection, filtered by `agent_scope`.
 Qdrant target: per-scope collection (see SCOPE_QDRANT_MAP).
 
-# Last Update: 2026-03-29 00:15:16
+# Last Update: 2026-04-10 23:31:10
 # Author: Daniel Chung
-# Version: 3.0.0
+# Version: 3.1.0
 """
 
 import logging
@@ -33,7 +33,7 @@ ARANGO_URL = os.getenv("ARANGO_URL", "http://localhost:8529")
 ARANGO_DB = os.getenv("ARANGO_DATABASE", "abc_desktop")
 ARANGO_USER = os.getenv("ARANGO_USER", "root")
 ARANGO_PASSWORD = os.getenv("ARANGO_PASSWORD", "abc_desktop_2026")
-MATCH_THRESHOLD = float(os.getenv("MATCH_THRESHOLD", "0.56"))
+MATCH_THRESHOLD_DEFAULT = float(os.getenv("MATCH_THRESHOLD", "0.45"))
 
 SCOPE_QDRANT_MAP: dict[str, str] = {
     "data_agent": "data_agent_intents",
@@ -279,6 +279,12 @@ async def match_intent(
     qdrant_collection = _resolve_qdrant_collection(scope)
 
     try:
+        threshold_str = await get_param("intent.match_threshold")
+        try:
+            match_threshold = float(threshold_str)
+        except (ValueError, TypeError):
+            match_threshold = MATCH_THRESHOLD_DEFAULT
+
         query_embedding = await get_embedding(request.query)
         if not query_embedding:
             raise HTTPException(
@@ -302,7 +308,7 @@ async def match_intent(
 
         for r in results:
             score = float(r.get("score", 0.0))
-            if score < MATCH_THRESHOLD:
+            if score < match_threshold:
                 continue
             payload = r.get("payload", {})
             matches.append(

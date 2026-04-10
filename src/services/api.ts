@@ -57,7 +57,11 @@ api.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       localStorage.removeItem('token');
-      window.location.href = '/login';
+      // Only redirect to /login if not already on a protected page
+      // (avoids race condition where successful login triggers 401 from another API)
+      if (!window.location.pathname.startsWith('/app')) {
+        window.location.href = '/login';
+      }
     }
     return Promise.reject(error);
   }

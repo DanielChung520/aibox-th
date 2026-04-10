@@ -1,7 +1,7 @@
 ---
-lastUpdate: 2026-03-27 10:17:47
-author: Prometheus (AI Planning Agent)
-version: 1.0.0
+lastUpdate: 2026-04-10 21:15:31
+author: Daniel Chung
+version: 1.1.0
 status: 正式版
 parent: 00-index.md
 ---
@@ -19,11 +19,11 @@ parent: 00-index.md
 
 | 集合名稱 | 類型 | 用途 | 索引 |
 |---------|------|------|------|
-| `chat_sessions` | Document | 會話元資料 | `user_id` (hash), `status` (hash), `created_at` (skiplist desc) |
-| `chat_messages` | Document | 對話訊息 | `session_id` (hash), `created_at` (skiplist), `session_id+created_at` (compound) |
+| `chat_sessions` | Document | 會話元資料 | `user_key` (hash), `status` (hash), `created_at` (skiplist desc) |
+| `chat_messages` | Document | 對話訊息 | `session_key` (hash), `created_at` (skiplist), `session_key+created_at` (compound) |
 | `chat_checkpoints` | Document | LangGraph 狀態快照 | `thread_id` (hash), `thread_id+checkpoint_id` (compound unique) |
 | `chat_checkpoint_writes` | Document | LangGraph 寫入記錄 | `thread_id+task_id+idx` (compound unique) |
-| `tool_executions` | Document | 工具調用記錄 | `session_id` (hash), `tool_name` (hash) |
+| `tool_executions` | Document | 工具調用記錄 | `session_key` (hash), `tool_name` (hash) |
 
 ---
 
@@ -34,27 +34,19 @@ parent: 00-index.md
 ```json
 {
   "_key": "ses_uuid_v4",
-  "user_id": "users/admin_key",
+  "user_key": "admin",
   "title": "物料查詢 — 2026-03-27",
-  "mode": "open_chat | bpa_workflow",
-  "status": "active | archived | deleted",
+  "provider": "ollama",
+  "model": "llama3.2:latest",
+  "status": "active",
   
-  "bpa_context": {
-    "agent_id": "agents/mm_agent_key",
-    "agent_name": "物料管理代理",
-    "task_id": "task_uuid",
-    "final_status": "completed | failed | cancelled"
-  },
-  
-  "summary": "使用者查詢了物料庫存並執行了補貨分析...",
-  "message_count": 12,
-  "last_message_at": "2026-03-27T10:30:00Z",
-  
-  "metadata": {
-    "reply_mode": "auto",
-    "total_tokens": 4500,
-    "total_cost": 0.0045,
-    "model_used": "qwen2.5:14b"
+  "tags_5w1h": {
+    "what": "查詢內容描述",
+    "who": "使用者、助理",
+    "when": "時間",
+    "where": "地點",
+    "why": "原因",
+    "how": "方法"
   },
   
   "created_at": "2026-03-27T10:00:00Z",
@@ -62,53 +54,21 @@ parent: 00-index.md
 }
 ```
 
+> **重要**: 
+> - 使用 `user_key` 而非 `user_id`（從 JWT claims.sub 提取）
+> - `provider` + `model` 用於記錄該 session 使用的 AI 模型
+> - 工作區隔離：所有 API 查詢都需透過 `user_key` 過濾
+
 ### chat_messages
 
 ```json
 {
   "_key": "msg_uuid_v4",
-  "session_id": "ses_uuid_v4",
-  "role": "user | assistant | system | tool",
+  "session_key": "ses_uuid_v4",
+  "role": "user | assistant",
   "content": "Markdown 格式的訊息內容",
-  
-  "message_type": "user_message | ai_response | tool_call | tool_result | bpa_status | bpa_ask_user | bpa_result | system_notice | error",
-  
-  "agent_id": "agents/mm_agent_key",
-  "agent_name": "物料管理代理",
-  
-  "tool_calls": [
-    {
-      "tool_id": "call_uuid",
-      "tool_name": "mcp_inventory_search",
-      "arguments": {"keyword": "螺絲", "warehouse": "A"},
-      "result": "{...}",
-      "status": "success",
-      "duration_ms": 350
-    }
-  ],
-  
-  "bpa_metadata": {
-    "step": "analysis",
-    "progress": 65,
-    "ask_user_options": ["確認", "取消", "修改條件"]
-  },
-  
-  "sources": [
-    {
-      "title": "物料管理手冊",
-      "source": "kb_material_handbook",
-      "relevance_score": 0.92,
-      "snippet": "安全庫存計算方式..."
-    }
-  ],
-  
-  "token_usage": {
-    "prompt_tokens": 1200,
-    "completion_tokens": 450,
-    "total_tokens": 1650,
-    "model": "qwen2.5:14b"
-  },
-  
+  "thinking": "AI 思考過程（可選）",
+  "tokens": 1650,
   "created_at": "2026-03-27T10:05:00Z"
 }
 ```

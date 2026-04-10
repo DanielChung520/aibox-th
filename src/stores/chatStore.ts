@@ -329,22 +329,23 @@ class ChatStore {
       return null;
     }
 
+    const selectedProvider = this.state.selectedProvider ?? this.getDefaultProviderCode() ?? undefined;
+    const providerConfig = this.getProviderByCode(selectedProvider ?? null);
+    const resolvedModel = providerConfig?.models?.[0]?.model_id ?? this.getDefaultModel();
+
     let activeSessionKey = this.state.activeSessionKey;
     if (!activeSessionKey) {
-      const session = await this.createSession();
+      const session = await this.createSession(selectedProvider, resolvedModel);
       activeSessionKey = session._key;
     }
 
     this.addUserMessage(trimmed);
     this.startStreaming();
 
-    const selectedProvider = this.state.selectedProvider ?? this.getDefaultProviderCode() ?? undefined;
-    const providerConfig = this.getProviderByCode(selectedProvider ?? null);
-
     const request: SendMessageRequest = {
       content: trimmed,
       provider: selectedProvider,
-      model: this.getDefaultModel() ?? providerConfig?.models?.[0]?.model_id,
+      model: resolvedModel,
       temperature: this.getDefaultTemperature(),
       max_tokens: this.getDefaultMaxTokens(),
     };

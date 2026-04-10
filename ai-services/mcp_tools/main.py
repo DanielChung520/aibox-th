@@ -180,6 +180,10 @@ async def execute_tool(tool_name: str, parameters: dict[str, Any]) -> ToolResult
                 result = await execute_code(parameters.get("code", ""))
             case _:
                 return ToolResult(tool=tool_name, success=False, result=None, error=f"Unknown tool: {tool_name}")
+        
+        if isinstance(result, dict) and result.get("error"):
+            return ToolResult(tool=tool_name, success=False, result=result, error=result.get("error"))
+        
         return ToolResult(tool=tool_name, success=True, result=result)
     except Exception as e:
         return ToolResult(tool=tool_name, success=False, result=None, error=str(e))

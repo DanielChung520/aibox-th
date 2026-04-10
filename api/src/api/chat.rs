@@ -3,9 +3,9 @@
 //! # Description
 //! 聊天 Session CRUD、SSE 串流代理、5W1H 非同步標記
 //!
-//! # Last Update: 2026-03-27 15:50:00
+//! # Last Update: 2026-04-10 23:35:37
 //! # Author: Daniel Chung
-//! # Version: 1.1.0
+//! # Version: 1.3.0
 
 use std::collections::VecDeque;
 use std::convert::Infallible;
@@ -26,6 +26,7 @@ use crate::db::{
 };
 use crate::models::ApiResponse;
 use crate::auth::{verify_jwt, Claims};
+use crate::config::CONFIG;
 use crate::api::sse::broadcast_file_status_event;
 use crate::api::intent::{
     route_tool_intent, sse_text_to_stream, summarize_text, ToolIntentResult,
@@ -228,8 +229,7 @@ async fn delete_session(
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    let agent_url =
-        std::env::var("KNOWLEDGE_AGENT_URL").unwrap_or_else(|_| "http://localhost:8007".to_string());
+    let agent_url = CONFIG.ai_services.knowledge_agent_url.clone();
 
     for file in &file_keys {
         let file_key = file.as_str().unwrap_or_default();
@@ -258,7 +258,7 @@ async fn delete_session(
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    let qdrant_url = std::env::var("QDRANT_URL").unwrap_or_else(|_| "http://localhost:6333".to_string());
+    let qdrant_url = CONFIG.ai_services.qdrant_url.clone();
     let qdrant_collection = format!("knowledge_{}", key);
     let _ = client
         .delete(format!(
@@ -269,9 +269,9 @@ async fn delete_session(
         .send()
         .await;
 
-    let seaweed_user = std::env::var("SEAWEED_USER").unwrap_or_else(|_| "admin".to_string());
-    let seaweed_pass = std::env::var("SEAWEED_PASS").unwrap_or_else(|_| "admin123".to_string());
-    let seaweed_base = std::env::var("SEAWEED_AIBOX_URL").unwrap_or_else(|_| "http://localhost:8888".to_string());
+    let seaweed_user = CONFIG.ai_services.seaweed_user.clone();
+    let seaweed_pass = CONFIG.ai_services.seaweed_pass.clone();
+    let seaweed_base = CONFIG.ai_services.seaweed_aibox_url.clone();
     let _ = client
         .delete(format!(
             "{}/bucket-aibox-assets/sessions/{}",
@@ -331,6 +331,21 @@ async fn send_message(
         .unwrap_or_else(|| session.model.clone());
     let temperature = payload.temperature.unwrap_or(defaults.temperature);
     let max_tokens = payload.max_tokens.unwrap_or(defaults.max_tokens);
+
+    if provider != session.provider || model != session.model {
+        let _ = db
+            .aql_bind_vars::<serde_json::Value>(
+                "UPDATE @key WITH { provider: @provider, model: @model, updated_at: @now } IN chat_sessions",
+                [
+                    ("key", serde_json::json!(session_key.clone())),
+                    ("provider", serde_json::json!(provider.clone())),
+                    ("model", serde_json::json!(model.clone())),
+                    ("now", serde_json::json!(chrono::Utc::now().to_rfc3339())),
+                ]
+                .into(),
+            )
+            .await;
+    }
 
     let providers_raw: Vec<serde_json::Value> = db
         .aql_bind_vars(
@@ -403,9 +418,126 @@ async fn send_message(
         }));
     }
 
-    let aitask_url =
-        std::env::var("AITASK_URL").unwrap_or_else(|_| "http://localhost:8001".to_string());
+    let aitask_url = CONFIG.ai_services.aitask_url.clone();
     let client = reqwest::Client::new();
+
+    let enable_intent_router = if CONFIG.ai_services.intent_router_enabled {
+        "true".to_string()
+    } else {
+        "false".to_string()
+    };
+
+    if enable_intent_router == "true" {
+        let ollama_base_url = if provider == "ollama" {
+            provider_info.base_url.clone()
+        } else {
+            CONFIG.ai_services.ollama_base_url.clone()
+        };
+
+        let intent_rag_url = CONFIG.ai_services.data_agent_url.clone();
+        let mcp_tools_url = CONFIG.ai_services.mcp_tools_url.clone();
+
+        let intent_model = {
+            let params: Vec<SystemParam> = db
+                .aql_str("FOR p IN system_params FILTER p.param_key == \"intent.extraction_model\" RETURN p")
+                .await
+                .unwrap_or_default();
+            params.first()
+                .map(|p| p.param_value.clone())
+                .unwrap_or_else(|| "deepseek-v3.1:671b-cloud".to_string())
+        };
+
+        let intent_threshold: f64 = {
+            let params: Vec<SystemParam> = db
+                .aql_str("FOR p IN system_params FILTER p.param_key == \"intent.match_threshold\" RETURN p")
+                .await
+                .unwrap_or_default();
+            params.first()
+                .and_then(|p| p.param_value.parse::<f64>().ok())
+                .unwrap_or(0.45)
+        };
+
+        eprintln!("[chat] intent router: threshold={:.4} model={}", intent_threshold, intent_model);
+
+        let tool_result = route_tool_intent(
+            &client,
+            &intent_rag_url,
+            &mcp_tools_url,
+            &ollama_base_url,
+            &intent_model,
+            &payload.content,
+            &history_for_intent,
+            intent_threshold,
+        )
+        .await;
+
+        match &tool_result {
+            Ok(Some(ref tr)) => eprintln!("[chat] intent router matched: tool={} score={:.4}", tr.tool_name, tr.score),
+            Ok(None) => eprintln!("[chat] intent router: no tool match, falling back to LLM"),
+            Err(ref e) => eprintln!("[chat] intent router error: {:?}, falling back to LLM", e),
+        }
+
+        if let Ok(Some(ToolIntentResult {
+            tool_name,
+            result: tool_data,
+            ..
+        })) = tool_result
+        {
+            let ollama_url_for_tool = ollama_base_url.clone();
+            let model_for_tool = intent_model.clone();
+            let user_msg_for_tool = payload.content.clone();
+
+            let sse_text = summarize_text(
+                &client,
+                &ollama_url_for_tool,
+                &model_for_tool,
+                &user_msg_for_tool,
+                &tool_name,
+                &tool_data,
+                &history_for_intent,
+            )
+            .await;
+
+            if let Ok(sse_text) = &sse_text {
+                let sk_persist = session_key.clone();
+                let text_for_persist = sse_text.clone();
+
+                tokio::spawn(async move {
+                    let db = get_db();
+                    let mut full_content = String::new();
+                    for line in text_for_persist.lines() {
+                        if let Ok(data) = serde_json::from_str::<serde_json::Value>(line) {
+                            if let Some(c) = data.get("response").and_then(|v| v.as_str()) {
+                                full_content.push_str(c);
+                            }
+                        }
+                    }
+                    if full_content.is_empty() {
+                        return;
+                    }
+                    let msg = ChatMessage {
+                        _key: Some(uuid::Uuid::new_v4().to_string()),
+                        session_key: sk_persist.clone(),
+                        role: "assistant".to_string(),
+                        content: full_content.clone(),
+                        tokens: None,
+                        created_at: chrono::Utc::now().to_rfc3339(),
+                    };
+                    if let Ok(col) = db.collection("chat_messages").await {
+                        let _ = col.create_document(msg, Default::default()).await;
+                    }
+                    spawn_5w1h_tagging(sk_persist).await;
+                });
+
+                let tool_stream = sse_text_to_stream(sse_text.clone());
+                return Ok(Sse::new(tool_stream));
+            } else if let Err(ref e) = sse_text {
+                eprintln!("[chat] summarize_text failed: {:?}, falling back to LLM", e);
+            }
+        }
+    }
+
+    // --- LLM fallback: only send aitask request AFTER intent router decides no tool match ---
     let aitask_body = serde_json::json!({
         "messages": messages,
         "model": model,
@@ -414,6 +546,7 @@ async fn send_message(
         "max_tokens": max_tokens,
         "provider": provider,
         "provider_base_url": provider_info.base_url,
+        "api_key": provider_info.api_key,
     });
 
     let response = client
@@ -456,101 +589,6 @@ async fn send_message(
         spawn_5w1h_tagging(session_key_clone).await;
     });
 
-    let enable_intent_router =
-        std::env::var("INTENT_ROUTER_ENABLED").unwrap_or_else(|_| "true".into());
-
-    if enable_intent_router == "true" {
-        let ollama_base_url = if provider == "ollama" {
-            provider_info.base_url.clone()
-        } else {
-            std::env::var("OLLAMA_BASE_URL").unwrap_or_else(|_| "http://localhost:11434".into())
-        };
-
-        let intent_rag_url =
-            std::env::var("INTENT_RAG_URL").unwrap_or_else(|_| "http://localhost:8003".into());
-        let mcp_tools_url =
-            std::env::var("MCP_TOOLS_URL").unwrap_or_else(|_| "http://localhost:8004".into());
-
-        // Get Intent Router specific model (faster model for parameter extraction)
-        let intent_model = {
-            let params: Vec<SystemParam> = db
-                .aql_str("FOR p IN system_params FILTER p.param_key == \"intent.extraction_model\" RETURN p")
-                .await
-                .unwrap_or_default();
-            params.first()
-                .map(|p| p.param_value.clone())
-                .unwrap_or_else(|| "deepseek-v3.1:671b-cloud".to_string())
-        };
-
-        let tool_result = route_tool_intent(
-            &client,
-            &intent_rag_url,
-            &mcp_tools_url,
-            &ollama_base_url,
-            &intent_model,
-            &payload.content,
-            &history_for_intent,
-        )
-        .await;
-
-        if let Ok(Some(ToolIntentResult {
-            tool_name,
-            result: tool_data,
-            ..
-        })) = tool_result
-        {
-            let ollama_url_for_tool = ollama_base_url.clone();
-            let model_for_tool = model.clone();
-            let user_msg_for_tool = payload.content.clone();
-            let sk_for_tool = session_key.clone();
-
-            let sse_text = summarize_text(
-                &client,
-                &ollama_url_for_tool,
-                &model_for_tool,
-                &user_msg_for_tool,
-                &tool_name,
-                &tool_data,
-                &history_for_intent,
-            )
-            .await;
-
-            if let Ok(sse_text) = sse_text {
-                let sk_persist = session_key.clone();
-                let text_for_persist = sse_text.clone();
-
-                tokio::spawn(async move {
-                    let db = get_db();
-                    let mut full_content = String::new();
-                    for line in text_for_persist.lines() {
-                        if let Ok(data) = serde_json::from_str::<serde_json::Value>(line) {
-                            if let Some(c) = data.get("response").and_then(|v| v.as_str()) {
-                                full_content.push_str(c);
-                            }
-                        }
-                    }
-                    if full_content.is_empty() {
-                        return;
-                    }
-                    let msg = ChatMessage {
-                        _key: Some(uuid::Uuid::new_v4().to_string()),
-                        session_key: sk_persist.clone(),
-                        role: "assistant".to_string(),
-                        content: full_content.clone(),
-                        tokens: None,
-                        created_at: chrono::Utc::now().to_rfc3339(),
-                    };
-                    if let Ok(col) = db.collection("chat_messages").await {
-                        let _ = col.create_document(msg, Default::default()).await;
-                    }
-                    spawn_5w1h_tagging(sk_persist).await;
-                });
-
-                let tool_stream = sse_text_to_stream(sse_text);
-                return Ok(Sse::new(tool_stream));
-            }
-        }
-    }
     let (event_tx, event_rx) = mpsc::unbounded_channel::<Result<Event, std::convert::Infallible>>();
     let event_tx = Arc::new(event_tx);
     let tx_for_bg = event_tx.clone();
@@ -588,15 +626,37 @@ async fn send_message(
                             }
 
                             if let Ok(json) = serde_json::from_str::<serde_json::Value>(data) {
-                                if let Some(delta) = json
+                                let delta = json
                                     .get("message")
                                     .and_then(|m| m.get("content"))
                                     .and_then(|v| v.as_str())
-                                {
-                                    let _ = tx.send(delta.to_string());
+                                    .or_else(|| {
+                                        json.get("choices")
+                                            .and_then(|c| c.get(0))
+                                            .and_then(|c| c.get("delta"))
+                                            .and_then(|d| d.get("content"))
+                                            .and_then(|v| v.as_str())
+                                    });
+
+                                if let Some(delta) = delta {
+                                    if !delta.is_empty() {
+                                        let _ = tx.send(delta.to_string());
+                                    }
                                 }
 
-                                if json.get("done").and_then(|v| v.as_bool()) == Some(true) {
+                                let is_done = json
+                                    .get("done")
+                                    .and_then(|v| v.as_bool())
+                                    == Some(true);
+
+                                let is_finish = json
+                                    .get("choices")
+                                    .and_then(|c| c.get(0))
+                                    .and_then(|c| c.get("finish_reason"))
+                                    .and_then(|v| v.as_str())
+                                    == Some("stop");
+
+                                if is_done || is_finish {
                                     let _ = tx_for_bg.send(Ok(Event::default()
                                         .event("chat_done")
                                         .data(serde_json::json!({ "done": true }).to_string())));
@@ -732,8 +792,7 @@ async fn spawn_5w1h_tagging(session_key: String) {
         .map(|m| serde_json::json!({ "role": m.role, "content": m.content }))
         .collect();
 
-    let aitask_url =
-        std::env::var("AITASK_URL").unwrap_or_else(|_| "http://localhost:8001".to_string());
+    let aitask_url = CONFIG.ai_services.aitask_url.clone();
 
     let client = reqwest::Client::new();
     let body = serde_json::json!({
@@ -830,10 +889,9 @@ async fn upload_session_file(
         "bucket-aibox-assets/sessions/{}/{}.{}",
         session_key, file_key, ext
     );
-    let seaweed_user = std::env::var("SEAWEED_USER").unwrap_or_else(|_| "admin".to_string());
-    let seaweed_pass = std::env::var("SEAWEED_PASS").unwrap_or_else(|_| "admin123".to_string());
-    let seaweed_base =
-        std::env::var("SEAWEED_AIBOX_URL").unwrap_or_else(|_| "http://localhost:8888".to_string());
+    let seaweed_user = CONFIG.ai_services.seaweed_user.clone();
+    let seaweed_pass = CONFIG.ai_services.seaweed_pass.clone();
+    let seaweed_base = CONFIG.ai_services.seaweed_aibox_url.clone();
     let seaweed_url = format!("{}/{}", seaweed_base, s3_path);
     let client = reqwest::Client::new();
     let _ = client
@@ -885,8 +943,7 @@ async fn upload_session_file(
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    let agent_url =
-        std::env::var("KNOWLEDGE_AGENT_URL").unwrap_or_else(|_| "http://localhost:8007".to_string());
+    let agent_url = CONFIG.ai_services.knowledge_agent_url.clone();
     let trigger_url = format!("{}/pipeline/trigger", agent_url);
     let payload = serde_json::json!({
         "task": "vectorize",
@@ -982,8 +1039,7 @@ async fn delete_session_file(
         return Err(StatusCode::NOT_FOUND);
     }
 
-    let agent_url =
-        std::env::var("KNOWLEDGE_AGENT_URL").unwrap_or_else(|_| "http://localhost:8007".to_string());
+    let agent_url = CONFIG.ai_services.knowledge_agent_url.clone();
     let client = reqwest::Client::new();
     let _ = client
         .post(format!("{}/pipeline/delete?file_id={}", agent_url, file_key))
@@ -1021,12 +1077,9 @@ async fn delete_session_file(
         .join(&session_key);
     let _ = tokio::fs::remove_file(local_dir.join(format!("{}.*", file_key))).await;
 
-    let seaweed_user =
-        std::env::var("SEAWEED_USER").unwrap_or_else(|_| "admin".to_string());
-    let seaweed_pass =
-        std::env::var("SEAWEED_PASS").unwrap_or_else(|_| "admin123".to_string());
-    let seaweed_base =
-        std::env::var("SEAWEED_AIBOX_URL").unwrap_or_else(|_| "http://localhost:8888".to_string());
+    let seaweed_user = CONFIG.ai_services.seaweed_user.clone();
+    let seaweed_pass = CONFIG.ai_services.seaweed_pass.clone();
+    let seaweed_base = CONFIG.ai_services.seaweed_aibox_url.clone();
     let _ = client
         .delete(format!(
             "{}/bucket-aibox-assets/sessions/{}/{}",

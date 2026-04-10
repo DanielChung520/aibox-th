@@ -29,6 +29,7 @@ AI_SERVICES=(
   "bpa_mm_agent:8005:bpa.mm_agent.main:app"
   "knowledge_agent:8007:knowledge_agent.main:app"
   "memory_agent:8008:memory_agent.main:app"
+  "backup_agent:8010:backup_agent.main:app"
 )
 
 # ─── 共用函數 ────────────────────────────────────────────────────────────────

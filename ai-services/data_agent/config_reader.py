@@ -32,6 +32,7 @@ _ENV_FALLBACKS: dict[str, tuple[str, str]] = {
     "da.small_llm_model": ("NL2SQL_SMALL_MODEL", "mistral-nemo:12b"),
     "da.large_llm_model": ("NL2SQL_LARGE_MODEL", "qwen3-coder:30b"),
     "da.data_source": ("DA_DATA_SOURCE", "sap"),
+    "intent.match_threshold": ("MATCH_THRESHOLD", "0.45"),
 }
 
 

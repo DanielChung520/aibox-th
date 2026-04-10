@@ -1,8 +1,8 @@
 //! Intent Router - 意圖檢測 + 工具路由
 //!
-//! # Last Update: 2026-03-28 12:03:42
+//! # Last Update: 2026-04-11 00:39:07
 //! # Author: Daniel Chung
-//! # Version: 1.0.0
+//! # Version: 1.2.0
 
 use std::collections::HashMap;
 use std::pin::Pin;
@@ -69,12 +69,11 @@ struct ToolCall {
     parameters: HashMap<String, Value>,
 }
 
-const INTENT_RAG_THRESHOLD: f64 = 0.55;
-
 pub async fn detect_intent(
     client: &reqwest::Client,
     intent_rag_url: &str,
     query: &str,
+    threshold: f64,
 ) -> Result<Option<(IntentMatchResult, String)>, IntentError> {
     let url = format!("{}/intent-rag/orchestrator/intent/match", intent_rag_url);
     let body = serde_json::json!({"query": query, "top_k": 3});
@@ -87,22 +86,37 @@ pub async fn detect_intent(
         .await?;
 
     if !resp.status().is_success() {
+        eprintln!("[intent] detect_intent HTTP failed: status={}", resp.status());
         return Ok(None);
     }
 
     let data: IntentMatchResponse = resp.json().await?;
 
     let best = match data.best_match {
-        Some(m) if m.score >= INTENT_RAG_THRESHOLD => m,
-        _ => return Ok(None),
+        Some(m) if m.score >= threshold => {
+            eprintln!("[intent] matched intent_id={} tool={} score={:.4} (threshold={:.4})",
+                m.intent_id, m.intent_data.tool_name, m.score, threshold);
+            m
+        }
+        Some(m) => {
+            eprintln!("[intent] below threshold: intent_id={} score={:.4} < {:.4}",
+                m.intent_id, m.score, threshold);
+            return Ok(None);
+        }
+        _ => {
+            eprintln!("[intent] no best_match returned for query: {}", query);
+            return Ok(None);
+        }
     };
 
     if best.intent_data.intent_type != "tool" {
+        eprintln!("[intent] intent_type={} (not tool), skipping", best.intent_data.intent_type);
         return Ok(None);
     }
 
     let tool_name = best.intent_data.tool_name.clone();
     if tool_name.is_empty() {
+        eprintln!("[intent] matched intent has empty tool_name");
         return Ok(None);
     }
 
@@ -120,24 +134,29 @@ pub async fn extract_parameters(
         "weather" => {
             r#"You are a parameter extraction assistant. Extract parameters from the user message for the weather tool.
 The weather tool accepts:
-- city: string (optional, city name like "Taipei", "台中", "New York")
+- city: string (optional, MUST be in English, e.g. "Taipei", "Taichung", "New York")
 - lat: float (optional, latitude)
 - lon: float (optional, longitude)
 - units: string ("metric" for Celsius, "imperial" for Fahrenheit)
 
-Output ONLY valid JSON. Examples:
-- "台北天氣怎樣" → {"city": "台北"}
+IMPORTANT: Always translate city names to English. Examples:
+- "台北天氣怎樣" → {"city": "Taipei"}
+- "台中今天會下雨嗎" → {"city": "Taichung"}
+- "高雄溫度多少" → {"city": "Kaohsiung"}
+- "東京天氣" → {"city": "Tokyo"}
 - "temperature in New York" → {"city": "New York", "units": "imperial"}
-- "weather forecast for Tokyo" → {"city": "Tokyo"}
 - "今天會下雨嗎" → {}
 Output JSON only:"#
         }
         "forecast" => {
             r#"You are a parameter extraction assistant. Extract parameters for the forecast tool.
-Accepts: city, lat, lon, days (1-7, default 3), units.
-Examples:
+Accepts: city (MUST be in English), lat, lon, days (1-7, default 3), units.
+
+IMPORTANT: Always translate city names to English. Examples:
 - "未來三天天氣" → {"days": 3}
-- "一週天氣預報台北" → {"city": "台北", "days": 7}
+- "一週天氣預報台北" → {"city": "Taipei", "days": 7}
+- "高雄五天天氣" → {"city": "Kaohsiung", "days": 5}
+- "Tokyo weather forecast" → {"city": "Tokyo", "days": 3}
 Output JSON only:"#
         }
         "web_search" => {
@@ -167,6 +186,7 @@ Output JSON only:"#
         .await?;
 
     if !resp.status().is_success() {
+        eprintln!("[intent] param extraction failed: status={}", resp.status());
         return Err(IntentError::OllamaError("param extraction failed".into()));
     }
 
@@ -232,6 +252,7 @@ pub async fn execute_tool(
 
     if !resp.status().is_success() {
         let text = resp.text().await.unwrap_or_default();
+        eprintln!("[intent] tool execution failed: tool={} error={}", tool_name, text);
         return Err(IntentError::ToolExecutionFailed(text));
     }
 
@@ -254,52 +275,80 @@ pub fn build_summarize_prompt(
     user_message: &str,
     tool_name: &str,
     tool_result: &Value,
-    history: &[Value],
+    _history: &[Value],
 ) -> String {
-    let result_str = serde_json::to_string_pretty(&tool_result).unwrap_or_default();
+    match tool_name {
+        "weather" | "forecast" => build_weather_prompt(user_message, tool_name, tool_result),
+        _ => build_web_search_prompt(user_message, tool_result),
+    }
+}
 
-    let history_summary = if history.is_empty() {
-        String::new()
-    } else {
-        history
+fn build_weather_prompt(user_message: &str, tool_name: &str, tool_result: &Value) -> String {
+    let data_text = serde_json::to_string_pretty(tool_result).unwrap_or_default();
+    let tool_label = if tool_name == "forecast" { "天氣預報" } else { "即時天氣" };
+
+    format!(
+        r#"用戶詢問了：「{user_message}」
+
+以下是{tool_label}工具回傳的數據：
+
+{data_text}
+
+請根據以上數據，用流暢自然的繁體中文回應用戶。
+
+要求：
+- 直接回答問題，不要說「根據數據」或「根據結果」
+- 包含溫度、天氣狀況、濕度、風速等關鍵資訊
+- 如果用戶問是否適合出行，根據天氣數據給出具體建議
+- 用日常對話口吻，不要過於正式
+- 在回答末尾附上簡短來源標記：
+
+**參考來源**
+[1] {tool_label}數據 ({tool_name} tool)"#
+    )
+}
+
+fn build_web_search_prompt(user_message: &str, tool_result: &Value) -> String {
+    let results_text = if let Some(results) = tool_result
+        .get("result")
+        .and_then(|r| r.get("results"))
+        .and_then(|r| r.as_array())
+    {
+        results
             .iter()
-            .rev()
-            .take(4)
-            .filter_map(|m| {
-                let role = m.get("role")?.as_str()?;
-                let content = m.get("content")?.as_str()?;
-                Some(format!("{}: {}", role, content))
+            .enumerate()
+            .filter_map(|(i, item)| {
+                let title = item.get("title")?.as_str()?;
+                let link = item.get("link")?.as_str()?;
+                let snippet = item.get("snippet").and_then(|v| v.as_str()).unwrap_or("");
+                Some(format!("[{}] 標題：{}\n    摘要：{}\n    連結：{}", i + 1, title, snippet, link))
             })
             .collect::<Vec<_>>()
-            .join("\n")
+            .join("\n\n")
+    } else {
+        serde_json::to_string_pretty(tool_result).unwrap_or_default()
     };
 
     format!(
-        r#"你是一個助手，用戶詢問了：「{}」
+        r#"用戶詢問了：「{user_message}」
 
-以下是工具執行結果（JSON 格式）：
-{}
+以下是網路搜尋結果：
 
-{}
+{results_text}
 
-請根據工具結果，用流暢自然的語言回應用戶。不要提及"根據工具結果"或"數據顯示"等字眼，直接用自然的句子回答。
-如果用戶用繁體中文提問，請用繁體中文回答。
+請根據搜尋結果，用流暢自然的繁體中文回應用戶。
 
-重要格式要求：
-- 如果結果包含網頁連結，請使用 Markdown 格式：[標題](連結URL)
-- 搜尋結果請條列說明，每項包含可點擊的連結
-- 天氣資訊直接以自然語言表達
+格式要求（仿照 Copilot 風格）：
+- 在回答正文中，對引用的資訊標註來源編號，例如：負責人為何將謙[1][2]，實收資本額為 100,000 元[1]。
+- 回答結束後，附上「參考來源」區塊，格式如下：
 
-範例格式：
-1. [AI | 世界新聞網](https://example.com) - 最新AI相關報導和深度分析
-2. [TechNews 科技新報](https://technews.tw) - AI技術發展和產業動態"#,
-        user_message,
-        result_str,
-        if history_summary.is_empty() {
-            String::new()
-        } else {
-            format!("\n\n參考對話歷史：\n{}", history_summary)
-        }
+**參考來源**
+[1] [標題文字](URL)
+[2] [標題文字](URL)
+
+- 編號必須與正文引用對應
+- 用繁體中文回答
+- 直接回答問題，不要說「根據搜尋結果」"#
     )
 }
 
@@ -389,6 +438,7 @@ pub async fn summarize_text(
     tool_result: &Value,
     history: &[Value],
 ) -> Result<String, IntentError> {
+    eprintln!("[intent] summarize_text: model={} ollama_url={} tool={}", model, ollama_url, tool_name);
     let prompt = build_summarize_prompt(user_message, tool_name, tool_result, history);
 
     let body = serde_json::json!({
@@ -406,6 +456,7 @@ pub async fn summarize_text(
         .await?;
 
     if !resp.status().is_success() {
+        eprintln!("[intent] summarize failed: model={} status={}", model, resp.status());
         return Err(IntentError::OllamaError("summarize failed".into()));
     }
 
@@ -428,15 +479,19 @@ pub async fn route_tool_intent(
     ollama_url: &str,
     ollama_model: &str,
     user_message: &str,
-    history: &[Value],
+    _history: &[Value],
+    threshold: f64,
 ) -> Result<Option<ToolIntentResult>, IntentError> {
-    let detect_result = detect_intent(client, intent_rag_url, user_message).await;
+    let detect_result = detect_intent(client, intent_rag_url, user_message, threshold).await;
     let Some((intent_match, tool_name)) = detect_result? else {
         return Ok(None);
     };
 
+    eprintln!("[intent] extracting parameters for tool={} model={}", tool_name, ollama_model);
     let params = extract_parameters(client, ollama_url, ollama_model, user_message, &tool_name).await?;
+    eprintln!("[intent] executing tool={} params={:?}", tool_name, params.keys().collect::<Vec<_>>());
     let result = execute_tool(client, mcp_tools_url, &tool_name, params).await?;
+    eprintln!("[intent] tool={} executed successfully", tool_name);
 
     Ok(Some(ToolIntentResult {
         tool_name,

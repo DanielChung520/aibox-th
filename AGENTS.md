@@ -1,7 +1,7 @@
 ---
-lastUpdate: 2026-03-27 21:12:40
+lastUpdate: 2026-04-10 22:35:00
 author: Daniel Chung
-version: 1.5.0
+version: 1.7.0
 ---
 # AGENTS.md - Daniel Chung Guide for ABC Desktop
 
@@ -338,6 +338,152 @@ cd ai-services && ruff check . && ruff format --check . && mypy . --strict --ign
 
 # Start AI service (example: aitask)
 cd ai-services/aitask && uvicorn main:app --port 8001 --reload
+```
+
+---
+
+## 執行環境 (Execution Environment)
+
+### Python 服務執行環境
+
+**重要**：所有 Python AI 服務必須使用 `.venv` 虛擬環境執行，**禁止使用系統 Python**。
+
+#### 確認虛擬環境
+
+```bash
+# 確認 .venv 存在
+ls -la ai-services/.venv/bin/python
+
+# 確認當前使用的 Python 版本（應為 3.14）
+ai-services/.venv/bin/python --version
+```
+
+#### 服務啟動命令（使用 .venv）
+
+```bash
+# 進入 ai-services 目錄
+cd ai-services
+
+# 啟動所有 Python AI 服務（使用 .venv）
+source .venv/bin/activate
+
+# AITask (port 8001) - AI 任務編排
+.venv/bin/python -m uvicorn aitask.main:app --port 8001 --host 0.0.0.0
+
+# Data Agent (port 8003) - NL→SQL 查詢
+.venv/bin/python -m uvicorn data_agent.main:app --port 8003 --host 0.0.0.0
+
+# MCP Tools (port 8004) - MCP 工具執行
+.venv/bin/python -m uvicorn mcp_tools.main:app --port 8004 --host 0.0.0.0
+
+# BPA MM Agent (port 8005) - 物料管理流程
+.venv/bin/python -m uvicorn bpa.mm_agent.main:app --port 8005 --host 0.0.0.0
+
+# Knowledge Agent (port 8007) - 知識庫 RAG
+.venv/bin/python -m uvicorn knowledge_agent.main:app --port 8007 --host 0.0.0.0
+
+# Memory Agent (port 8008) - AI 增強記憶
+.venv/bin/python -m uvicorn memory_agent.main:app --port 8008 --host 0.0.0.0
+
+# Backup Agent (port 8010)
+.venv/bin/python -m uvicorn backup_agent.main:app --port 8010 --host 0.0.0.0
+```
+
+#### 快速重啟單一服務
+
+```bash
+# 找到並 kill 舊进程
+pkill -f "uvicorn aitask.main:app"
+
+# 使用 .venv 重啟
+cd ai-services
+nohup .venv/bin/python -m uvicorn aitask.main:app --port 8001 --host 0.0.0.0 > .tmp/aitask.log 2>&1 &
+```
+
+---
+
+### Rust API Gateway 執行環境
+
+#### 環境變數配置
+
+Rust API Gateway 使用 `api/.env` 檔案：
+
+```bash
+# 進入 api 目錄
+cd api
+
+# 確認 .env 存在
+cat .env | grep PORT
+
+# 啟動 API（自動讀取 .env）
+cd ..
+./target/release/abc-api
+```
+
+#### 環境變數範例 (api/.env)
+
+```env
+# ===================
+# Server
+# ===================
+PORT=6500
+HOST=0.0.0.0
+
+# ===================
+# Database
+# ===================
+DATABASE_URL=http://localhost:8529
+DATABASE_NAME=abc_desktop
+DATABASE_USER=root
+DATABASE_PASSWORD=abc_desktop_2026
+
+# ===================
+# JWT
+# ===================
+JWT_SECRET=your-secret-key
+JWT_EXPIRATION_HOURS=24
+
+# ===================
+# AI Services
+# ===================
+AITASK_URL=http://localhost:8001
+DATA_AGENT_URL=http://localhost:8003
+KNOWLEDGE_AGENT_URL=http://localhost:8007
+MCP_TOOLS_URL=http://localhost:8004
+BPA_MM_AGENT_URL=http://localhost:8005
+OLLAMA_BASE_URL=http://localhost:11434
+LM_STUDIO_URL=http://localhost:1234
+
+# ===================
+# External Services
+# ===================
+QDRANT_URL=http://localhost:6333
+SEAWEED_AIBOX_URL=http://localhost:8888
+SEAWEED_USER=admin
+SEAWEED_PASS=admin123
+
+# ===================
+# Rate Limiting
+# ===================
+RATE_LIMIT_MAX_REQUESTS=100
+RATE_LIMIT_WINDOW_SECONDS=60
+
+# ===================
+# Billing
+# ===================
+BILLING_FREE_TOKENS_PER_MONTH=10000
+BILLING_PRICE_PER_1K_TOKENS=0.001
+```
+
+#### 確認服務正常
+
+```bash
+# Rust API Gateway
+curl http://localhost:6500/health
+
+# Python AI Services
+curl http://localhost:8001/health  # AITask
+curl http://localhost:8003/health  # Data Agent
 ```
 
 ---

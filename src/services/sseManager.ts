@@ -1,9 +1,9 @@
 /**
  * @file        SSE 串流連線管理
  * @description 使用 fetch + ReadableStream 解析聊天 SSE 事件
- * @lastUpdate  2026-04-09 12:21:28
+ * @lastUpdate  2026-04-10 23:00:01
  * @author      Daniel Chung
- * @version     1.0.1
+ * @version     1.1.0
  */
 
 import { FileStatusPayload, SendMessageRequest } from './api';
@@ -47,10 +47,22 @@ interface SSEChunkPayload {
     content?: string;
     thinking?: string;
   };
+  choices?: Array<{
+    delta?: {
+      content?: string;
+    };
+    finish_reason?: string | null;
+  }>;
 }
 
 interface SSEErrorPayload {
   error?: string;
+}
+
+function extractChunkDelta(payload: SSEChunkPayload): string {
+  return payload.message?.content
+    ?? payload.choices?.[0]?.delta?.content
+    ?? '';
 }
 
 function parseSSEEvent(rawEvent: string): { event: string; data: string } {
@@ -127,7 +139,7 @@ export function sendMessageSSE(
             } else if (evt.event === 'chat_chunk') {
               try {
                 const payload = JSON.parse(evt.data) as SSEChunkPayload;
-                const delta = payload.message?.content ?? '';
+                const delta = extractChunkDelta(payload);
                 if (delta) callbacks.onChunk(delta);
               } catch {
                 callbacks.onError('SSE chunk 解析失敗');
@@ -170,7 +182,7 @@ export function sendMessageSSE(
           if (evt.event === 'chat_chunk') {
             try {
               const payload = JSON.parse(evt.data) as SSEChunkPayload;
-              const delta = payload.message?.content ?? '';
+              const delta = extractChunkDelta(payload);
               if (delta) callbacks.onChunk(delta);
             } catch {
               callbacks.onError('SSE chunk 解析失敗');
