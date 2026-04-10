@@ -30,7 +30,7 @@ pub struct SseEvent {
     pub retry: Option<u64>,
 }
 
-/// 全局广播通道 (用于演示，实际应从外部注入)
+// 全局广播通道 (用于演示，實際應從外部注入)
 lazy_static::lazy_static! {
     static ref BROADCAST_TX: Arc<broadcast::Sender<SseEvent>> = {
         let (tx, _) = broadcast::channel(100);
@@ -38,7 +38,7 @@ lazy_static::lazy_static! {
     };
 }
 
-/// Session-scoped broadcast channels for file status events
+// Session-scoped broadcast channels for file status events
 lazy_static::lazy_static! {
     static ref FILE_BROADCAST_TXS: Arc<std::sync::Mutex<HashMap<String, broadcast::Sender<SseEvent>>>> = {
         Arc::new(std::sync::Mutex::new(HashMap::new()))
@@ -217,7 +217,7 @@ pub async fn sse_session_files(
     Path(session_key): Path<String>,
 ) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
     let tx = get_or_create_file_broadcast_tx(&session_key);
-    let mut rx = tx.subscribe();
+    let rx = tx.subscribe();
 
     let initial_stream = stream::iter(vec![Ok(
         Event::default().event("connected").data(

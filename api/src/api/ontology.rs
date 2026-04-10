@@ -27,7 +27,7 @@ pub async fn list_ontologies(
     } else {
         (
             "FOR o IN ontologies SORT o.type ASC, o.name ASC RETURN o".to_string(),
-            HashMap::new().into(),
+            HashMap::new(),
         )
     };
 
@@ -81,7 +81,7 @@ pub async fn create_ontology(
         use_cases: extract_string_array(&payload, "use_cases"),
         entity_classes: serde_json::from_value(payload.get("entity_classes").cloned().unwrap_or(json!([]))).unwrap_or_default(),
         object_properties: serde_json::from_value(payload.get("object_properties").cloned().unwrap_or(json!([]))).unwrap_or_default(),
-        metadata: serde_json::from_value(payload.get("metadata").cloned().unwrap_or(json!({}))).unwrap_or_else(|_| crate::db::ontology::OntologyMetadata {
+        metadata: serde_json::from_value(payload.get("metadata").cloned().unwrap_or(json!({}))).unwrap_or(crate::db::ontology::OntologyMetadata {
             domain_owner: None,
             domain: None,
             major_owner: None,

@@ -15,7 +15,7 @@ use axum::{
     extract::{DefaultBodyLimit, Path, Query},
     http::{HeaderMap, StatusCode},
     response::IntoResponse,
-    routing::{delete, get, post},
+    routing::post,
     Json, Router,
 };
 use futures::StreamExt;
@@ -37,7 +37,7 @@ pub async fn list_roots(
     } else {
         (
             "FOR r IN knowledge_roots SORT r.created_at DESC RETURN r".to_string(),
-            HashMap::new().into(),
+            HashMap::new(),
         )
     };
 
@@ -357,14 +357,14 @@ pub async fn upload_file(
 
     // Extract file from multipart
     let field = multipart.next_field().await.map_err(|_| err_400("no file provided"))?;
-    let mut field = field.ok_or_else(|| err_400("no file provided"))?;
+    let field = field.ok_or_else(|| err_400("no file provided"))?;
 
     let filename = field.file_name().unwrap_or("unknown").to_string();
     let content_type = field.content_type().unwrap_or("application/octet-stream").to_string();
 
     // Determine user tier and max upload size
-    let tier = extract_user_tier(&headers, &db).await;
-    let max_size = get_upload_max_size(&db, &tier).await;
+    let tier = extract_user_tier(&headers, db).await;
+    let max_size = get_upload_max_size(db, &tier).await;
     let tier_display = if tier == "vip" { "VIP" } else { "一般用户" };
 
     // Generate unique file key and local path
@@ -429,10 +429,16 @@ pub async fn upload_file(
     }
     drop(file);
 
-    let bytes_to_upload = tokio::fs::read(&local_path).await.map_err(|e| {
-        let _ = tokio::fs::remove_file(&local_path);
-        (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "code": 500, "message": e.to_string() })))
-    })?;
+    let bytes_to_upload = match tokio::fs::read(&local_path).await {
+        Ok(bytes) => bytes,
+        Err(e) => {
+            let _ = tokio::fs::remove_file(&local_path).await;
+            return Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "code": 500, "message": e.to_string() })),
+            ));
+        }
+    };
 
     let s3_path = format!("bucket-aibox-assets/{}/{}.{}", root_id, file_key, ext);
 
@@ -669,6 +675,7 @@ pub async fn clear_jobs(
 /// List stuck jobs: processing in DB but no active Celery task backing them.
 /// A job is stuck if vector_status or graph_status is "processing" for > STUCK_TIMEOUT_SECS
 /// without a corresponding active Celery task.
+#[allow(dead_code)]
 const STUCK_TIMEOUT_SECS: i64 = 600; // 10 minutes
 
 pub async fn list_jobs_stuck() -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {

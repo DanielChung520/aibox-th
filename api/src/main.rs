@@ -1,3 +1,6 @@
+#![allow(dead_code, unused_imports)]
+#![allow(clippy::single_component_path_imports)]
+
 //! Main entry point
 //!
 //! # Description

@@ -7,22 +7,7 @@
 //! # Version: 1.0.0
 
 use axum::{routing::get, Json, Router};
-use serde::Serialize;
-
 use crate::db::get_db;
-
-#[derive(Serialize)]
-struct WebSearchConfig {
-    serper_enabled: bool,
-    serper_api_key: String,
-    serpapi_enabled: bool,
-    serpapi_api_key: String,
-    scraper_enabled: bool,
-    scraper_api_key: String,
-    google_cse_enabled: bool,
-    google_cse_api_key: String,
-    google_cse_cx: String,
-}
 
 async fn get_web_search_config() -> Json<serde_json::Value> {
     let db = get_db();

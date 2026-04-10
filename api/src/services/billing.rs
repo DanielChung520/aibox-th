@@ -22,13 +22,13 @@ impl BillingService {
         }
     }
 
-    pub fn check_quota(&self, user_key: &str, tokens_used: u64) -> Result<u64, ApiError> {
+    pub fn check_quota(&self, _user_key: &str, tokens_used: u64) -> Result<u64, ApiError> {
         let remaining = self.free_tokens_per_month.saturating_sub(tokens_used);
-        
+
         if remaining == 0 {
             return Err(ApiError::quota_exceeded());
         }
-        
+
         Ok(remaining)
     }
 
@@ -36,17 +36,22 @@ impl BillingService {
         (tokens as f64 / 1000.0) * self.price_per_1k_tokens
     }
 
-    pub fn record_usage(&self, user_key: &str, tokens: u64, request_type: &str) -> Result<(), ApiError> {
+    pub fn record_usage(
+        &self,
+        user_key: &str,
+        tokens: u64,
+        request_type: &str,
+    ) -> Result<(), ApiError> {
         tracing::info!(
             "Usage recorded: user={}, tokens={}, type={}",
             user_key,
             tokens,
             request_type
         );
-        
+
         let cost = self.calculate_cost(tokens);
         tracing::info!("Cost calculated: ${:.4}", cost);
-        
+
         Ok(())
     }
 

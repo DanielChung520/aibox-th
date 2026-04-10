@@ -73,6 +73,7 @@ enum WsServerMessage {
         title: String,
         body: String,
     },
+    #[allow(dead_code)]
     Error {
         code: String,
         message: String,
@@ -137,7 +138,7 @@ async fn handle_chat_socket(socket: WebSocket, addr: std::net::SocketAddr, state
                                 WsClientMessage::Chat { message, context_id } => {
                                     tracing::info!("Chat message from {}: {}", addr, message);
                                     
-                                    let responses = vec![
+                                    let responses = [
                                         "好的，我来帮你处理这个问题。",
                                         "让我分析一下...",
                                         "根据我的理解，你可以尝试以下方案：",
@@ -248,14 +249,9 @@ async fn handle_monitor_socket(socket: WebSocket, addr: std::net::SocketAddr, st
             msg = receiver.next() => {
                 match msg {
                     Some(Ok(Message::Text(text))) => {
-                        if let Ok(client_msg) = serde_json::from_str::<WsClientMessage>(&text) {
-                            match client_msg {
-                                WsClientMessage::Heartbeat => {
-                                    let ack = WsServerMessage::HeartbeatAck;
-                                    let _ = sender.send(Message::Text(serde_json::to_string(&ack).unwrap().into())).await;
-                                }
-                                _ => {}
-                            }
+                        if let Ok(WsClientMessage::Heartbeat) = serde_json::from_str::<WsClientMessage>(&text) {
+                            let ack = WsServerMessage::HeartbeatAck;
+                            let _ = sender.send(Message::Text(serde_json::to_string(&ack).unwrap().into())).await;
                         }
                     }
                     Some(Ok(Message::Close(_))) | None => {

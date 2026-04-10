@@ -100,8 +100,8 @@ fn base_url_for(name: &str) -> String {
         "knowledge-agent" => cfg.knowledge_agent_url.clone(),
         "backup-agent"  => std::env::var("BACKUP_AGENT_URL")
             .unwrap_or_else(|_| "http://localhost:8010".to_string()),
-        "celery"        => format!("http://localhost:6379"),
-        _ => format!("http://localhost:{}", 0),
+        "celery"        => "http://localhost:6379".to_string(),
+        _ => "http://localhost:0".to_string(),
     }
 }
 

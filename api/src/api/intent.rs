@@ -12,6 +12,7 @@ use futures::Stream;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+#[allow(dead_code)]
 #[derive(Debug)]
 pub enum IntentError {
     Reqwest(reqwest::Error),
@@ -34,13 +35,14 @@ impl From<serde_json::Error> for IntentError {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-struct IntentMatchResult {
+pub struct IntentMatchResult {
     intent_id: String,
     score: f64,
     #[serde(rename = "intent_data")]
     intent_data: IntentData,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Deserialize)]
 struct IntentData {
     #[serde(rename = "intent_type", default)]
@@ -55,6 +57,7 @@ struct IntentData {
     description: String,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Deserialize)]
 struct IntentMatchResponse {
     query: String,
@@ -472,6 +475,7 @@ pub struct ToolIntentResult {
     pub result: Value,
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn route_tool_intent(
     client: &reqwest::Client,
     intent_rag_url: &str,

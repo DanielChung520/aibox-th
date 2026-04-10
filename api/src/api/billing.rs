@@ -10,9 +10,8 @@
 use crate::error::ApiError;
 use axum::{
     extract::Path,
-    http::StatusCode,
     response::IntoResponse,
-    routing::{get, post, delete},
+    routing::{delete, get},
     Json, Router,
 };
 use serde::{Deserialize, Serialize};

@@ -7,11 +7,10 @@
 //! # Author: Daniel Chung
 //! # Version: 1.1.0
 
-use reqwest;
 use crate::auth::verify_jwt;
 use crate::middleware::auth::jwt_auth_middleware;
 use crate::db::{
-    get_db, CreateAgentRequest, CreateRoleRequest, CreateToolRequest, CreateUserRequest, Function, FunctionRoleAuth, Role, RoleFunction, SystemParam, UpdateParamRequest, UpdateRoleRequest, User, Agent, Tool, ToolLog, ModelProvider, LLMModel,
+    get_db, CreateAgentRequest, CreateRoleRequest, CreateToolRequest, CreateUserRequest, Function, FunctionRoleAuth, Role, RoleFunction, SystemParam, UpdateParamRequest, UpdateRoleRequest, User, Agent, Tool, ModelProvider, LLMModel,
 };
 use crate::models::*;
 use axum::{
