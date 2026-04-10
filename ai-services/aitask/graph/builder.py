@@ -13,28 +13,16 @@ from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import Checkpointer
 
 from aitask.graph.nodes import (
+    bpa_orchestrator_node,
     chat_responder_node,
     classify_intent_node,
+    da_query_node,
+    ka_search_node,
     memory_manager_node,
     resolve_coreference_node,
+    tool_executor_node,
 )
 from aitask.graph.state import TopState
-
-
-async def tool_executor_node(state: TopState) -> dict[str, object]:
-    return {}
-
-
-async def bpa_orchestrator_node(state: TopState) -> dict[str, object]:
-    return {}
-
-
-async def da_query_node(state: TopState) -> dict[str, object]:
-    return {}
-
-
-async def ka_search_node(state: TopState) -> dict[str, object]:
-    return {}
 
 
 def route_by_intent(state: TopState) -> str:
@@ -44,7 +32,7 @@ def route_by_intent(state: TopState) -> str:
 
 
 def build_graph(
-    checkpointer: Checkpointer,
+    checkpointer: Checkpointer | None,
 ) -> CompiledStateGraph[TopState, None, TopState, TopState]:
     graph = StateGraph(TopState)
     graph.add_node("classify_intent", classify_intent_node)

@@ -9,6 +9,7 @@ and 5W1H tagging for chat sessions.
 # Version: 1.2.0
 """
 
+import asyncio
 import json
 import logging
 import os
@@ -19,10 +20,14 @@ import httpx
 from arango import ArangoClient  # type: ignore[attr-defined]
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
+from langchain_core.messages import HumanMessage
+from langchain_core.runnables import RunnableConfig
 from pydantic import BaseModel
 
+from aitask.checkpointer.arango_saver import ArangoDBSaver
 from aitask.collections import ensure_collections
 from aitask.config import settings
+from aitask.graph.builder import build_graph
 
 logger = logging.getLogger("aitask")
 
@@ -112,6 +117,13 @@ class Tag5W1HResponse(BaseModel):
     tags: dict[str, str]
 
 
+class GraphChatRequest(BaseModel):
+    session_id: str
+    user_id: str
+    message: str
+    mode: str = "chat"
+
+
 @app.get("/", response_model=ServiceInfo)
 def root() -> ServiceInfo:
     return ServiceInfo(
@@ -158,7 +170,7 @@ def get_provider_config(provider: str, provider_base_url: Optional[str]) -> tupl
 
 
 async def stream_ollama(
-    base_url: str, model: str, messages: list[dict], temperature: float
+    base_url: str, model: str, messages: list[dict[str, str]], temperature: float
 ) -> AsyncGenerator[str, None]:
     """Stream chat from Ollama."""
     async with httpx.AsyncClient(timeout=120.0) as client:
@@ -186,7 +198,12 @@ async def stream_ollama(
 
 
 async def stream_openai_compatible(
-    base_url: str, model: str, messages: list[dict], temperature: float, max_tokens: Optional[int] = None, api_key: str = ""
+    base_url: str,
+    model: str,
+    messages: list[dict[str, str]],
+    temperature: float,
+    max_tokens: Optional[int] = None,
+    api_key: str = "",
 ) -> AsyncGenerator[str, None]:
     """Stream chat from OpenAI-compatible API (OpenAI, MiniMax, etc.)."""
     async with httpx.AsyncClient(timeout=120.0) as client:
@@ -226,7 +243,11 @@ async def stream_openai_compatible(
 
 
 async def stream_gemini(
-    base_url: str, model: str, messages: list[dict], temperature: float, api_key: str = ""
+    base_url: str,
+    model: str,
+    messages: list[dict[str, str]],
+    temperature: float,
+    api_key: str = "",
 ) -> AsyncGenerator[str, None]:
     """Stream chat from Google Gemini API."""
     async with httpx.AsyncClient(timeout=120.0) as client:
@@ -275,7 +296,11 @@ async def stream_gemini(
 
 
 async def stream_anthropic(
-    base_url: str, model: str, messages: list[dict], temperature: float, max_tokens: Optional[int] = None
+    base_url: str,
+    model: str,
+    messages: list[dict[str, str]],
+    temperature: float,
+    max_tokens: Optional[int] = None,
 ) -> AsyncGenerator[str, None]:
     """Stream chat from Anthropic Claude API."""
     async with httpx.AsyncClient(timeout=120.0) as client:
@@ -327,7 +352,13 @@ async def stream_anthropic(
 
 
 def get_streaming_generator(
-    provider: str, base_url: str, model: str, messages: list[dict], temperature: float, max_tokens: Optional[int] = None, api_key: Optional[str] = None
+    provider: str,
+    base_url: str,
+    model: str,
+    messages: list[dict[str, str]],
+    temperature: float,
+    max_tokens: Optional[int] = None,
+    api_key: Optional[str] = None,
 ) -> AsyncGenerator[str, None]:
     """Get the appropriate streaming generator based on provider."""
     if provider == "ollama":
@@ -447,7 +478,7 @@ async def chat_completions(request: ChatRequest) -> StreamingResponse:
 
 
 @app.post("/chat")
-async def chat(request: ChatRequest) -> dict:
+async def chat(request: ChatRequest) -> dict[str, object]:
     provider = request.provider or "ollama"
     model = request.model or DEFAULT_MODEL
     messages = [{"role": m.role, "content": m.content} for m in request.messages]
@@ -543,13 +574,14 @@ async def chat(request: ChatRequest) -> dict:
 
 
 @app.get("/models")
-async def list_models() -> dict:
+async def list_models() -> dict[str, object]:
     """List available models from Ollama."""
     async with httpx.AsyncClient(timeout=30.0) as client:
         try:
             response = await client.get(f"{OLLAMA_BASE_URL}/api/tags")
             response.raise_for_status()
-            return response.json()
+            payload = response.json()
+            return payload if isinstance(payload, dict) else {"models": payload}
         except httpx.HTTPError as e:
             raise HTTPException(status_code=502, detail=f"Ollama connection failed: {str(e)}")
 
@@ -598,8 +630,126 @@ def _parse_tags_response(raw: str) -> dict[str, str]:
         else:
             raise
 
+    if not isinstance(parsed, dict):
+        raise ValueError("Tag response is not a JSON object")
+
     default_keys = ("who", "what", "when", "where", "why", "how")
     return {k: str(parsed.get(k, "未知")) for k in default_keys}
+
+
+def _build_graph_input(request: GraphChatRequest) -> dict[str, object]:
+    return {
+        "session_id": request.session_id,
+        "user_id": request.user_id,
+        "mode": request.mode if request.mode in {"chat", "task"} else "chat",
+        "messages": [HumanMessage(content=request.message)],
+        "current_intent": None,
+        "intent_confidence": 0.0,
+        "intent_method": "rule",
+        "entities": {},
+        "coreference_resolved": False,
+        "context_entities": {},
+        "active_bpa": None,
+        "bpa_workflow_id": None,
+        "bpa_state": "idle",
+        "tool_results": [],
+        "pending_tool_calls": [],
+        "short_term_memory": [],
+        "long_term_memory": [],
+        "memory_turn_count": 0,
+        "protocol_version": "2.0",
+        "state_version": 1,
+        "checkpoint_version": 1,
+    }
+
+
+def _sse(event_type: str, payload: dict[str, object]) -> str:
+    return f"event: {event_type}\ndata: {json.dumps(payload, ensure_ascii=False, default=str)}\n\n"
+
+
+def _event_payload(event: object) -> dict[str, object]:
+    if not isinstance(event, dict):
+        return {"event": "unknown", "name": "", "run_id": "", "data": {}}
+    payload = {
+        "event": event.get("event", "unknown"),
+        "name": event.get("name", ""),
+        "run_id": event.get("run_id", ""),
+        "data": event.get("data", {}),
+    }
+    parent_ids = event.get("parent_ids")
+    if isinstance(parent_ids, list):
+        payload["parent_ids"] = parent_ids
+    return payload
+
+
+def _map_graph_event(event: object) -> tuple[str, dict[str, object]] | None:
+    if not isinstance(event, dict):
+        return None
+    event_name = str(event.get("event", ""))
+    name = str(event.get("name", ""))
+    data = event.get("data", {})
+    payload = _event_payload(event)
+    if event_name == "on_chat_model_stream":
+        chunk_text = ""
+        if isinstance(data, dict):
+            chunk = data.get("chunk")
+            content = getattr(chunk, "content", "")
+            chunk_text = content if isinstance(content, str) else str(content)
+        payload["chunk"] = chunk_text
+        return "chat_chunk", payload
+    if event_name == "on_chain_start" and name == "da_query":
+        return "da_query_start", payload
+    if event_name == "on_chain_end" and name == "da_query":
+        return "da_query_result", payload
+    if event_name == "on_chain_end" and name == "ka_search":
+        return "ka_search_result", payload
+    if event_name == "on_chain_start" and name == "bpa_orchestrator":
+        return "bpa_step_start", payload
+    if event_name == "on_chain_start" and name == "tool_executor":
+        return "tool_call_start", payload
+    if event_name == "on_chain_end" and name == "tool_executor":
+        return "tool_call_result", payload
+    if event_name == "on_chain_end" and name == "memory_manager":
+        return "chat_complete", payload
+    if event_name == "on_chain_error":
+        return "error", payload
+    return None
+
+
+async def _build_checkpointer() -> ArangoDBSaver:
+    saver = ArangoDBSaver(
+        db_url=settings.arango.url,
+        db_name=settings.arango.db_name,
+        username=settings.arango.username,
+        password=settings.arango.password,
+    )
+    await saver.setup()
+    return saver
+
+
+async def _graph_event_stream(request: GraphChatRequest) -> AsyncGenerator[str, None]:
+    try:
+        checkpointer = await _build_checkpointer()
+        graph = build_graph(checkpointer)
+        config: RunnableConfig = {"configurable": {"thread_id": request.session_id}}
+        async for event in graph.astream_events(
+            _build_graph_input(request),
+            config=config,
+            version="v2",
+        ):
+            mapped = _map_graph_event(event)
+            if mapped is not None:
+                event_type, payload = mapped
+                yield _sse(event_type, payload)
+        yield _sse("heartbeat", {"status": "done", "session_id": request.session_id})
+    except Exception as exc:
+        yield _sse("error", {"message": str(exc), "session_id": request.session_id})
+
+
+async def _heartbeat_stream(context_id: str) -> AsyncGenerator[str, None]:
+    while True:
+        yield _sse("heartbeat", {"context_id": context_id, "status": "alive"})
+        await asyncio.sleep(15)
 
 
 @app.post("/v1/chat/tag-5w1h", response_model=Tag5W1HResponse)
@@ -634,3 +784,19 @@ async def tag_5w1h(request: Tag5W1HRequest) -> Tag5W1HResponse:
         tags = {k: "未知" for k in ("who", "what", "when", "where", "why", "how")}
 
     return Tag5W1HResponse(session_key=request.session_key, tags=tags)
+
+
+@app.post("/v1/graph/chat")
+async def graph_chat(request: GraphChatRequest) -> StreamingResponse:
+    return StreamingResponse(
+        _graph_event_stream(request),
+        media_type="text/event-stream",
+    )
+
+
+@app.get("/v1/graph/stream/{context_id}")
+async def graph_stream(context_id: str) -> StreamingResponse:
+    return StreamingResponse(
+        _heartbeat_stream(context_id),
+        media_type="text/event-stream",
+    )
