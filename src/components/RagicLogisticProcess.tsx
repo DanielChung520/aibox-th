@@ -9,11 +9,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Avatar, Button, Card, Col, Divider, Dropdown, Input, List, Modal, Row, Space, Spin, Tag, Typography, theme } from 'antd';
 import type { MenuProps } from 'antd';
-import { SendOutlined, UserOutlined, RobotOutlined, CompressOutlined, EyeOutlined, ZoomInOutlined, ZoomOutOutlined, InfoCircleOutlined } from '@ant-design/icons';
+import { SendOutlined, UserOutlined, RobotOutlined, CompressOutlined, EyeOutlined, ZoomInOutlined, ZoomOutOutlined, InfoCircleOutlined, PlusOutlined, HistoryOutlined } from '@ant-design/icons';
 import { CanvasEvent, Graph, NodeEvent } from '@antv/g6';
 import type { ComboData, EdgeData, IElementEvent, NodeData } from '@antv/g6';
-import { chatStore } from '../stores/chatStore';
-import { dataAgentApi } from '../services/dataAgentApi';
+import { ragicChatStore } from '../stores/chatStore';
 import flowQuestions from '../../data/ragic-flow-questions.json';
 
 const { Title, Text } = Typography;
@@ -672,15 +671,13 @@ export default function RagicLogisticProcess() {
   const [chatInput, setChatInput] = useState('');
   const [infoModalNode, setInfoModalNode] = useState<typeof rawNodes[0] | null>(null);
   const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>([]);
-  const [dataQueryResult, setDataQueryResult] = useState<{ query: string; response: string; columns?: string[]; rows?: Record<string, unknown>[] } | null>(null);
-  const [dataQueryLoading, setDataQueryLoading] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
-  const [storeState, setStoreState] = useState(chatStore.getState());
+  const [storeState, setStoreState] = useState(ragicChatStore.getState());
 
-  const unsubscribe = chatStore.subscribe(() => setStoreState(chatStore.getState()));
+  const unsubscribe = ragicChatStore.subscribe(() => setStoreState(ragicChatStore.getState()));
 
   useEffect(() => {
-    void chatStore.loadProviders();
+    void ragicChatStore.loadProviders();
     return () => unsubscribe();
   }, []);
 
@@ -712,41 +709,9 @@ export default function RagicLogisticProcess() {
     setSuggestedQuestions(shuffled.slice(0, 3));
   }, [selectedNodeId]);
 
-  const handleDataQuery = async (question: string) => {
-    setDataQueryLoading(true);
-    setDataQueryResult({ query: question, response: '查詢中...' });
-    try {
-      const res = await dataAgentApi.query({
-        query: question,
-        options: {
-          timezone: 'Asia/Taipei',
-          limit: 50,
-        },
-      });
-      const data = res.data.data;
-      if (data.results && data.results.length > 0) {
-        const cols = data.columns || Object.keys(data.results[0]);
-        const readable = data.results.slice(0, 20).map((r) =>
-          cols.map((c) => `${c}: ${r[c]}`).join(' | ')
-        ).join('\n');
-        setDataQueryResult({
-          query: question,
-          response: `共 ${data.metadata.row_count} 筆資料:\n${readable}`,
-          columns: cols,
-          rows: data.results,
-        });
-      } else {
-        setDataQueryResult({
-          query: question,
-          response: `SQL: ${data.sql}\n\n無查詢結果`,
-        });
-      }
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : '查詢失敗';
-      setDataQueryResult({ query: question, response: `錯誤: ${msg}` });
-    } finally {
-      setDataQueryLoading(false);
-    }
+  const handleNewChat = async () => {
+    await ragicChatStore.createSession();
+    ragicChatStore.resetCurrentSession();
   };
 
   const handleSend = async () => {
@@ -761,7 +726,7 @@ export default function RagicLogisticProcess() {
 
     const fullContent = `${contextInfo ? contextInfo + '\n---\n' : ''}【使用者問題】\n${text}`;
     setChatInput('');
-    await chatStore.sendMessage(fullContent);
+    await ragicChatStore.sendMessage(fullContent);
   };
 
   useEffect(() => {
@@ -1019,11 +984,11 @@ export default function RagicLogisticProcess() {
         </div>
       </Card>
 
-      <Row gutter={[20, 20]}>
-        <Col xs={24} xl={18}>
+      <Row gutter={[20, 20]} style={{ height: suggestedGraphHeight + 45 }}>
+        <Col xs={24} xl={18} style={{ height: '100%' }}>
           <Card
-            styles={{ body: { padding: 12 } }}
-            style={{ borderRadius: 20 }}
+            styles={{ body: { padding: 12, height: '100%' } }}
+            style={{ borderRadius: 20, height: '100%' }}
           >
             <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginBottom: 10 }}>
               <Space size={8}>
@@ -1053,23 +1018,28 @@ export default function RagicLogisticProcess() {
           </Card>
         </Col>
 
-        <Col xs={2} xl={6}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16, height: suggestedGraphHeight, overflow: 'hidden' }}>
-            <Card styles={{ body: { padding: 18, display: 'flex', flexDirection: 'column', overflow: 'hidden', height: '100%' } }} style={{ borderRadius: 20, flex: 1, minHeight: 0 }}>
-              <Title level={4} style={{ marginTop: 0, marginBottom: 10, flexShrink: 0 }}>
+        <Col xs={2} xl={6} style={{ height: '100%' }}>
+          <Card styles={{ body: { padding: 12, display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' } }} style={{ borderRadius: 20, height: '100%' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 8, borderBottom: '1px solid #f0f0f0', marginBottom: 8 }}>
+              <Title level={4} style={{ marginTop: 0, marginBottom: 0 }}>
                 AI 流程問答
               </Title>
-              <div
-                style={{
-                  flex: 1,
-                  overflowY: 'auto',
-                  marginBottom: 10,
-                  border: '1px solid #f0f0f0',
-                  borderRadius: 8,
-                  padding: '8px 12px',
-                  background: '#fafafa',
-                  minHeight: 0,
-                }}
+              <Space size={4}>
+                <Button type="text" icon={<PlusOutlined />} onClick={handleNewChat} title="新聊天" size="small" />
+                <Button type="text" icon={<HistoryOutlined />} title="歷史紀錄" size="small" disabled />
+              </Space>
+            </div>
+            <div
+              style={{
+                flex: 1,
+                overflowY: 'auto',
+                border: '1px solid #f0f0f0',
+                borderRadius: 8,
+                padding: '8px 12px',
+                background: '#fafafa',
+                marginTop: 8,
+                minHeight: 0,
+              }}
               >
                 {storeState.messages.length === 0 ? (
                   <div style={{ padding: '16px 8px' }}>
@@ -1081,7 +1051,7 @@ export default function RagicLogisticProcess() {
                         {suggestedQuestions.map((q, i) => (
                           <div
                             key={i}
-                            onClick={() => handleDataQuery(q)}
+                            onClick={() => setChatInput(q)}
                             style={{
                               padding: '10px 14px',
                               marginBottom: 8,
@@ -1097,19 +1067,6 @@ export default function RagicLogisticProcess() {
                             {q}
                           </div>
                         ))}
-                        {dataQueryResult && (
-                          <div style={{ marginTop: 16, padding: 12, background: '#fafafa', borderRadius: 8, border: '1px solid #e8e8e8' }}>
-                            <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8, color: '#1677ff' }}>【查詢結果】</div>
-                            <div style={{ fontSize: 12, color: '#666', marginBottom: 8 }}>{dataQueryResult.query}</div>
-                            {dataQueryLoading ? (
-                              <Spin size="small" />
-                            ) : (
-                              <pre style={{ fontSize: 12, whiteSpace: 'pre-wrap', wordBreak: 'break-word', margin: 0, maxHeight: 200, overflow: 'auto', background: '#fff', padding: 8, borderRadius: 4, border: '1px solid #f0f0f0' }}>
-                                {dataQueryResult.response}
-                              </pre>
-                            )}
-                          </div>
-                        )}
                       </div>
                     ) : (
                       <div style={{ textAlign: 'center', marginTop: 80, color: '#999' }}>
@@ -1139,7 +1096,7 @@ export default function RagicLogisticProcess() {
                 )}
                 <div ref={chatEndRef} />
               </div>
-              <div style={{ position: 'relative' }}>
+              <div style={{ position: 'relative', flexShrink: 0, borderTop: '1px solid #f0f0f0', padding: '12px 16px', background: '#fff' }}>
                 <Input.TextArea
                   value={chatInput}
                   onChange={(e) => setChatInput(e.target.value)}
@@ -1158,9 +1115,9 @@ export default function RagicLogisticProcess() {
                   <Dropdown
                     menu={{ items: providerItems, onClick: ({ key }) => {
                       if (key === '__auto__') {
-                        chatStore.setSelectedProvider(null);
+                        ragicChatStore.setSelectedProvider(null);
                       } else {
-                        chatStore.setSelectedProvider(key);
+                        ragicChatStore.setSelectedProvider(key);
                       }
                     }}}
                     trigger={['click']}
@@ -1208,9 +1165,8 @@ export default function RagicLogisticProcess() {
                 </div>
               </div>
             </Card>
-          </div>
-        </Col>
-      </Row>
+          </Col>
+        </Row>
 
       <Modal
         title={infoModalNode ? `${infoModalNode.data.label}` : '節點詳情'}

@@ -526,8 +526,8 @@ async fn seed_model_providers(db: &Database<ReqwestClient>) -> Result<(), String
             models: vec![
                 LLMModel { model_id: "llama3.2:latest".to_string(), name: "llama3.2:latest".to_string(), display_name: Some("Llama 3.2".to_string()), context_window: Some(128000), input_cost_per_1k: None, output_cost_per_1k: None, supports_vision: Some(false), temperature: Some(0.7), status: "enabled".to_string() },
             ],
-            created_at: Utc::now().to_rfc3339(),
-            updated_at: Utc::now().to_rfc3339(),
+            created_at: Some(Utc::now().to_rfc3339()),
+            updated_at: Some(Utc::now().to_rfc3339()),
         },
         ModelProvider {
             _key: Some("openai".to_string()),
@@ -544,8 +544,8 @@ async fn seed_model_providers(db: &Database<ReqwestClient>) -> Result<(), String
                 LLMModel { model_id: "gpt-4-turbo".to_string(), name: "gpt-4-turbo".to_string(), display_name: Some("GPT-4 Turbo".to_string()), context_window: Some(128000), input_cost_per_1k: Some(0.01), output_cost_per_1k: Some(0.03), supports_vision: Some(true), temperature: Some(0.7), status: "enabled".to_string() },
                 LLMModel { model_id: "gpt-3.5-turbo".to_string(), name: "gpt-3.5-turbo".to_string(), display_name: Some("GPT-3.5 Turbo".to_string()), context_window: Some(16385), input_cost_per_1k: Some(0.0005), output_cost_per_1k: Some(0.0015), supports_vision: Some(false), temperature: Some(0.7), status: "enabled".to_string() },
             ],
-            created_at: Utc::now().to_rfc3339(),
-            updated_at: Utc::now().to_rfc3339(),
+            created_at: Some(Utc::now().to_rfc3339()),
+            updated_at: Some(Utc::now().to_rfc3339()),
         },
         ModelProvider {
             _key: Some("anthropic".to_string()),
@@ -561,8 +561,8 @@ async fn seed_model_providers(db: &Database<ReqwestClient>) -> Result<(), String
                 LLMModel { model_id: "claude-3-5-sonnet".to_string(), name: "claude-3-5-sonnet".to_string(), display_name: Some("Claude 3.5 Sonnet".to_string()), context_window: Some(200000), input_cost_per_1k: Some(0.003), output_cost_per_1k: Some(0.015), supports_vision: Some(true), temperature: Some(0.7), status: "enabled".to_string() },
                 LLMModel { model_id: "claude-3-opus".to_string(), name: "claude-3-opus".to_string(), display_name: Some("Claude 3 Opus".to_string()), context_window: Some(200000), input_cost_per_1k: Some(0.015), output_cost_per_1k: Some(0.075), supports_vision: Some(true), temperature: Some(0.7), status: "enabled".to_string() },
             ],
-            created_at: Utc::now().to_rfc3339(),
-            updated_at: Utc::now().to_rfc3339(),
+            created_at: Some(Utc::now().to_rfc3339()),
+            updated_at: Some(Utc::now().to_rfc3339()),
         },
     ];
 
@@ -851,8 +851,10 @@ pub struct ModelProvider {
     pub status: String,
     pub sort_order: i32,
     pub models: Vec<LLMModel>,
-    pub created_at: String,
-    pub updated_at: String,
+    #[serde(default)]
+    pub created_at: Option<String>,
+    #[serde(default)]
+    pub updated_at: Option<String>,
 }
 
 // ============= Chat Data Models =============
@@ -866,6 +868,7 @@ pub struct ChatSession {
     pub model: String,
     pub status: String,           // "active", "archived"
     pub tags_5w1h: Option<serde_json::Value>,
+    pub user_key: String,          // owner user key
     pub created_at: String,
     pub updated_at: String,
 }

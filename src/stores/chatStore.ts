@@ -36,6 +36,8 @@ interface ChatState {
 }
 
 class ChatStore {
+  namespace: string = 'default';
+
   private state: ChatState = {
     sessions: [],
     activeSessionKey: null,
@@ -442,5 +444,16 @@ class ChatStore {
 }
 
 export const chatStore = new ChatStore();
+
+export function createNamespacedChatStore(namespace: string) {
+  const store = new ChatStore();
+  store.namespace = namespace;
+  return store;
+}
+
+const taskChatStore = createNamespacedChatStore('task');
+const ragicChatStore = createNamespacedChatStore('ragic');
+
+export { taskChatStore, ragicChatStore };
 
 export type { ChatState };

@@ -13,7 +13,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use axum::extract::{Multipart, Path};
-use axum::http::StatusCode;
+use axum::http::{HeaderMap, StatusCode};
 use axum::response::sse::{Event, Sse};
 use axum::routing::{get, post};
 use axum::{Json, Router};
@@ -25,6 +25,7 @@ use crate::db::{
     SystemParam, UpdateSessionRequest,
 };
 use crate::models::ApiResponse;
+use crate::auth::{verify_jwt, Claims};
 use crate::api::sse::broadcast_file_status_event;
 use crate::api::intent::{
     route_tool_intent, sse_text_to_stream, summarize_text, ToolIntentResult,
@@ -44,6 +45,16 @@ struct ChatDefaults {
     max_tokens: i32,
     system_prompt: String,
     max_history_messages: usize,
+}
+
+fn extract_user_key_from_headers(headers: &HeaderMap) -> String {
+    headers
+        .get(axum::http::header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.strip_prefix("Bearer "))
+        .and_then(|token| verify_jwt(token).ok())
+        .map(|data| data.claims.sub)
+        .unwrap_or_else(|| "anonymous".to_string())
 }
 
 pub fn create_chat_router() -> Router {
@@ -68,12 +79,15 @@ pub fn create_chat_router() -> Router {
 }
 
 async fn create_session(
+    headers: HeaderMap,
     Json(payload): Json<CreateSessionRequest>,
 ) -> Result<Json<ApiResponse<ChatSession>>, StatusCode> {
     let db = get_db();
     let defaults = load_chat_defaults(db).await?;
     let key = uuid::Uuid::new_v4().to_string();
     let now = chrono::Utc::now().to_rfc3339();
+
+    let user_key = extract_user_key_from_headers(&headers);
 
     let session = ChatSession {
         _key: Some(key),
@@ -84,6 +98,7 @@ async fn create_session(
         model: payload.model.unwrap_or_else(|| defaults.default_model.clone()),
         status: "active".to_string(),
         tags_5w1h: None,
+        user_key,
         created_at: now.clone(),
         updated_at: now,
     };
@@ -99,24 +114,32 @@ async fn create_session(
     Ok(Json(ApiResponse::success(session)))
 }
 
-async fn list_sessions() -> Result<Json<ApiResponse<Vec<ChatSession>>>, StatusCode> {
+async fn list_sessions(
+    headers: HeaderMap,
+) -> Result<Json<ApiResponse<Vec<ChatSession>>>, StatusCode> {
     let db = get_db();
+    let user_key = extract_user_key_from_headers(&headers);
     let sessions: Vec<ChatSession> = db
-        .aql_str("FOR s IN chat_sessions SORT s.updated_at DESC RETURN s")
+        .aql_bind_vars(
+            "FOR s IN chat_sessions FILTER s.user_key == @user_key SORT s.updated_at DESC RETURN s",
+            [("user_key", serde_json::json!(user_key))].into(),
+        )
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(Json(ApiResponse::success(sessions)))
 }
 
 async fn get_session(
+    headers: HeaderMap,
     Path(key): Path<String>,
 ) -> Result<Json<ApiResponse<SessionWithMessages>>, StatusCode> {
     let db = get_db();
+    let user_key = extract_user_key_from_headers(&headers);
 
     let mut sessions: Vec<ChatSession> = db
         .aql_bind_vars(
-            "FOR s IN chat_sessions FILTER s._key == @key LIMIT 1 RETURN s",
-            [("key", serde_json::json!(key.clone()))].into(),
+            "FOR s IN chat_sessions FILTER s._key == @key AND s.user_key == @user_key LIMIT 1 RETURN s",
+            [("key", serde_json::json!(key.clone())), ("user_key", serde_json::json!(user_key))].into(),
         )
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -178,9 +201,24 @@ async fn update_session(
     Ok(Json(ApiResponse::success(session)))
 }
 
-async fn delete_session(Path(key): Path<String>) -> Result<Json<ApiResponse<String>>, StatusCode> {
+async fn delete_session(
+    headers: HeaderMap,
+    Path(key): Path<String>,
+) -> Result<Json<ApiResponse<String>>, StatusCode> {
     let db = get_db();
+    let user_key = extract_user_key_from_headers(&headers);
     let client = reqwest::Client::new();
+
+    let sessions: Vec<ChatSession> = db
+        .aql_bind_vars(
+            "FOR s IN chat_sessions FILTER s._key == @key AND s.user_key == @user_key RETURN s",
+            [("key", serde_json::json!(key.clone())), ("user_key", serde_json::json!(user_key))].into(),
+        )
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    if sessions.is_empty() {
+        return Err(StatusCode::NOT_FOUND);
+    }
 
     let file_keys: Vec<serde_json::Value> = db
         .aql_bind_vars(
@@ -262,6 +300,7 @@ async fn delete_session(Path(key): Path<String>) -> Result<Json<ApiResponse<Stri
 }
 
 async fn send_message(
+    headers: HeaderMap,
     Path(session_key): Path<String>,
     Json(payload): Json<SendMessageRequest>,
 ) -> Result<Sse<impl tokio_stream::Stream<Item = Result<Event, Infallible>>>, StatusCode> {
@@ -270,11 +309,12 @@ async fn send_message(
     }
 
     let db = get_db();
+    let user_key = extract_user_key_from_headers(&headers);
 
     let mut sessions: Vec<ChatSession> = db
         .aql_bind_vars(
-            "FOR s IN chat_sessions FILTER s._key == @key LIMIT 1 RETURN s",
-            [("key", serde_json::json!(session_key.clone()))].into(),
+            "FOR s IN chat_sessions FILTER s._key == @key AND s.user_key == @user_key LIMIT 1 RETURN s",
+            [("key", serde_json::json!(session_key.clone())), ("user_key", serde_json::json!(user_key))].into(),
         )
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -292,13 +332,17 @@ async fn send_message(
     let temperature = payload.temperature.unwrap_or(defaults.temperature);
     let max_tokens = payload.max_tokens.unwrap_or(defaults.max_tokens);
 
-    let providers: Vec<ModelProvider> = db
+    let providers_raw: Vec<serde_json::Value> = db
         .aql_bind_vars(
             "FOR p IN model_providers FILTER p.code == @code LIMIT 1 RETURN p",
             [("code", serde_json::json!(provider.clone()))].into(),
         )
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let providers: Vec<ModelProvider> = providers_raw
+        .into_iter()
+        .filter_map(|v| serde_json::from_value(v).ok())
+        .collect();
     let provider_info = providers.into_iter().next().ok_or(StatusCode::BAD_REQUEST)?;
 
     let user_msg = ChatMessage {
@@ -433,7 +477,6 @@ async fn send_message(
                 .aql_str("FOR p IN system_params FILTER p.param_key == \"intent.extraction_model\" RETURN p")
                 .await
                 .unwrap_or_default();
-            
             params.first()
                 .map(|p| p.param_value.clone())
                 .unwrap_or_else(|| "deepseek-v3.1:671b-cloud".to_string())
@@ -508,7 +551,6 @@ async fn send_message(
             }
         }
     }
-
     let (event_tx, event_rx) = mpsc::unbounded_channel::<Result<Event, std::convert::Infallible>>();
     let event_tx = Arc::new(event_tx);
     let tx_for_bg = event_tx.clone();
