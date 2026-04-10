@@ -12,35 +12,53 @@ and 5W1H tagging for chat sessions.
 import json
 import logging
 import os
+from contextlib import asynccontextmanager
 from typing import AsyncGenerator, Optional
 
 import httpx
+from arango import ArangoClient  # type: ignore[attr-defined]
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
+from aitask.collections import ensure_collections
+from aitask.config import settings
+
 logger = logging.getLogger("aitask")
+
+
+@asynccontextmanager
+async def lifespan(app_instance: FastAPI) -> AsyncGenerator[None, None]:
+    client = ArangoClient(hosts=settings.arango.url)
+    db = client.db(
+        settings.arango.db_name,
+        username=settings.arango.username,
+        password=settings.arango.password,
+    )
+    await ensure_collections(db)
+    logger.info("ArangoDB collections ensured")
+    yield
+
 
 app = FastAPI(
     title="AIBox AITask Service",
     description="AI Chat service with multi-provider streaming support.",
-    version="1.2.0",
+    version="1.3.0",
+    lifespan=lifespan,
 )
 
-# Provider base URLs (can be overridden by environment variables)
-OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
-ANTHROPIC_BASE_URL = os.getenv("ANTHROPIC_BASE_URL", "https://api.anthropic.com")
-GEMINI_BASE_URL = os.getenv("GEMINI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta")
-MINIMAX_BASE_URL = os.getenv("MINIMAX_BASE_URL", "https://api.minimaxi.com/v1")
+OLLAMA_BASE_URL = settings.provider.ollama_base_url
+OPENAI_BASE_URL = settings.provider.openai_base_url
+ANTHROPIC_BASE_URL = settings.provider.anthropic_base_url
+GEMINI_BASE_URL = settings.provider.gemini_base_url
+MINIMAX_BASE_URL = settings.provider.minimax_base_url
 
-# Provider API Keys
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-MINIMAX_API_KEY = os.getenv("MINIMAX_API_KEY", "")
-ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+OPENAI_API_KEY = settings.provider.openai_api_key
+MINIMAX_API_KEY = settings.provider.minimax_api_key
+ANTHROPIC_API_KEY = settings.provider.anthropic_api_key
+GEMINI_API_KEY = settings.provider.gemini_api_key
 
-DEFAULT_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2:latest")
+DEFAULT_MODEL = settings.default_model
 
 
 class ChatMessage(BaseModel):
@@ -536,7 +554,7 @@ async def list_models() -> dict:
             raise HTTPException(status_code=502, detail=f"Ollama connection failed: {str(e)}")
 
 
-TAGGING_MODEL = os.getenv("TAGGING_MODEL", "qwen3-coder:30b")
+TAGGING_MODEL = settings.tagging_model
 
 TAG_5W1H_PROMPT = """分析以下對話內容，提取 5W1H 標籤。
 回覆必須是嚴格的 JSON 格式，包含以下欄位（值使用繁體中文，若無法判斷則填 "未知"）：
@@ -567,7 +585,7 @@ def _parse_tags_response(raw: str) -> dict[str, str]:
     cleaned = raw.strip()
     if cleaned.startswith("```"):
         lines = cleaned.split("\n")
-        lines = [l for l in lines if not l.strip().startswith("```")]
+        lines = [line for line in lines if not line.strip().startswith("```")]
         cleaned = "\n".join(lines).strip()
 
     try:
