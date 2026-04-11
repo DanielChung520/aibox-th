@@ -7,6 +7,20 @@
  */
 
 import { FileStatusPayload, SendMessageRequest } from './api';
+import type {
+  IntentDetectedPayload,
+  ToolCallStartPayload,
+  ToolCallResultPayload,
+  DaQueryStartPayload,
+  DaQueryResultPayload,
+  KaSearchResultPayload,
+  BpaStepStartPayload,
+  BpaStepCompletePayload,
+  BpaAskUserPayload,
+  BpaCompletePayload,
+  BpaFailedPayload,
+  SessionStatePayload,
+} from '../types/sseEvents';
 
 function resolveApiBaseUrl(): string {
   const configured = import.meta.env.VITE_API_URL;
@@ -36,6 +50,21 @@ interface SSECallbacks {
   onThinkingChunk?: (delta: string) => void;
   onDone: () => void;
   onError: (error: string) => void;
+}
+
+interface ExtendedSSECallbacks extends SSECallbacks {
+  onIntentDetected?: (data: IntentDetectedPayload) => void;
+  onToolCallStart?: (data: ToolCallStartPayload) => void;
+  onToolCallResult?: (data: ToolCallResultPayload) => void;
+  onDaQueryStart?: (data: DaQueryStartPayload) => void;
+  onDaQueryResult?: (data: DaQueryResultPayload) => void;
+  onKaSearchResult?: (data: KaSearchResultPayload) => void;
+  onBpaStepStart?: (data: BpaStepStartPayload) => void;
+  onBpaStepComplete?: (data: BpaStepCompletePayload) => void;
+  onBpaAskUser?: (data: BpaAskUserPayload) => void;
+  onBpaComplete?: (data: BpaCompletePayload) => void;
+  onBpaFailed?: (data: BpaFailedPayload) => void;
+  onSessionState?: (data: SessionStatePayload) => void;
 }
 
 interface SSEConnection {
@@ -87,7 +116,7 @@ function parseSSEEvent(rawEvent: string): { event: string; data: string } {
 export function sendMessageSSE(
   sessionKey: string,
   request: SendMessageRequest,
-  callbacks: SSECallbacks,
+  callbacks: ExtendedSSECallbacks,
 ): SSEConnection {
   const controller = new AbortController();
   const baseURL = resolveApiBaseUrl();
@@ -153,6 +182,66 @@ export function sendMessageSSE(
               } catch {
                 callbacks.onError('SSE error 解析失敗');
               }
+            } else if (evt.event === 'intent_detected') {
+              try {
+                const payload = JSON.parse(evt.data) as IntentDetectedPayload;
+                callbacks.onIntentDetected?.(payload);
+              } catch { /* ignore */ }
+            } else if (evt.event === 'tool_call_start') {
+              try {
+                const payload = JSON.parse(evt.data) as ToolCallStartPayload;
+                callbacks.onToolCallStart?.(payload);
+              } catch { /* ignore */ }
+            } else if (evt.event === 'tool_call_result') {
+              try {
+                const payload = JSON.parse(evt.data) as ToolCallResultPayload;
+                callbacks.onToolCallResult?.(payload);
+              } catch { /* ignore */ }
+            } else if (evt.event === 'da_query_start') {
+              try {
+                const payload = JSON.parse(evt.data) as DaQueryStartPayload;
+                callbacks.onDaQueryStart?.(payload);
+              } catch { /* ignore */ }
+            } else if (evt.event === 'da_query_result') {
+              try {
+                const payload = JSON.parse(evt.data) as DaQueryResultPayload;
+                callbacks.onDaQueryResult?.(payload);
+              } catch { /* ignore */ }
+            } else if (evt.event === 'ka_search_result') {
+              try {
+                const payload = JSON.parse(evt.data) as KaSearchResultPayload;
+                callbacks.onKaSearchResult?.(payload);
+              } catch { /* ignore */ }
+            } else if (evt.event === 'bpa_step_start') {
+              try {
+                const payload = JSON.parse(evt.data) as BpaStepStartPayload;
+                callbacks.onBpaStepStart?.(payload);
+              } catch { /* ignore */ }
+            } else if (evt.event === 'bpa_step_complete') {
+              try {
+                const payload = JSON.parse(evt.data) as BpaStepCompletePayload;
+                callbacks.onBpaStepComplete?.(payload);
+              } catch { /* ignore */ }
+            } else if (evt.event === 'bpa_ask_user') {
+              try {
+                const payload = JSON.parse(evt.data) as BpaAskUserPayload;
+                callbacks.onBpaAskUser?.(payload);
+              } catch { /* ignore */ }
+            } else if (evt.event === 'bpa_complete') {
+              try {
+                const payload = JSON.parse(evt.data) as BpaCompletePayload;
+                callbacks.onBpaComplete?.(payload);
+              } catch { /* ignore */ }
+            } else if (evt.event === 'bpa_failed') {
+              try {
+                const payload = JSON.parse(evt.data) as BpaFailedPayload;
+                callbacks.onBpaFailed?.(payload);
+              } catch { /* ignore */ }
+            } else if (evt.event === 'session_state') {
+              try {
+                const payload = JSON.parse(evt.data) as SessionStatePayload;
+                callbacks.onSessionState?.(payload);
+              } catch { /* ignore */ }
             }
           }
           break;
@@ -202,6 +291,103 @@ export function sendMessageSSE(
             } catch {
               callbacks.onError('SSE error 解析失敗');
             }
+            continue;
+          }
+
+          if (evt.event === 'intent_detected') {
+            try {
+              const payload = JSON.parse(evt.data) as IntentDetectedPayload;
+              callbacks.onIntentDetected?.(payload);
+            } catch { /* ignore parse errors for optional events */ }
+            continue;
+          }
+
+          if (evt.event === 'tool_call_start') {
+            try {
+              const payload = JSON.parse(evt.data) as ToolCallStartPayload;
+              callbacks.onToolCallStart?.(payload);
+            } catch { /* ignore */ }
+            continue;
+          }
+
+          if (evt.event === 'tool_call_result') {
+            try {
+              const payload = JSON.parse(evt.data) as ToolCallResultPayload;
+              callbacks.onToolCallResult?.(payload);
+            } catch { /* ignore */ }
+            continue;
+          }
+
+          if (evt.event === 'da_query_start') {
+            try {
+              const payload = JSON.parse(evt.data) as DaQueryStartPayload;
+              callbacks.onDaQueryStart?.(payload);
+            } catch { /* ignore */ }
+            continue;
+          }
+
+          if (evt.event === 'da_query_result') {
+            try {
+              const payload = JSON.parse(evt.data) as DaQueryResultPayload;
+              callbacks.onDaQueryResult?.(payload);
+            } catch { /* ignore */ }
+            continue;
+          }
+
+          if (evt.event === 'ka_search_result') {
+            try {
+              const payload = JSON.parse(evt.data) as KaSearchResultPayload;
+              callbacks.onKaSearchResult?.(payload);
+            } catch { /* ignore */ }
+            continue;
+          }
+
+          if (evt.event === 'bpa_step_start') {
+            try {
+              const payload = JSON.parse(evt.data) as BpaStepStartPayload;
+              callbacks.onBpaStepStart?.(payload);
+            } catch { /* ignore */ }
+            continue;
+          }
+
+          if (evt.event === 'bpa_step_complete') {
+            try {
+              const payload = JSON.parse(evt.data) as BpaStepCompletePayload;
+              callbacks.onBpaStepComplete?.(payload);
+            } catch { /* ignore */ }
+            continue;
+          }
+
+          if (evt.event === 'bpa_ask_user') {
+            try {
+              const payload = JSON.parse(evt.data) as BpaAskUserPayload;
+              callbacks.onBpaAskUser?.(payload);
+            } catch { /* ignore */ }
+            continue;
+          }
+
+          if (evt.event === 'bpa_complete') {
+            try {
+              const payload = JSON.parse(evt.data) as BpaCompletePayload;
+              callbacks.onBpaComplete?.(payload);
+            } catch { /* ignore */ }
+            continue;
+          }
+
+          if (evt.event === 'bpa_failed') {
+            try {
+              const payload = JSON.parse(evt.data) as BpaFailedPayload;
+              callbacks.onBpaFailed?.(payload);
+            } catch { /* ignore */ }
+            continue;
+          }
+
+          if (evt.event === 'session_state') {
+            try {
+              const payload = JSON.parse(evt.data) as SessionStatePayload;
+              callbacks.onSessionState?.(payload);
+            } catch { /* ignore */ }
+            continue;
           }
         }
       }
@@ -308,4 +494,4 @@ export function subscribeSessionFileStatus(
   };
 }
 
-export type { SSECallbacks, SSEConnection };
+export type { SSECallbacks, ExtendedSSECallbacks, SSEConnection };
