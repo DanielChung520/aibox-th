@@ -9,6 +9,7 @@
 
 use axum::http::{HeaderMap, StatusCode};
 
+#[allow(deprecated)]
 use crate::api::intent::{route_tool_intent, sse_text_to_stream, summarize_text, ToolIntentResult};
 use crate::config::CONFIG;
 use crate::db::{get_db, ChatMessage, ModelProvider, SendMessageRequest};

@@ -1,8 +1,13 @@
 //! Intent Router - 意圖檢測 + 工具路由
 //!
-//! # Last Update: 2026-04-11 00:39:07
+//! **DEPRECATED**: This module is superseded by the Python LangGraph intent
+//! classifier (`aitask/graph/nodes/intent_classifier.py`). It remains
+//! functional for `orchestrator_mode = "legacy"` but will be removed in a
+//! future release.
+//!
+//! # Last Update: 2026-04-11 08:54:32
 //! # Author: Daniel Chung
-//! # Version: 1.2.0
+//! # Version: 1.3.0
 
 use std::collections::HashMap;
 use std::pin::Pin;
@@ -72,6 +77,7 @@ struct ToolCall {
     parameters: HashMap<String, Value>,
 }
 
+#[deprecated(since = "1.3.0", note = "Use Python LangGraph intent classifier (B4)")]
 pub async fn detect_intent(
     client: &reqwest::Client,
     intent_rag_url: &str,
@@ -126,6 +132,7 @@ pub async fn detect_intent(
     Ok(Some((best, tool_name)))
 }
 
+#[deprecated(since = "1.3.0", note = "Use Python LangGraph intent classifier (B4)")]
 pub async fn extract_parameters(
     client: &reqwest::Client,
     ollama_url: &str,
@@ -234,6 +241,7 @@ Output JSON only:"#
     Ok(result)
 }
 
+#[deprecated(since = "1.3.0", note = "Use Python LangGraph intent classifier (B4)")]
 pub async fn execute_tool(
     client: &reqwest::Client,
     mcp_tools_url: &str,
@@ -274,6 +282,7 @@ pub async fn execute_tool(
     Ok(result)
 }
 
+#[deprecated(since = "1.3.0", note = "Use Python LangGraph intent classifier (B4)")]
 pub fn build_summarize_prompt(
     user_message: &str,
     tool_name: &str,
@@ -355,6 +364,7 @@ fn build_web_search_prompt(user_message: &str, tool_result: &Value) -> String {
     )
 }
 
+#[deprecated(since = "1.3.0", note = "Use Python LangGraph intent classifier (B4)")]
 pub async fn summarize_result_stream(
     client: &reqwest::Client,
     ollama_url: &str,
@@ -403,6 +413,7 @@ pub async fn summarize_result_stream(
     Ok(futures::stream::iter(events))
 }
 
+#[deprecated(since = "1.3.0", note = "Use Python LangGraph intent classifier (B4)")]
 pub fn sse_text_to_stream(
     text: String,
 ) -> Pin<Box<dyn Stream<Item = Result<Event, std::convert::Infallible>> + Send>> {
@@ -432,6 +443,7 @@ pub fn sse_text_to_stream(
     Box::pin(futures::stream::iter(events))
 }
 
+#[deprecated(since = "1.3.0", note = "Use Python LangGraph intent classifier (B4)")]
 pub async fn summarize_text(
     client: &reqwest::Client,
     ollama_url: &str,
@@ -467,6 +479,7 @@ pub async fn summarize_text(
     Ok(text)
 }
 
+#[deprecated(since = "1.3.0", note = "Use Python LangGraph intent classifier (B4)")]
 #[derive(Debug, Clone, Serialize)]
 pub struct ToolIntentResult {
     pub tool_name: String,
@@ -475,6 +488,7 @@ pub struct ToolIntentResult {
     pub result: Value,
 }
 
+#[deprecated(since = "1.3.0", note = "Use Python LangGraph intent classifier (B4)")]
 #[allow(clippy::too_many_arguments)]
 pub async fn route_tool_intent(
     client: &reqwest::Client,
