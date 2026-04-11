@@ -69,6 +69,50 @@ html, body, #root {
   border-color: currentColor !important;
 }
 
+.schema-table-fill {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.schema-table-fill .ant-spin,
+.schema-table-fill .ant-spin-container,
+.schema-table-fill .ant-table-wrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.schema-table-fill .ant-table-wrapper .ant-table {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.schema-table-fill .ant-table-wrapper .ant-table .ant-table-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.schema-table-fill .ant-table-wrapper .ant-table .ant-table-content {
+  flex: 1;
+  min-height: 0;
+  overflow: auto !important;
+}
+
+.schema-table-fill .ant-table-wrapper .ant-table .ant-table-content > table {
+  height: 100%;
+}
+
+.schema-table-fill .ant-pagination {
+  margin-bottom: 4px !important;
+}
+
 .ant-tooltip .ant-tooltip-inner {
   background: var(--tooltip-bg);
   color: var(--tooltip-text);

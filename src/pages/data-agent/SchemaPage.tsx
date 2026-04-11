@@ -1,88 +1,54 @@
 /**
  * @file        Data Agent Schema 管理頁面
- * @description 管理 DA 的資料表結構、欄位定義與表關聯
- * @lastUpdate  2026-03-22 19:56:42
+ * @description 管理 DA 的資料表結構與模組分類
+ * @lastUpdate  2026-04-11 18:13:37
  * @author      Daniel Chung
+ * @version     1.0.0
  */
 
 import { useState, useEffect } from 'react';
-import { 
-  Card, Table, Button, Modal, Form, Input, Select, Tabs, 
-  Tag, Space, App, Popconfirm, Typography, Row, Col, Statistic, theme,
-  Segmented
-} from 'antd';
-import { 
-  PlusOutlined, EditOutlined, DeleteOutlined, 
-  DatabaseOutlined, TableOutlined, LinkOutlined, 
-  ReloadOutlined
-} from '@ant-design/icons';
-import { dataAgentApi, TableInfo, FieldInfo, TableRelation } from '../../services/dataAgentApi';
+import { Card, Table, Form, Tabs, App, Typography } from 'antd';
+import { DatabaseOutlined } from '@ant-design/icons';
+import { dataAgentApi, TableInfo, FieldInfo } from '../../services/dataAgentApi';
+
+import { TAB_LABELS, TAB_CATEGORIES } from './schemaConstants';
+import { getSchemaTableColumns } from './schemaTableColumns';
+import SchemaFilterTags from './SchemaFilterTags';
+import SchemaDataPreviewModal from './SchemaDataPreviewModal';
+import SchemaImportSection from './SchemaImportSection';
+import SchemaColumnsModal from './SchemaColumnsModal';
+import SchemaEditModal from './SchemaEditModal';
 
 const { Title, Text } = Typography;
-const { Option } = Select;
-
-type DataSourceType = 'sap' | 'ragic' | 'ALL';
-type ModuleType = string;
-
-const SAP_MODULES = ['MM', 'SD', 'FI', 'PP', 'QM'];
-const RAGIC_MODULES = ['BASE', 'PLM', 'MFG', 'PUR', 'INV', 'QA', 'FORM', 'SAL', 'CRM', 'FIN', 'HR', 'MES', 'ADMIN', 'AI'];
 
 export default function SchemaPage() {
   const { message } = App.useApp();
-  const { token } = theme.useToken();
-  const [activeTab, setActiveTab] = useState('tables');
   const [tables, setTables] = useState<TableInfo[]>([]);
-  const [fields, setFields] = useState<FieldInfo[]>([]);
-  const [relations, setRelations] = useState<TableRelation[]>([]);
   const [loading, setLoading] = useState(false);
   const [tableModalVisible, setTableModalVisible] = useState(false);
-  const [fieldModalVisible, setFieldModalVisible] = useState(false);
-  const [relationModalVisible, setRelationModalVisible] = useState(false);
-  const [selectedTable, setSelectedTable] = useState<string>('');
   const [editingTable, setEditingTable] = useState<Partial<TableInfo> | null>(null);
-  const [editingField, setEditingField] = useState<Partial<FieldInfo> | null>(null);
-  const [editingRelation, setEditingRelation] = useState<Partial<TableRelation> | null>(null);
-  const [moduleFilter, setModuleFilter] = useState<ModuleType | 'ALL'>('ALL');
-  const [dataSourceFilter, setDataSourceFilter] = useState<DataSourceType>('ALL');
+  
+  const [selectedCategory, setSelectedCategory] = useState<string>('全部');
+  const [selectedTab, setSelectedTab] = useState<string>('ALL');
+  
   const [form] = Form.useForm();
-  const [fieldForm] = Form.useForm();
-  const [relationForm] = Form.useForm();
 
-  // 載入資料表
+  const [columnsModalVisible, setColumnsModalVisible] = useState(false);
+  const [columnsTableName, setColumnsTableName] = useState('');
+  const [columns, setColumns] = useState<FieldInfo[]>([]);
+  const [columnsLoading, setColumnsLoading] = useState(false);
+
+  const [dataModalVisible, setDataModalVisible] = useState(false);
+  const [dataModalTitle, setDataModalTitle] = useState('');
+  const [dataTableId, setDataTableId] = useState('');
+
   const loadTables = async () => {
     setLoading(true);
     try {
       const res = await dataAgentApi.listTables();
-      setTables(res.data.data || []);
-    } catch (error) {
+      setTables((res.data.data || []).filter((t: TableInfo) => t.data_source !== 'sap'));
+    } catch {
       message.error('載入資料表失敗');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // 載入欄位
-  const loadFields = async (tableId: string) => {
-    if (!tableId) return;
-    setLoading(true);
-    try {
-      const res = await dataAgentApi.listFields(tableId);
-      setFields(res.data.data || []);
-    } catch (error) {
-      message.error('載入欄位失敗');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // 載入關聯
-  const loadRelations = async () => {
-    setLoading(true);
-    try {
-      const res = await dataAgentApi.listRelations();
-      setRelations(res.data.data || []);
-    } catch (error) {
-      message.error('載入關聯失敗');
     } finally {
       setLoading(false);
     }
@@ -90,194 +56,15 @@ export default function SchemaPage() {
 
   useEffect(() => {
     loadTables();
-    loadRelations();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  useEffect(() => {
-    if (selectedTable) {
-      loadFields(selectedTable);
-    }
-  }, [selectedTable]);
-
-  // 資料表欄位
-  const tableColumns = [
-    { 
-      title: '來源', dataIndex: 'data_source', key: 'data_source', width: 80,
-      render: (ds: 'sap' | 'ragic' | undefined) => (
-        <Tag color={ds === 'ragic' ? 'green' : ds === 'sap' ? 'blue' : 'default'}>
-          {ds?.toUpperCase() || 'N/A'}
-        </Tag>
-      )
-    },
-    { title: 'Table ID', dataIndex: 'table_id', key: 'table_id', width: 130 },
-    { title: 'Table Name', dataIndex: 'table_name', key: 'table_name', width: 130 },
-    { 
-      title: 'Module', 
-      dataIndex: 'module', 
-      key: 'module',
-      width: 80,
-      render: (module: string) => {
-        const colors: Record<string, string> = {
-          'MM': 'blue', 'SD': 'green', 'FI': 'orange', 
-          'PP': 'purple', 'QM': 'red', 'BASE': 'cyan', 
-          'PUR': 'volcano', 'INV': 'gold', 'MFG': 'magenta',
-          'HR': 'lime', 'FIN': 'purple', 'SAL': 'geekblue',
-        };
-        return <Tag color={colors[module] || 'default'}>{module}</Tag>;
-      }
-    },
-    { title: 'Tab', dataIndex: 'tab', key: 'tab', width: 140, ellipsis: true },
-    { title: 'Sheet Key', dataIndex: 'sheet_key', key: 'sheet_key', width: 130 },
-    { title: 'Description', dataIndex: 'description', key: 'description', ellipsis: true },
-    { title: 'S3 Path', dataIndex: 's3_path', key: 's3_path', width: 160, ellipsis: true },
-    { 
-      title: 'Status', dataIndex: 'status', key: 'status', width: 90,
-      render: (status: string) => (
-        <Tag color={status === 'enabled' ? 'success' : 'default'}>
-          {status}
-        </Tag>
-      )
-    },
-    {
-      title: 'Actions', key: 'actions', width: 100,
-      render: (_: any, record: TableInfo) => (
-        <Space>
-          <Button 
-            type="link" 
-            icon={<EditOutlined />} 
-            onClick={() => {
-              setEditingTable(record);
-              form.setFieldsValue(record);
-              setTableModalVisible(true);
-            }}
-          />
-          <Popconfirm
-            title="確定要刪除此資料表嗎？"
-            onConfirm={() => handleDeleteTable(record.table_id)}
-          >
-            <Button type="link" danger icon={<DeleteOutlined />} />
-          </Popconfirm>
-        </Space>
-      )
-    }
-  ];
-
-  // 欄位列
-  const fieldColumns = [
-    { title: 'Field ID', dataIndex: 'field_id', key: 'field_id', width: 120 },
-    { title: 'Field Name', dataIndex: 'field_name', key: 'field_name', width: 150 },
-    { title: 'Type', dataIndex: 'field_type', key: 'field_type', width: 100 },
-    { title: 'Length', dataIndex: 'length', key: 'length', width: 80 },
-    { title: 'Description', dataIndex: 'description', key: 'description' },
-    { 
-      title: 'PK', dataIndex: 'is_pk', key: 'is_pk', width: 60,
-      render: (pk: boolean) => pk ? <Tag color="gold">PK</Tag> : null
-    },
-    { 
-      title: 'FK', dataIndex: 'is_fk', key: 'is_fk', width: 60,
-      render: (fk: boolean) => fk ? <Tag color="blue">FK</Tag> : null
-    },
-    { 
-      title: 'W', dataIndex: 'writable', key: 'writable', width: 50,
-      render: (w: boolean | undefined) => w === false ? <Tag color="orange">R</Tag> : <Tag color="success">RW</Tag>
-    },
-    { 
-      title: 'Nullable', dataIndex: 'nullable', key: 'nullable', width: 90,
-      render: (nullable: boolean) => nullable ? 'Yes' : 'No'
-    },
-    {
-      title: 'Actions', key: 'actions', width: 100,
-      render: (_: any, record: FieldInfo) => (
-        <Space>
-          <Button 
-            type="link" 
-            icon={<EditOutlined />} 
-            onClick={() => {
-              setEditingField(record);
-              fieldForm.setFieldsValue(record);
-              setFieldModalVisible(true);
-            }}
-          />
-          <Popconfirm
-            title="確定要刪除此欄位嗎？"
-            onConfirm={() => handleDeleteField(record.table_id, record.field_id)}
-          >
-            <Button type="link" danger icon={<DeleteOutlined />} />
-          </Popconfirm>
-        </Space>
-      )
-    }
-  ];
-
-  // 關聯欄位
-  const relationColumns = [
-    { title: 'Relation ID', dataIndex: 'relation_id', key: 'relation_id', width: 150 },
-    { title: 'Left Table', dataIndex: 'left_table', key: 'left_table', width: 120 },
-    { title: 'Left Field', dataIndex: 'left_field', key: 'left_field', width: 100 },
-    { title: 'Right Table', dataIndex: 'right_table', key: 'right_table', width: 120 },
-    { title: 'Right Field', dataIndex: 'right_field', key: 'right_field', width: 100 },
-    { 
-      title: 'Join Type', dataIndex: 'join_type', key: 'join_type', width: 80,
-      render: (type: string) => <Tag>{type}</Tag>
-    },
-    { 
-      title: 'Cardinality', dataIndex: 'cardinality', key: 'cardinality', width: 80,
-      render: (card: string) => <Tag color="cyan">{card}</Tag>
-    },
-    { 
-      title: 'Confidence', dataIndex: 'confidence', key: 'confidence', width: 100,
-      render: (conf: number) => `${(conf * 100).toFixed(0)}%`
-    },
-    {
-      title: 'Actions', key: 'actions', width: 100,
-      render: (_: any, record: TableRelation) => (
-        <Space>
-          <Button 
-            type="link" 
-            icon={<EditOutlined />} 
-            onClick={() => {
-              setEditingRelation(record);
-              relationForm.setFieldsValue(record);
-              setRelationModalVisible(true);
-            }}
-          />
-          <Popconfirm
-            title="確定要刪除此關聯嗎？"
-            onConfirm={() => handleDeleteRelation(record.relation_id)}
-          >
-            <Button type="link" danger icon={<DeleteOutlined />} />
-          </Popconfirm>
-        </Space>
-      )
-    }
-  ];
 
   const handleDeleteTable = async (tableId: string) => {
     try {
       await dataAgentApi.deleteTable(tableId);
       message.success('刪除成功');
       loadTables();
-    } catch (error) {
-      message.error('刪除失敗');
-    }
-  };
-
-  const handleDeleteField = async (tableId: string, fieldId: string) => {
-    try {
-      await dataAgentApi.deleteField(tableId, fieldId);
-      message.success('刪除成功');
-      loadFields(selectedTable);
-    } catch (error) {
-      message.error('刪除失敗');
-    }
-  };
-
-  const handleDeleteRelation = async (relationId: string) => {
-    try {
-      await dataAgentApi.deleteRelation(relationId);
-      message.success('刪除成功');
-      loadRelations();
-    } catch (error) {
+    } catch {
       message.error('刪除失敗');
     }
   };
@@ -296,446 +83,153 @@ export default function SchemaPage() {
       form.resetFields();
       setEditingTable(null);
       loadTables();
-    } catch (error) {
+    } catch {
       message.error('操作失敗');
     }
   };
 
-  const handleSaveField = async () => {
+  const openDataModal = (record: TableInfo) => {
+    setDataModalTitle(record.table_name);
+    setDataTableId(record.table_id);
+    setDataModalVisible(true);
+  };
+
+  const openColumnsModal = async (record: TableInfo) => {
+    setColumnsTableName(`${record.table_name}（${record.table_id}）`);
+    setColumnsModalVisible(true);
+    setColumnsLoading(true);
     try {
-      const values = await fieldForm.validateFields();
-      values.table_id = selectedTable;
-      if (editingField?.field_id) {
-        await dataAgentApi.updateField(selectedTable, editingField.field_id, values);
-        message.success('更新成功');
-      } else {
-        await dataAgentApi.createField(values);
-        message.success('建立成功');
-      }
-      setFieldModalVisible(false);
-      fieldForm.resetFields();
-      setEditingField(null);
-      loadFields(selectedTable);
-    } catch (error) {
-      message.error('操作失敗');
+      const res = await dataAgentApi.listFields(record.table_id);
+      setColumns(res.data.data || []);
+    } catch {
+      message.error('載入欄位資訊失敗');
+      setColumns([]);
+    } finally {
+      setColumnsLoading(false);
     }
   };
 
-  const handleSaveRelation = async () => {
-    try {
-      const values = await relationForm.validateFields();
-      if (editingRelation?.relation_id) {
-        await dataAgentApi.updateRelation(editingRelation.relation_id, values);
-        message.success('更新成功');
-      } else {
-        await dataAgentApi.createRelation(values);
-        message.success('建立成功');
-      }
-      setRelationModalVisible(false);
-      relationForm.resetFields();
-      setEditingRelation(null);
-      loadRelations();
-    } catch (error) {
-      message.error('操作失敗');
-    }
-  };
-
+  const knownTabs = TAB_CATEGORIES.flatMap(c => c.tabs);
   const filteredTables = tables.filter(t => {
-    if (dataSourceFilter !== 'ALL' && t.data_source !== dataSourceFilter) return false;
-    if (moduleFilter !== 'ALL' && t.module !== moduleFilter) return false;
+    if (selectedCategory !== '全部') {
+      if (selectedCategory === '其他') {
+        if (knownTabs.includes(t.tab || '')) return false;
+      } else {
+        const category = TAB_CATEGORIES.find(c => c.label === selectedCategory);
+        if (category && !category.tabs.includes(t.tab || '')) return false;
+      }
+    }
+    if (selectedTab !== 'ALL' && t.tab !== selectedTab) return false;
     return true;
   });
 
-  const tableItems = [
-    {
-      key: 'tables',
-      label: (
-        <span><DatabaseOutlined /> 資料表 ({filteredTables.length})</span>
-      ),
-      children: (
-        <div>
-           <Row gutter={16} style={{ marginBottom: 16 }}>
-             <Col span={4}>
-               <Statistic 
-                 title="總資料表" 
-                 value={tables.length} 
-                 prefix={<DatabaseOutlined />} 
-               />
-             </Col>
-              <Col span={4}>
-               <Statistic 
-                 title="SAP" 
-                 value={tables.filter(t => t.data_source === 'sap').length} 
-                 styles={{ content: { color: token.colorInfo } }}
-               />
-             </Col>
-             <Col span={4}>
-               <Statistic 
-                 title="Ragic" 
-                 value={tables.filter(t => t.data_source === 'ragic').length} 
-                 styles={{ content: { color: token.colorSuccess } }}
-               />
-             </Col>
-             <Col span={4}>
-               <Statistic 
-                 title="已過濾" 
-                 value={filteredTables.length} 
-                 styles={{ content: { color: token.colorWarning } }}
-               />
-             </Col>
-           </Row>
-           
-           <Space style={{ marginBottom: 12, width: '100%' }} direction="vertical">
-             <Segmented
-               value={dataSourceFilter}
-               onChange={(v) => { setDataSourceFilter(v as DataSourceType); setModuleFilter('ALL'); }}
-               options={[
-                 { label: `全部 (${tables.length})`, value: 'ALL' },
-                 { label: `SAP (${tables.filter(t => t.data_source === 'sap').length})`, value: 'sap' },
-                 { label: `Ragic (${tables.filter(t => t.data_source === 'ragic').length})`, value: 'ragic' },
-               ]}
-               block
-             />
-           </Space>
-          
-          <Space style={{ marginBottom: 16 }}>
-            <Select 
-              value={moduleFilter} 
-              onChange={setModuleFilter}
-              style={{ width: 180 }}
-            >
-              <Option value="ALL">全部模組</Option>
-              {(dataSourceFilter === 'ALL' || dataSourceFilter === 'sap') &&
-                SAP_MODULES.map(m => <Option key={m} value={m}>{m}</Option>)
-              }
-              {(dataSourceFilter === 'ALL' || dataSourceFilter === 'ragic') &&
-                RAGIC_MODULES.map(m => <Option key={m} value={m}>{m}</Option>)
-              }
-            </Select>
-            <Button 
-              icon={<PlusOutlined />} 
-              onClick={() => {
-                setEditingTable(null);
-                form.resetFields();
-                setTableModalVisible(true);
-              }}
-            >
-              新增資料表
-            </Button>
-            <Button icon={<ReloadOutlined />} onClick={loadTables}>重新整理</Button>
-          </Space>
+  const enabledCount = tables.filter(t => t.status === 'enabled').length;
+  const disabledCount = tables.filter(t => t.status !== 'enabled').length;
 
-          <Table 
-            columns={tableColumns} 
-            dataSource={filteredTables} 
-            rowKey="table_id"
-            loading={loading}
-            pagination={{ pageSize: 10 }}
-            size="small"
-          />
-        </div>
-      )
+  const categoryOptions = [
+    { label: `全部 (${tables.length})`, value: '全部' },
+    ...TAB_CATEGORIES.map(c => ({
+      label: `${c.label} (${tables.filter(t => c.tabs.includes(t.tab || '')).length})`, 
+      value: c.label
+    })),
+  ];
+  
+  const otherCount = tables.filter(t => !knownTabs.includes(t.tab || '')).length;
+  if (otherCount > 0) categoryOptions.push({ label: `其他 (${otherCount})`, value: '其他' });
+
+  let availableTabs: string[] = [];
+  if (selectedCategory === '全部') {
+    availableTabs = Array.from(new Set(tables.map(t => t.tab || ''))).filter(Boolean);
+  } else if (selectedCategory === '其他') {
+    availableTabs = Array.from(new Set(tables.filter(t => !knownTabs.includes(t.tab || '')).map(t => t.tab || ''))).filter(Boolean);
+  } else {
+    const category = TAB_CATEGORIES.find(c => c.label === selectedCategory);
+    if (category) availableTabs = category.tabs.filter(tab => tables.some(t => t.tab === tab));
+  }
+
+  const tabItems = [
+    {
+      key: 'ALL',
+      label: `全部 (${tables.filter(t => {
+        if (selectedCategory === '全部') return true;
+        if (selectedCategory === '其他') return !knownTabs.includes(t.tab || '');
+        const cat = TAB_CATEGORIES.find(c => c.label === selectedCategory);
+        return cat?.tabs.includes(t.tab || '');
+      }).length})`
     },
-    {
-      key: 'fields',
-      label: (
-        <span><TableOutlined /> 欄位資訊</span>
-      ),
-      children: (
-        <div>
-          <Space style={{ marginBottom: 16 }}>
-            <Select
-              placeholder="選擇資料表"
-              value={selectedTable || undefined}
-              onChange={(value) => setSelectedTable(value)}
-              style={{ width: 200 }}
-              showSearch
-              allowClear
-            >
-              {tables.map(t => (
-                <Option key={t.table_id} value={t.table_id}>
-                  {t.table_name} ({t.table_id})
-                </Option>
-              ))}
-            </Select>
-            {selectedTable && (
-              <>
-                <Button 
-                  icon={<PlusOutlined />} 
-                  onClick={() => {
-                    setEditingField(null);
-                    fieldForm.resetFields();
-                    setFieldModalVisible(true);
-                  }}
-                >
-                  新增欄位
-                </Button>
-                <Button icon={<ReloadOutlined />} onClick={() => loadFields(selectedTable)}>
-                  重新整理
-                </Button>
-              </>
-            )}
-          </Space>
-
-          {selectedTable ? (
-            <Table 
-              columns={fieldColumns} 
-              dataSource={fields} 
-              rowKey="field_id"
-              loading={loading}
-              pagination={{ pageSize: 15 }}
-              size="small"
-            />
-          ) : (
-            <Card>
-              <Text type="secondary">請先選擇一個資料表</Text>
-            </Card>
-          )}
-        </div>
-      )
-    },
-    {
-      key: 'relations',
-      label: (
-        <span><LinkOutlined /> 表關聯 ({relations.length})</span>
-      ),
-      children: (
-        <div>
-          <Space style={{ marginBottom: 16 }}>
-            <Button 
-              icon={<PlusOutlined />} 
-              onClick={() => {
-                setEditingRelation(null);
-                relationForm.resetFields();
-                setRelationModalVisible(true);
-              }}
-            >
-              新增關聯
-            </Button>
-            <Button icon={<ReloadOutlined />} onClick={loadRelations}>重新整理</Button>
-          </Space>
-
-          <Table 
-            columns={relationColumns} 
-            dataSource={relations} 
-            rowKey="relation_id"
-            loading={loading}
-            pagination={{ pageSize: 10 }}
-            size="small"
-          />
-        </div>
-      )
-    }
+    ...availableTabs.map(tab => ({
+      key: tab,
+      label: `${TAB_LABELS[tab] || tab} (${tables.filter(t => t.tab === tab).length})`
+    }))
   ];
 
   return (
-    <div>
-      <Title level={4} style={{ marginBottom: 24 }}>
-        <DatabaseOutlined /> Data Agent Schema 管理
-      </Title>
+    <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <Title level={4} style={{ margin: 0 }}>
+          <DatabaseOutlined /> Data Agent Schema 管理
+          <Text type="secondary" style={{ fontSize: 14, marginLeft: 12 }}>
+            有效 {enabledCount} / 無效 {disabledCount}
+          </Text>
+        </Title>
+        <SchemaImportSection onImportSuccess={loadTables} />
+      </div>
 
-      <Tabs 
-        activeKey={activeTab} 
-        onChange={setActiveTab}
-        items={tableItems}
+      <Card style={{ flex: 1, display: 'flex', flexDirection: 'column' }} styles={{ body: { padding: '12px 24px 0', flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' } }}>
+        <SchemaFilterTags 
+          categoryOptions={categoryOptions} 
+          selectedCategory={selectedCategory} 
+          onSelect={(val) => { setSelectedCategory(val); setSelectedTab('ALL'); }} 
+        />
+        
+        {availableTabs.length > 0 && (
+          <Tabs type="card" size="small" activeKey={selectedTab} onChange={setSelectedTab} items={tabItems} style={{ marginBottom: 8 }} />
+        )}
+
+        <div className="schema-table-fill">
+          <Table 
+            columns={getSchemaTableColumns({
+              onOpenColumnsModal: openColumnsModal,
+              onOpenDataModal: openDataModal,
+              onEditTable: (record) => {
+                setEditingTable(record);
+                form.setFieldsValue(record);
+                setTableModalVisible(true);
+              },
+              onDeleteTable: handleDeleteTable
+            })} 
+            dataSource={filteredTables} 
+            rowKey="table_id"
+            loading={loading} 
+            pagination={{ pageSize: 15 }} 
+            size="small"
+            onRow={(record) => ({ onDoubleClick: () => openColumnsModal(record), style: { cursor: 'pointer' } })}
+          />
+        </div>
+      </Card>
+
+      <SchemaEditModal
+        visible={tableModalVisible}
+        form={form}
+        editingTable={editingTable}
+        onSave={handleSaveTable}
+        onCancel={() => { setTableModalVisible(false); form.resetFields(); setEditingTable(null); }}
       />
 
-       {/* 資料表 Modal */}
-       <Modal
-         title={editingTable?.table_id ? '編輯資料表' : '新增資料表'}
-         open={tableModalVisible}
-         onOk={handleSaveTable}
-         onCancel={() => {
-           setTableModalVisible(false);
-           form.resetFields();
-           setEditingTable(null);
-         }}
-         width={600}
-         forceRender
-       >
-         <Form form={form} layout="vertical">
-          <Form.Item name="table_id" label="Table ID" rules={[{ required: true }]}>
-            <Input disabled={!!editingTable?.table_id} placeholder="如: MM_EKKO" />
-          </Form.Item>
-          <Form.Item name="table_name" label="Table Name" rules={[{ required: true }]}>
-            <Input placeholder="如: EKKO" />
-          </Form.Item>
-          <Form.Item name="module" label="Module" rules={[{ required: true }]}>
-            <Select placeholder="選擇模組">
-              <Option value="MM">MM - 物料管理</Option>
-              <Option value="SD">SD - 銷售配送</Option>
-              <Option value="FI">FI - 財務会计</Option>
-              <Option value="PP">PP - 生产计划</Option>
-              <Option value="QM">QM - 质量管理</Option>
-              <Option value="OTHER">OTHER - 其他</Option>
-              <Option value="BASE">BASE - 基礎資料</Option>
-              <Option value="PUR">PUR - 採購</Option>
-              <Option value="INV">INV - 庫存/倉儲</Option>
-              <Option value="MFG">MFG - 製造</Option>
-              <Option value="HR">HR - 人力資源</Option>
-              <Option value="FIN">FIN - 財務</Option>
-              <Option value="SAL">SAL - 銷售</Option>
-            </Select>
-          </Form.Item>
-          <Form.Item name="data_source" label="資料來源" rules={[{ required: true }]}>
-            <Select placeholder="選擇資料來源">
-              <Option value="sap">SAP</Option>
-              <Option value="ragic">Ragic</Option>
-            </Select>
-          </Form.Item>
-          <Form.Item name="tab" label="Ragic Tab">
-            <Input placeholder="如: configuration-file/7" />
-          </Form.Item>
-          <Form.Item name="sheet_key" label="Ragic Sheet Key">
-            <Input placeholder="如: CFG7_EMPLOYEE" />
-          </Form.Item>
-          <Form.Item name="description" label="Description" rules={[{ required: true }]}>
-            <Input.TextArea rows={2} />
-          </Form.Item>
-           <Form.Item name="s3_path" label="S3 Path" rules={[{ required: true }]}>
-             <Input placeholder="s3://sap/mm/ekko/ 或 s3://ragic/employees/" />
-           </Form.Item>
-          <Form.Item name="primary_keys" label="Primary Keys">
-            <Select mode="tags" placeholder="輸入主鍵欄位" />
-          </Form.Item>
-          <Form.Item name="partition_keys" label="Partition Keys">
-            <Select mode="tags" placeholder="輸入分區欄位" />
-          </Form.Item>
-          <Form.Item name="status" label="Status" initialValue="enabled">
-            <Select>
-              <Option value="enabled">Enabled</Option>
-              <Option value="disabled">Disabled</Option>
-              <Option value="deprecated">Deprecated</Option>
-            </Select>
-          </Form.Item>
-        </Form>
-      </Modal>
+      <SchemaColumnsModal
+        visible={columnsModalVisible}
+        tableName={columnsTableName}
+        columns={columns}
+        loading={columnsLoading}
+        onCancel={() => setColumnsModalVisible(false)}
+      />
 
-       {/* 欄位 Modal */}
-       <Modal
-         title={editingField?.field_id ? '編輯欄位' : '新增欄位'}
-         open={fieldModalVisible}
-         onOk={handleSaveField}
-         onCancel={() => {
-           setFieldModalVisible(false);
-           fieldForm.resetFields();
-           setEditingField(null);
-         }}
-         width={600}
-         forceRender
-       >
-         <Form form={fieldForm} layout="vertical">
-          <Form.Item name="field_id" label="Field ID" rules={[{ required: true }]}>
-            <Input disabled={!!editingField?.field_id} placeholder="如: EBELN" />
-          </Form.Item>
-          <Form.Item name="field_name" label="Field Name" rules={[{ required: true }]}>
-            <Input placeholder="如: 採購單號" />
-          </Form.Item>
-          <Form.Item name="field_type" label="Field Type" rules={[{ required: true }]}>
-            <Select placeholder="選擇類型">
-              <Option value="CHAR">CHAR</Option>
-              <Option value="VARCHAR">VARCHAR</Option>
-              <Option value="INT">INT</Option>
-              <Option value="BIGINT">BIGINT</Option>
-              <Option value="DECIMAL">DECIMAL</Option>
-              <Option value="DATE">DATE</Option>
-              <Option value="TIMESTAMP">TIMESTAMP</Option>
-              <Option value="BOOLEAN">BOOLEAN</Option>
-            </Select>
-          </Form.Item>
-          <Form.Item name="length" label="Length">
-            <Input type="number" placeholder="如: 10" />
-          </Form.Item>
-          <Form.Item name="scale" label="Scale">
-            <Input type="number" placeholder="如: 2" />
-          </Form.Item>
-          <Form.Item name="description" label="Description">
-            <Input.TextArea rows={2} />
-          </Form.Item>
-          <Form.Item name="business_aliases" label="Business Aliases">
-            <Select mode="tags" placeholder="輸入商業別名" />
-          </Form.Item>
-          <Form.Item name="is_pk" label="Primary Key" valuePropName="checked">
-            <Input type="checkbox" />
-          </Form.Item>
-          <Form.Item name="is_fk" label="Foreign Key" valuePropName="checked">
-            <Input type="checkbox" />
-          </Form.Item>
-           <Form.Item name="nullable" label="Nullable" valuePropName="checked" initialValue>
-             <Input type="checkbox" />
-           </Form.Item>
-           <Form.Item name="writable" label="可寫入 (Ragic)" valuePropName="checked" initialValue={true}>
-             <Input type="checkbox" />
-           </Form.Item>
-           <Form.Item name="is_subtable_field" label="子表格欄位 (Ragic)" valuePropName="checked">
-             <Input type="checkbox" />
-           </Form.Item>
-           <Form.Item name="subtable_key" label="子表格 Key (Ragic)">
-             <Input placeholder="如: 1015530" />
-           </Form.Item>
-         </Form>
-       </Modal>
-
-       {/* 關聯 Modal */}
-       <Modal
-         title={editingRelation?.relation_id ? '編輯關聯' : '新增關聯'}
-         open={relationModalVisible}
-         onOk={handleSaveRelation}
-         onCancel={() => {
-           setRelationModalVisible(false);
-           relationForm.resetFields();
-           setEditingRelation(null);
-         }}
-         width={600}
-         forceRender
-       >
-         <Form form={relationForm} layout="vertical">
-          <Form.Item name="relation_id" label="Relation ID" rules={[{ required: true }]}>
-            <Input disabled={!!editingRelation?.relation_id} placeholder="如: REL_MM_EKKO_EKPO" />
-          </Form.Item>
-          <Form.Item name="left_table" label="Left Table" rules={[{ required: true }]}>
-            <Select showSearch placeholder="選擇左表">
-              {tables.map(t => (
-                <Option key={t.table_id} value={t.table_id}>
-                  {t.table_name}
-                </Option>
-              ))}
-            </Select>
-          </Form.Item>
-          <Form.Item name="left_field" label="Left Field" rules={[{ required: true }]}>
-            <Input placeholder="如: EBELN" />
-          </Form.Item>
-          <Form.Item name="right_table" label="Right Table" rules={[{ required: true }]}>
-            <Select showSearch placeholder="選擇右表">
-              {tables.map(t => (
-                <Option key={t.table_id} value={t.table_id}>
-                  {t.table_name}
-                </Option>
-              ))}
-            </Select>
-          </Form.Item>
-          <Form.Item name="right_field" label="Right Field" rules={[{ required: true }]}>
-            <Input placeholder="如: EBELN" />
-          </Form.Item>
-          <Form.Item name="join_type" label="Join Type" initialValue="INNER">
-            <Select>
-              <Option value="INNER">INNER</Option>
-              <Option value="LEFT">LEFT</Option>
-            </Select>
-          </Form.Item>
-          <Form.Item name="cardinality" label="Cardinality" initialValue="1:N">
-            <Select>
-              <Option value="1:1">1:1</Option>
-              <Option value="1:N">1:N</Option>
-              <Option value="N:1">N:1</Option>
-              <Option value="N:N">N:N</Option>
-            </Select>
-          </Form.Item>
-          <Form.Item name="confidence" label="Confidence" initialValue={1.0}>
-            <Input type="number" step={0.1} min={0} max={1} />
-          </Form.Item>
-        </Form>
-      </Modal>
+      <SchemaDataPreviewModal
+        visible={dataModalVisible}
+        tableId={dataTableId}
+        tableName={dataModalTitle}
+        onCancel={() => setDataModalVisible(false)}
+      />
     </div>
   );
 }

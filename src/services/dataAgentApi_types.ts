@@ -1,7 +1,7 @@
 /**
  * @file        Data Agent API 服務層 - 型別定義
  * @description DA 的 Schema、Intents、Query 等型別介面定義
- * @lastUpdate  2026-03-24 16:36:01
+ * @lastUpdate  2026-04-11 18:10:32
  * @author      Daniel Chung
  */
 
@@ -9,19 +9,17 @@ export interface TableInfo {
   table_id: string;
   table_name: string;
   module: string;
-  description: string;
-  s3_path: string;
-  primary_keys: string[];
-  partition_keys: string[];
-  row_count_estimate?: number;
-  record_count?: number;
+  tab: string;
+  tab_name: string;
+  sheet_key: string;
+  sheet_number: string;
+  sheet_url: string;
+  api_url: string;
+  data_source: 'ragic' | 'sap';
   status: 'enabled' | 'disabled' | 'deprecated';
-  version: number;
   created_at: string;
   updated_at: string;
-  data_source?: 'sap' | 'ragic';
-  tab?: string;
-  sheet_key?: string;
+  updated_by: string;
 }
 
 export interface FieldInfo {
@@ -29,19 +27,11 @@ export interface FieldInfo {
   field_id: string;
   field_name: string;
   field_type: string;
-  length?: number;
-  scale?: number;
-  nullable: boolean;
-  description: string;
-  business_aliases?: string[];
-  is_pk: boolean;
-  is_fk: boolean;
-  relation_table?: string;
-  relation_field?: string;
+  writable: boolean;
+  writable_raw: string;
+  write_format: string;
+  memo: string;
   status: string;
-  writable?: boolean;
-  is_subtable_field?: boolean;
-  subtable_key?: string;
 }
 
 export interface TableRelation {
@@ -195,4 +185,54 @@ export interface NL2SqlResponse {
   error?: string;
   phases: NL2SqlPhaseResult[];
   total_time_ms: number;
+}
+
+export interface RagicImportResult {
+  account: string;
+  tables_parsed: number;
+  schemas_vectorized: number;
+  intents_generated: number;
+  relations_extracted: number;
+  arango_tables_written: number;
+  arango_fields_written: number;
+  arango_relations_written: number;
+  errors: string[];
+  duration_ms: number;
+}
+
+export interface RagicGraphRelation {
+  target_table: string;
+  target_field: string;
+  source_field: string;
+  source_field_id: string;
+  relation_type: string;
+  direction: string;
+}
+
+export interface RagicGraphQueryResult {
+  table: string;
+  relations: RagicGraphRelation[];
+  depth: number;
+}
+
+export interface RagicStepResult {
+  step_index: number;
+  table_key: string;
+  table_name: string;
+  query_params: Record<string, unknown>;
+  records: Record<string, unknown>[];
+  record_count: number;
+  execution_time_ms: number;
+  error: string | null;
+}
+
+export interface RagicMultiStepResult {
+  query: string;
+  steps: RagicStepResult[];
+  merged_records: Record<string, unknown>[];
+  total_steps: number;
+  total_records: number;
+  total_time_ms: number;
+  partial_failure: boolean;
+  errors: string[];
 }

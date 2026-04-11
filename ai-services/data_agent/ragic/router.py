@@ -1,0 +1,718 @@
+"""
+@file        router.py
+@description FastAPI routes for RagicDataAgent — query + schema + intent + NL endpoints.
+@lastUpdate  2026-04-11 13:28:14
+@author      Daniel Chung
+@version     1.5.0
+"""
+
+import logging
+import os
+import time
+from typing import Optional, Union
+
+from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import Response
+from pydantic import BaseModel, Field
+
+from data_agent.ragic.client import RagicAPIClient
+from data_agent.ragic.config_loader import RagicConfigLoader
+from data_agent.ragic.exceptions import RagicError
+from data_agent.ragic.formatter import to_csv_bytes, to_excel_bytes
+from data_agent.ragic.models import (
+    IntentSearchRequest,
+    IntentSearchResponse,
+    IntentSearchResult,
+    IntentUpsertRequest,
+    NLQueryData,
+    NLQueryMetadata,
+    NLQueryRequest,
+    NLQueryResponse,
+    RagicConnectionConfig,
+    RagicIntent,
+    RagicOperator,
+    RagicPagination,
+    RagicQueryParams,
+    RagicQueryResult,
+    RagicRecord,
+    RagicTableSchema,
+    RagicWhereClause,
+    SchemaSearchRequest,
+    SchemaSearchResponse,
+    SchemaSearchResult,
+    SchemaUpsertRequest,
+)
+from data_agent.ragic.intent_store import RagicIntentStore
+from data_agent.ragic.nl_parser import RagicNLParser
+from data_agent.ragic.query_engine import RagicQueryEngine
+from data_agent.ragic.schema_store import RagicSchemaStore
+from data_agent.ragic.schema_sync import RagicSchemaSync
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter()
+
+_DEFAULT_ACCOUNT = os.getenv("RAGIC_DEFAULT_ACCOUNT", "2025shianyong")
+_DEFAULT_SERVER = os.getenv("RAGIC_DEFAULT_SERVER", "ap15")
+_DEFAULT_API_KEY = os.getenv("RAGIC_API_KEY", "")
+
+_config_loader = RagicConfigLoader()
+
+
+async def _build_client_async(
+    account: str | None = None,
+    server: str | None = None,
+    api_key: str | None = None,
+) -> RagicAPIClient:
+    target_account = account or _DEFAULT_ACCOUNT
+
+    if api_key:
+        config = RagicConnectionConfig(
+            account=target_account,
+            api_key=api_key,
+            server_prefix=server or _DEFAULT_SERVER,
+        )
+        return RagicAPIClient(config)
+
+    conn = await _config_loader.get_connection(target_account)
+    if conn:
+        return RagicAPIClient(conn)
+
+    config = RagicConnectionConfig(
+        account=target_account,
+        api_key=_DEFAULT_API_KEY,
+        server_prefix=server or _DEFAULT_SERVER,
+    )
+    return RagicAPIClient(config)
+
+
+def _build_client(
+    account: str | None = None,
+    server: str | None = None,
+    api_key: str | None = None,
+) -> RagicAPIClient:
+    config = RagicConnectionConfig(
+        account=account or _DEFAULT_ACCOUNT,
+        api_key=api_key or _DEFAULT_API_KEY,
+        server_prefix=server or _DEFAULT_SERVER,
+    )
+    return RagicAPIClient(config)
+
+
+class DirectQueryRequest(BaseModel):
+    """Request body for direct Ragic query via POST."""
+
+    tab_path: str = Field(..., description="Tab path, e.g. 'configuration-file'")
+    sheet_index: int = Field(..., description="Sheet number within the tab")
+    where: list[RagicWhereClause] = Field(default_factory=list)
+    limit: int = Field(default=1000, ge=1, le=1000)
+    offset: int = Field(default=0, ge=0)
+    order_field: Optional[str] = None
+    order_direction: str = Field(default="DESC")
+    naming: str = Field(default="EID")
+    subtables: Optional[int] = None
+
+
+class DirectQueryResponse(BaseModel):
+    """Wrapper for direct query result."""
+
+    code: int = 0
+    data: RagicQueryResult
+
+
+class HealthResponse(BaseModel):
+    """Health check result."""
+
+    status: str
+    service: str = "ragic_data_agent"
+    ragic_ok: bool = False
+    ragic_account: str = ""
+    ragic_server: str = ""
+    error: str = ""
+
+
+@router.get("/health", response_model=HealthResponse)
+async def health_check() -> HealthResponse:
+    if not _DEFAULT_API_KEY:
+        return HealthResponse(
+            status="degraded",
+            error="RAGIC_API_KEY not configured",
+        )
+
+    client = _build_client()
+    result = await client.check_health()
+
+    if result.get("ok"):
+        return HealthResponse(
+            status="ok",
+            ragic_ok=True,
+            ragic_account=str(result.get("account", "")),
+            ragic_server=str(result.get("server", "")),
+        )
+
+    return HealthResponse(
+        status="degraded",
+        error=str(result.get("error", "unknown")),
+    )
+
+
+@router.post("/query/records", response_model=DirectQueryResponse)
+async def query_records(request: DirectQueryRequest) -> DirectQueryResponse:
+    """Query Ragic records with structured parameters."""
+    if not _DEFAULT_API_KEY:
+        raise HTTPException(status_code=500, detail="RAGIC_API_KEY not configured")
+
+    client = _build_client()
+
+    params = RagicQueryParams(
+        where=request.where,
+        limit=request.limit,
+        offset=request.offset,
+        order_field=request.order_field,
+        order_direction=request.order_direction,  # type: ignore[arg-type]
+        naming=request.naming,
+        subtables=request.subtables,
+    )
+
+    try:
+        result = await client.get_records(
+            tab_path=request.tab_path,
+            sheet_index=request.sheet_index,
+            params=params,
+        )
+    except RagicError as exc:
+        raise HTTPException(
+            status_code=_ragic_error_to_http(exc),
+            detail={"code": exc.code, "message": str(exc)},
+        )
+
+    return DirectQueryResponse(data=result)
+
+
+@router.get("/query/records")
+async def query_records_get(
+    tab_path: str = Query(..., description="Tab path, e.g. 'configuration-file'"),
+    sheet_index: int = Query(..., description="Sheet number"),
+    where: Optional[str] = Query(None, description="Filter: field_id,op,value"),
+    limit: int = Query(1000, ge=1, le=1000),
+    offset: int = Query(0, ge=0),
+    order: Optional[str] = Query(None, description="field_id,ASC|DESC"),
+    naming: str = Query("EID"),
+    subtables: Optional[int] = Query(None),
+    connection: Optional[str] = Query(None, description="Account name override"),
+) -> DirectQueryResponse:
+    """Query Ragic records via GET with query-string parameters."""
+    if not _DEFAULT_API_KEY:
+        raise HTTPException(status_code=500, detail="RAGIC_API_KEY not configured")
+
+    client = _build_client(account=connection)
+
+    where_clauses: list[RagicWhereClause] = []
+    if where:
+        parts = where.split(",", 2)
+        if len(parts) == 3:
+            try:
+                op = RagicOperator(parts[1].strip())
+            except ValueError:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid operator '{parts[1]}'. "
+                    f"Valid: {[e.value for e in RagicOperator]}",
+                )
+            where_clauses.append(
+                RagicWhereClause(
+                    field_id=parts[0].strip(),
+                    operator=op,
+                    value=parts[2].strip(),
+                )
+            )
+
+    order_field: str | None = None
+    order_dir = "DESC"
+    if order:
+        order_parts = order.split(",", 1)
+        order_field = order_parts[0].strip()
+        if len(order_parts) > 1:
+            order_dir = order_parts[1].strip().upper()
+
+    params = RagicQueryParams(
+        where=where_clauses,
+        limit=limit,
+        offset=offset,
+        order_field=order_field,
+        order_direction=order_dir,  # type: ignore[arg-type]
+        naming=naming,
+        subtables=subtables,
+    )
+
+    try:
+        result = await client.get_records(
+            tab_path=tab_path,
+            sheet_index=sheet_index,
+            params=params,
+        )
+    except RagicError as exc:
+        raise HTTPException(
+            status_code=_ragic_error_to_http(exc),
+            detail={"code": exc.code, "message": str(exc)},
+        )
+
+    return DirectQueryResponse(data=result)
+
+
+def _ragic_error_to_http(exc: RagicError) -> int:
+    """Map RagicError subclass to HTTP status code."""
+    from data_agent.ragic.exceptions import (
+        RagicAuthError,
+        RagicForbiddenError,
+        RagicNotFoundError,
+        RagicRateLimitError,
+        RagicTimeoutError,
+    )
+
+    mapping: dict[type, int] = {
+        RagicAuthError: 401,
+        RagicForbiddenError: 403,
+        RagicNotFoundError: 404,
+        RagicRateLimitError: 429,
+        RagicTimeoutError: 504,
+    }
+    return mapping.get(type(exc), 502)
+
+
+_schema_store = RagicSchemaStore()
+
+
+class SchemaUpsertResponse(BaseModel):
+    """Response after upserting schemas."""
+
+    upserted_count: int
+    collection: str = "ragic_schemas"
+    status: str = "ok"
+
+
+class SchemaListResponse(BaseModel):
+    """Response listing schemas."""
+
+    schemas: list[RagicTableSchema] = Field(default_factory=list)
+    total: int = 0
+
+
+class SchemaCountResponse(BaseModel):
+    """Response with schema count."""
+
+    count: int = 0
+    collection: str = "ragic_schemas"
+
+
+@router.post("/schema/upsert", response_model=SchemaUpsertResponse)
+async def schema_upsert(request: SchemaUpsertRequest) -> SchemaUpsertResponse:
+    """Upsert table schemas into Qdrant (embed + store)."""
+    try:
+        count = await _schema_store.upsert(request.schemas)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Schema upsert failed: {exc}")
+    return SchemaUpsertResponse(upserted_count=count)
+
+
+@router.post("/schema/search", response_model=SchemaSearchResponse)
+async def schema_search(request: SchemaSearchRequest) -> SchemaSearchResponse:
+    """Search schemas by natural language query."""
+    try:
+        hits = await _schema_store.search(
+            query=request.query,
+            account=request.account,
+            top_k=request.top_k,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Schema search failed: {exc}")
+
+    results: list[SchemaSearchResult] = []
+    for hit in hits:
+        payload = hit.get("payload", {})
+        if not isinstance(payload, dict):
+            continue
+        schema = RagicSchemaStore.payload_to_schema(payload)
+        raw_score = hit.get("score", 0.0)
+        hit_score = float(raw_score) if isinstance(raw_score, (int, float)) else 0.0
+        results.append(
+            SchemaSearchResult(
+                table_key=schema.table_key,
+                table_name=schema.table_name,
+                account=schema.account,
+                score=hit_score,
+                schema_data=schema,
+            )
+        )
+
+    return SchemaSearchResponse(
+        query=request.query, results=results, total=len(results)
+    )
+
+
+@router.get("/schema/list", response_model=SchemaListResponse)
+async def schema_list(
+    account: Optional[str] = Query(None, description="Filter by account"),
+    limit: int = Query(100, ge=1, le=500),
+) -> SchemaListResponse:
+    """List all stored schemas."""
+    try:
+        points = await _schema_store.list_all(account=account, limit=limit)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Schema list failed: {exc}")
+
+    schemas: list[RagicTableSchema] = []
+    for point in points:
+        payload = point.get("payload", {})
+        if isinstance(payload, dict):
+            schemas.append(RagicSchemaStore.payload_to_schema(payload))
+
+    return SchemaListResponse(schemas=schemas, total=len(schemas))
+
+
+@router.get("/schema/count", response_model=SchemaCountResponse)
+async def schema_count() -> SchemaCountResponse:
+    try:
+        total = await _schema_store.count()
+    except Exception:
+        total = 0
+    return SchemaCountResponse(count=total)
+
+
+# ---------------------------------------------------------------------------
+# Intent endpoints
+# ---------------------------------------------------------------------------
+
+_intent_store = RagicIntentStore()
+
+
+class IntentUpsertResponse(BaseModel):
+    upserted_count: int
+    collection: str = "ragic_intents"
+    status: str = "ok"
+
+
+class IntentListResponse(BaseModel):
+    intents: list[RagicIntent] = Field(default_factory=list)
+    total: int = 0
+
+
+class IntentCountResponse(BaseModel):
+    count: int = 0
+    collection: str = "ragic_intents"
+
+
+@router.post("/intent/upsert", response_model=IntentUpsertResponse)
+async def intent_upsert(request: IntentUpsertRequest) -> IntentUpsertResponse:
+    try:
+        count = await _intent_store.upsert(request.intents)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Intent upsert failed: {exc}")
+    return IntentUpsertResponse(upserted_count=count)
+
+
+@router.post("/intent/search", response_model=IntentSearchResponse)
+async def intent_search(request: IntentSearchRequest) -> IntentSearchResponse:
+    try:
+        hits = await _intent_store.search(
+            query=request.query,
+            account=request.account,
+            top_k=request.top_k,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Intent search failed: {exc}")
+
+    results: list[IntentSearchResult] = []
+    for hit in hits:
+        payload = hit.get("payload", {})
+        if not isinstance(payload, dict):
+            continue
+        intent = RagicIntentStore.payload_to_intent(payload)
+        raw_score = hit.get("score", 0.0)
+        hit_score = float(raw_score) if isinstance(raw_score, (int, float)) else 0.0
+        results.append(
+            IntentSearchResult(
+                intent_id=intent.intent_id,
+                account=intent.account,
+                score=hit_score,
+                intent_data=intent,
+            )
+        )
+
+    best = results[0] if results else None
+
+    return IntentSearchResponse(
+        query=request.query,
+        results=results,
+        total=len(results),
+        best_match=best,
+    )
+
+
+@router.get("/intent/list", response_model=IntentListResponse)
+async def intent_list(
+    account: Optional[str] = Query(None, description="Filter by account"),
+    limit: int = Query(100, ge=1, le=500),
+) -> IntentListResponse:
+    try:
+        points = await _intent_store.list_all(account=account, limit=limit)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Intent list failed: {exc}")
+
+    intents: list[RagicIntent] = []
+    for point in points:
+        payload = point.get("payload", {})
+        if isinstance(payload, dict):
+            intents.append(RagicIntentStore.payload_to_intent(payload))
+
+    return IntentListResponse(intents=intents, total=len(intents))
+
+
+@router.get("/intent/count", response_model=IntentCountResponse)
+async def intent_count() -> IntentCountResponse:
+    try:
+        total = await _intent_store.count()
+    except Exception:
+        total = 0
+    return IntentCountResponse(count=total)
+
+
+# ---------------------------------------------------------------------------
+# NL query endpoint
+# ---------------------------------------------------------------------------
+
+_nl_parser = RagicNLParser(
+    intent_store=_intent_store,
+    schema_store=_schema_store,
+)
+
+_query_engine = RagicQueryEngine(schema_store=_schema_store)
+
+
+@router.post("/query", response_model=None)
+async def nl_query(request: NLQueryRequest) -> Union[NLQueryResponse, Response]:
+    if not _DEFAULT_API_KEY:
+        return NLQueryResponse(
+            code=1,
+            error="RAGIC_API_KEY not configured",
+        )
+
+    account = request.connection_name or _DEFAULT_ACCOUNT
+    start = time.monotonic()
+
+    try:
+        parsed = await _nl_parser.parse(
+            query=request.query,
+            account=account,
+            table_key=request.table_key,
+            options=request.options,
+        )
+    except Exception as exc:
+        return NLQueryResponse(code=2, error=f"NL parse failed: {exc}")
+
+    if not parsed.table_key:
+        return NLQueryResponse(
+            code=3,
+            error="無法判斷要查詢的表格，請指定 table_key 或新增對應 Intent",
+            data=NLQueryData(
+                query=request.query,
+                intent_matched=parsed.intent_matched,
+                translated_params=parsed.translated_params,
+            ),
+        )
+
+    parts = parsed.table_key.rsplit("/", 1)
+    if len(parts) != 2:
+        return NLQueryResponse(
+            code=4,
+            error=f"table_key 格式錯誤，應為 'tab_path/sheet_index'：{parsed.table_key}",
+        )
+
+    tab_path = parts[0]
+    try:
+        sheet_index = int(parts[1])
+    except ValueError:
+        return NLQueryResponse(
+            code=4,
+            error=f"sheet_index 不是數字：{parts[1]}",
+        )
+
+    query_params = _nl_parser.translated_to_query_params(parsed.translated_params)
+
+    if request.options.include_subtables:
+        query_params.subtables = 1
+
+    client = await _build_client_async(account=account)
+
+    try:
+        engine_result = await _query_engine.execute(
+            client=client,
+            tab_path=tab_path,
+            sheet_index=sheet_index,
+            params=query_params,
+            account=account,
+            auto_paginate=request.options.auto_paginate,
+        )
+    except RagicError as exc:
+        return NLQueryResponse(
+            code=_ragic_error_to_http(exc),
+            error=str(exc),
+            data=NLQueryData(
+                query=request.query,
+                intent_matched=parsed.intent_matched,
+                translated_params=parsed.translated_params,
+            ),
+        )
+
+    field_labels = (
+        engine_result.records[0].field_labels if engine_result.records else {}
+    )
+
+    fmt = request.output_format.lower()
+    if fmt == "csv":
+        csv_bytes = to_csv_bytes(engine_result.records, field_labels)
+        return Response(
+            content=csv_bytes,
+            media_type="text/csv; charset=utf-8",
+            headers={
+                "Content-Disposition": "attachment; filename=ragic_export.csv",
+            },
+        )
+
+    if fmt == "excel":
+        xlsx_bytes = to_excel_bytes(engine_result.records, field_labels)
+        return Response(
+            content=xlsx_bytes,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={
+                "Content-Disposition": "attachment; filename=ragic_export.xlsx",
+            },
+        )
+
+    total_ms = round((time.monotonic() - start) * 1000, 2)
+
+    records_as_ragic = [
+        RagicRecord(ragic_id=r.ragic_id, fields=r.fields)
+        for r in engine_result.records
+    ]
+
+    return NLQueryResponse(
+        code=0,
+        data=NLQueryData(
+            query=request.query,
+            intent_matched=parsed.intent_matched,
+            translated_params=parsed.translated_params,
+            records=records_as_ragic,
+            record_count=engine_result.record_count,
+            pagination=RagicPagination(
+                offset=query_params.offset,
+                limit=query_params.limit,
+                returned_count=engine_result.record_count,
+                has_more=engine_result.has_more,
+            ),
+            execution_time_ms=total_ms,
+            field_labels=field_labels,
+        ),
+        metadata=NLQueryMetadata(
+            connection=account,
+            table_key=parsed.table_key,
+            output_format=request.output_format,
+        ),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Config management endpoints
+# ---------------------------------------------------------------------------
+
+
+class ConfigConnectionInfo(BaseModel):
+    account: str
+    server_prefix: str
+    enabled: bool
+    description: str
+
+
+class ConfigListResponse(BaseModel):
+    connections: list[ConfigConnectionInfo] = Field(default_factory=list)
+    total: int = 0
+    source: str = ""
+
+
+class ConfigReloadResponse(BaseModel):
+    status: str = "ok"
+    message: str = ""
+
+
+@router.get("/config/connections", response_model=ConfigListResponse)
+async def config_list_connections() -> ConfigListResponse:
+    connections = await _config_loader.get_all_connections()
+    items = [
+        ConfigConnectionInfo(
+            account=c.account,
+            server_prefix=c.server_prefix,
+            enabled=c.enabled,
+            description=c.description,
+        )
+        for c in connections
+    ]
+    source = "ragic" if any(c.description != "env-fallback" for c in connections) else "env-fallback"
+    return ConfigListResponse(
+        connections=items, total=len(items), source=source
+    )
+
+
+@router.post("/config/reload", response_model=ConfigReloadResponse)
+async def config_reload() -> ConfigReloadResponse:
+    _config_loader.reload()
+    return ConfigReloadResponse(message="Config cache cleared, will reload on next request")
+
+
+# ---------------------------------------------------------------------------
+# Schema sync endpoints
+# ---------------------------------------------------------------------------
+
+_schema_sync = RagicSchemaSync(schema_store=_schema_store)
+
+
+class SchemaSyncRequest(BaseModel):
+    connection_name: Optional[str] = None
+    table_keys: list[str] = Field(
+        ..., description="List of table keys, e.g. ['configuration-file/10']"
+    )
+
+
+class SchemaSyncResult(BaseModel):
+    table_key: str
+    table_name: str
+    field_count: int
+
+
+class SchemaSyncResponse(BaseModel):
+    synced: list[SchemaSyncResult] = Field(default_factory=list)
+    total: int = 0
+    status: str = "ok"
+    error: str = ""
+
+
+@router.post("/schema/sync", response_model=SchemaSyncResponse)
+async def schema_sync(request: SchemaSyncRequest) -> SchemaSyncResponse:
+    account = request.connection_name or _DEFAULT_ACCOUNT
+    client = await _build_client_async(account=account)
+
+    try:
+        schemas = await _schema_sync.sync_tables(client, request.table_keys)
+    except Exception as exc:
+        return SchemaSyncResponse(
+            status="error", error=f"Schema sync failed: {exc}"
+        )
+
+    results = [
+        SchemaSyncResult(
+            table_key=s.table_key,
+            table_name=s.table_name,
+            field_count=len(s.fields),
+        )
+        for s in schemas
+    ]
+    return SchemaSyncResponse(synced=results, total=len(results))

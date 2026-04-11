@@ -138,6 +138,14 @@ export default function SystemParams() {
     backup: '备份设置',
     knowledge: '知識庫參數',
     task_chat: '任務聊天參數',
+    ragic: 'Ragic 連線設定',
+  };
+
+  const ragicParamLabels: Record<string, string> = {
+    'ragic.server_prefix': '伺服器前綴 (如 ap15)',
+    'ragic.database': '資料庫名稱 (如 2025shianyong)',
+    'ragic.service_account': '服務帳號',
+    'ragic.api_key': 'API Key',
   };
 
   const renderParamInput = (param: SystemParam) => {
@@ -152,6 +160,10 @@ export default function SystemParams() {
           <Select.Option value="ragic">Ragic</Select.Option>
         </Select>
       );
+    }
+
+    if (param.param_key === 'ragic.api_key') {
+      return <Input.Password {...commonProps} style={{ width: '100%' }} />;
     }
 
     switch (param.param_type) {
@@ -250,7 +262,7 @@ export default function SystemParams() {
               <Form.Item
                 key={param.param_key}
                 name={param.param_key}
-                label={param.param_key.split('.')[1] || param.param_key}
+                label={ragicParamLabels[param.param_key] || param.param_key.split('.')[1] || param.param_key}
                 tooltip={param.require_restart ? '需要重启生效' : undefined}
               >
                 {renderParamInput(param)}

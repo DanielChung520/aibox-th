@@ -4,9 +4,9 @@ Data Agent Service - Unified Data Query & Intent Management
 Combines intent RAG (Qdrant-based intent matching, embedding sync)
 and query execution (NL→AQL, NL→SQL pipeline) under a single FastAPI app.
 
-# Last Update: 2026-03-23 18:40:25
+# Last Update: 2026-04-11 17:12:44
 # Author: Daniel Chung
-# Version: 2.0.0
+# Version: 2.2.0
 """
 
 import os
@@ -16,11 +16,13 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from data_agent.intent_rag.router import router as intent_rag_router
 from data_agent.query.router import router as query_router
+from data_agent.ragic.router import router as ragic_router
+from data_agent.ragic.router_import import router as ragic_import_router
 
 app = FastAPI(
     title="AIBox Data Agent Service",
     description="Unified data query and intent management service.",
-    version="2.0.0",
+    version="2.1.0",
 )
 
 # CORS configuration
@@ -40,6 +42,8 @@ app.add_middleware(
 # Mount sub-routers
 app.include_router(intent_rag_router, prefix="/intent-rag", tags=["Intent RAG"])
 app.include_router(query_router, prefix="/query", tags=["Query"])
+app.include_router(ragic_router, prefix="/ragic", tags=["Ragic"])
+app.include_router(ragic_import_router, prefix="/ragic", tags=["Ragic Import"])
 
 
 @app.get("/")

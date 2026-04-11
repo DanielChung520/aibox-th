@@ -1,7 +1,7 @@
 /**
  * @file        Data Agent API 服務層 - API 端點函式
  * @description DA 的 Schema、Intents、Query 等 API 端點定義
- * @lastUpdate  2026-03-24 16:36:01
+ * @lastUpdate  2026-04-11 18:10:32
  * @author      Daniel Chung
  */
 
@@ -14,6 +14,9 @@ import type {
   QueryResponse,
   IntentCatalogEntry,
   NL2SqlResponse,
+  RagicImportResult,
+  RagicGraphQueryResult,
+  RagicMultiStepResult,
 } from './dataAgentApi_types';
 
 export const dataAgentApi_endpoints = {
@@ -133,4 +136,43 @@ export const dataAgentApi_endpoints = {
       offset: number;
       limit: number;
     }>(`/api/v1/da/query/tables/${tableName}/preview`, { params: { offset, limit } }),
+
+  // Ragic API Proxy
+  ragicProxyData: (tableId: string, offset = 0, limit = 20) =>
+    api.get<{
+      code: number;
+      message?: string;
+      table_id: string;
+      table_name: string;
+      fields: FieldInfo[];
+      rows: Record<string, unknown>[];
+      total: number;
+      offset: number;
+      limit: number;
+    }>(`/api/v1/da/ragic/proxy/${tableId}/data`, { params: { offset, limit } }),
+
+  importRagicMd: (data: { account: string; content: string }) =>
+    api.post<{ code: number; message: string; data: RagicImportResult | null }>(
+      '/api/v1/da/ragic/schema/import-md', data, { timeout: 300000 }
+    ),
+
+  ragicRelatedTables: (tableName: string, account: string, depth?: number) =>
+    api.get<{ code: number; data: RagicGraphQueryResult | null }>(
+      '/api/v1/da/ragic/graph/related-tables', { params: { table_name: tableName, account, depth } }
+    ),
+
+  ragicGraphPath: (fromTable: string, toTable: string, account: string) =>
+    api.get<{ code: number; data: Record<string, unknown>[] | null }>(
+      '/api/v1/da/ragic/graph/path', { params: { from_table: fromTable, to_table: toTable, account } }
+    ),
+
+  ragicAllRelations: (account: string) =>
+    api.get<{ code: number; data: Record<string, unknown>[] }>(
+      '/api/v1/da/ragic/graph/all-relations', { params: { account } }
+    ),
+
+  ragicMultiStepQuery: (data: { query: string; account: string; max_steps?: number }) =>
+    api.post<{ code: number; data: RagicMultiStepResult | null; error: string | null }>(
+      '/api/v1/da/ragic/query/multi-step', data, { timeout: 120000 }
+    ),
 };

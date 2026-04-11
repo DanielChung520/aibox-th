@@ -530,7 +530,7 @@ const renderResultTabs = () => {
                       {tables.filter(t => t.module === module).map(t => (
                         <div key={t.table_id} style={{ display: 'flex', justifyContent: 'space-between' }}>
                           <Text>{t.table_name}</Text>
-                          <Text type="secondary" style={{ fontSize: 12 }}>{t.primary_keys?.join(', ') || '-'}</Text>
+                          <Text type="secondary" style={{ fontSize: 12 }}>{t.sheet_key || '-'}</Text>
                         </div>
                       ))}
                     </Space>

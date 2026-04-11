@@ -121,12 +121,8 @@ export default function DataLakePage() {
       dataIndex: 'field_name',
       key: 'field_name',
       width: 200,
-      render: (name: string, record: FieldInfo) => (
-        <Space>
-          <Text code style={{ fontSize: 12 }}>{name}</Text>
-          {record.is_pk && <Tag color="gold" style={{ fontSize: 10 }}>PK</Tag>}
-          {record.is_fk && <Tag color="blue" style={{ fontSize: 10 }}>FK</Tag>}
-        </Space>
+      render: (name: string) => (
+        <Text code style={{ fontSize: 12 }}>{name}</Text>
       ),
     },
     {
@@ -137,19 +133,19 @@ export default function DataLakePage() {
       render: (type: string) => <Tag>{type}</Tag>,
     },
     {
-      title: '可空',
-      dataIndex: 'nullable',
-      key: 'nullable',
+      title: '可寫入',
+      dataIndex: 'writable',
+      key: 'writable',
       width: 70,
       align: 'center' as const,
       render: (v: boolean) => (v ? 'Y' : 'N'),
     },
     {
-      title: '說明',
-      dataIndex: 'description',
-      key: 'description',
-      render: (desc: string) => (
-        <Text type="secondary" style={{ fontSize: 12 }}>{desc || '-'}</Text>
+      title: '備註',
+      dataIndex: 'memo',
+      key: 'memo',
+      render: (memo: string) => (
+        <Text type="secondary" style={{ fontSize: 12 }}>{memo || '-'}</Text>
       ),
     },
   ];
@@ -291,7 +287,6 @@ export default function DataLakePage() {
             dataSource={filteredTables.filter(t =>
               !searchText ||
               t.table_name.toLowerCase().includes(searchText.toLowerCase()) ||
-              t.description?.toLowerCase().includes(searchText.toLowerCase()) ||
               t.module.toLowerCase().includes(searchText.toLowerCase()) ||
               t.table_id.toLowerCase().includes(searchText.toLowerCase())
             )}
@@ -317,11 +312,11 @@ export default function DataLakePage() {
                       <Tag color={MODULE_COLORS[t.module] || 'default'} style={{ fontSize: 10 }}>
                         {t.module}
                       </Tag>
-                      {t.data_source && (
-                        <Tag color={t.data_source === 'sap' ? 'blue' : 'green'} style={{ fontSize: 10 }}>
-                          {t.data_source.toUpperCase()}
-                        </Tag>
-                      )}
+                       {t.data_source && (
+                         <Tag color="green" style={{ fontSize: 10 }}>
+                           {t.data_source.toUpperCase()}
+                         </Tag>
+                       )}
                       {t.status === 'disabled' && (
                         <Tag color="default" style={{ fontSize: 10 }}>停用</Tag>
                       )}
@@ -329,17 +324,7 @@ export default function DataLakePage() {
                     <Text type="secondary" style={{ fontSize: 10 }}>
                       {t.table_id}
                     </Text>
-                    {(t.row_count_estimate ?? t.record_count) !== undefined && (
-                      <Text type="secondary" style={{ fontSize: 11 }}>
-                        ~{(t.row_count_estimate ?? t.record_count)?.toLocaleString()} rows
-                      </Text>
-                    )}
-                    {t.description && (
-                      <Text type="secondary" style={{ fontSize: 11 }} ellipsis>
-                        {t.description}
-                      </Text>
-                    )}
-                  </Space>
+                    </Space>
                 ),
               },
             ]}
@@ -376,30 +361,22 @@ export default function DataLakePage() {
                     <Tag color={MODULE_COLORS[tableInfo.module] || 'default'}>{tableInfo.module}</Tag>
                   </Descriptions.Item>
                   <Descriptions.Item label="來源">
-                    {tableInfo.data_source ? (
-                      <Tag color={tableInfo.data_source === 'sap' ? 'blue' : 'green'}>
-                        {tableInfo.data_source.toUpperCase()}
-                      </Tag>
-                    ) : '-'}
-                  </Descriptions.Item>
-                  <Descriptions.Item label="主鍵">
-                    {tableInfo.primary_keys?.join(', ') || '-'}
-                  </Descriptions.Item>
-                  <Descriptions.Item label="分割鍵">
-                    {tableInfo.partition_keys?.join(', ') || '-'}
+                    <Tag color="green">
+                      {tableInfo.data_source.toUpperCase()}
+                    </Tag>
                   </Descriptions.Item>
                   <Descriptions.Item label="狀態">
                     <Tag color={tableInfo.status === 'enabled' ? 'green' : 'default'}>
                       {tableInfo.status}
                     </Tag>
                   </Descriptions.Item>
-                  <Descriptions.Item label="預估列數">
-                    {tableInfo.row_count_estimate
-                      ? tableInfo.row_count_estimate.toLocaleString()
-                      : '-'}
+                  <Descriptions.Item label="Sheet Key">
+                    {tableInfo.sheet_key || '-'}
                   </Descriptions.Item>
-                  <Descriptions.Item label="描述" span={3}>
-                    {tableInfo.description || '-'}
+                  <Descriptions.Item label="表單連結" span={2}>
+                    {tableInfo.sheet_url ? (
+                      <a href={tableInfo.sheet_url} target="_blank" rel="noopener noreferrer">開啟 Ragic</a>
+                    ) : '-'}
                   </Descriptions.Item>
                 </Descriptions>
               </Card>
