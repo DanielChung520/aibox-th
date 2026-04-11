@@ -13,14 +13,17 @@ import { PlusOutlined, PaperClipOutlined, SmileOutlined, AudioOutlined, SendOutl
 import { useParams, useNavigate } from 'react-router-dom';
 import { useContentTokens } from '../contexts/AppThemeProvider';
 import { chatStore } from '../stores/chatStore';
+import { chatOrchestrator } from '../stores/chatOrchestrator';
 import { subscribeSessionFileStatus, type SSEConnection } from '../services/sseManager';
 import MessageBubble from '../components/MessageBubble';
+import ToolCallDisplay from '../components/ToolCallDisplay';
 
 export default function TaskSessionChat() {
   const { sessionKey: urlSessionKey } = useParams<{ sessionKey?: string }>();
   const navigate = useNavigate();
   const contentTokens = useContentTokens();
   const [storeState, setStoreState] = useState(chatStore.getState());
+  const [orchState, setOrchState] = useState(chatOrchestrator.getState());
   const [inputValue, setInputValue] = useState('');
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [queue, setQueue] = useState<string[]>([]);
@@ -32,8 +35,9 @@ export default function TaskSessionChat() {
   const prevStreamingRef = useRef(storeState.isStreaming);
 
   useEffect(() => {
-    const unsubscribe = chatStore.subscribe(() => setStoreState(chatStore.getState()));
-    return unsubscribe;
+    const unsubChat = chatStore.subscribe(() => setStoreState(chatStore.getState()));
+    const unsubOrch = chatOrchestrator.subscribe(() => setOrchState(chatOrchestrator.getState()));
+    return () => { unsubChat(); unsubOrch(); };
   }, []);
 
   useEffect(() => {
@@ -169,6 +173,7 @@ export default function TaskSessionChat() {
   const displayMessages = storeState.messages;
 
   const sendNow = async (text: string) => {
+    chatOrchestrator.handleSendStart();
     const connection = await chatStore.sendMessage(text);
     connectionRef.current = connection;
   };
@@ -210,7 +215,11 @@ export default function TaskSessionChat() {
     const wasStreaming = prevStreamingRef.current;
     const isStreaming = storeState.isStreaming;
     prevStreamingRef.current = isStreaming;
+    if (!wasStreaming && isStreaming) {
+      chatOrchestrator.handleStreamStart();
+    }
     if (wasStreaming && !isStreaming) {
+      chatOrchestrator.handleDone();
       connectionRef.current = null;
       if (queue.length > 0) {
         const [next, ...rest] = queue;
@@ -272,6 +281,13 @@ export default function TaskSessionChat() {
             )}
           </div>
         )}
+
+        {orchState.currentToolCalls.length > 0 && (
+          <div style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: 8, paddingLeft: 8 }}>
+            <ToolCallDisplay toolCalls={orchState.currentToolCalls} />
+          </div>
+        )}
+
         <div ref={chatEndRef} />
       </div>
 
