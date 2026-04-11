@@ -3,7 +3,7 @@
 //! # Description
 //! 封裝 AITask 上游串流解析、事件轉發、訊息累積持久化與 5W1H 後處理
 //!
-//! # Last Update: 2026-04-11 02:46:07
+//! # Last Update: 2026-04-11 08:42:17
 //! # Author: AI Agent
 //! # Version: 1.0.0
 
@@ -17,6 +17,37 @@ use crate::db::{get_db, ChatMessage};
 use super::models::{ChatEventStream, ChatSse};
 use super::orchestrator::spawn_5w1h_tagging;
 use super::repo::insert_message;
+
+fn done_event() -> Result<Event, std::convert::Infallible> {
+    Ok(Event::default().event("chat_done").data(serde_json::json!({ "done": true }).to_string()))
+}
+
+fn parse_sse_block(block: &str) -> Option<(String, String)> {
+    let mut event_name = None;
+    let mut data_lines = Vec::new();
+
+    for line in block.lines() {
+        let line = line.trim_end_matches('\r');
+        if let Some(value) = line.strip_prefix("event:") {
+            event_name = Some(value.trim().to_string());
+        } else if let Some(value) = line.strip_prefix("data:") {
+            data_lines.push(value.trim().to_string());
+        }
+    }
+
+    match (event_name, data_lines.is_empty()) {
+        (Some(event), false) => Some((event, data_lines.join("\n"))),
+        _ => None,
+    }
+}
+
+fn next_sse_block(buffer: &mut String) -> Option<String> {
+    let pos = buffer.find("\n\n").or_else(|| buffer.find("\r\n\r\n"))?;
+    let step = if buffer[pos..].starts_with("\r\n\r\n") { 4 } else { 2 };
+    let raw = buffer[..pos].to_string();
+    buffer.drain(..pos + step);
+    Some(raw)
+}
 
 pub async fn stream_aitask_response(response: reqwest::Response, session_key: String) -> ChatSse {
     let (content_tx, mut content_rx) = mpsc::unbounded_channel::<String>();
@@ -142,6 +173,113 @@ pub async fn stream_aitask_response(response: reqwest::Response, session_key: St
                 .event("chat_done")
                 .data(serde_json::json!({ "done": true }).to_string()),
         ));
+    });
+
+    let sse_stream: ChatEventStream = Box::pin(UnboundedReceiverStream::new(event_rx));
+    Sse::new(sse_stream)
+}
+
+pub async fn stream_langgraph_response(response: reqwest::Response, session_key: String) -> ChatSse {
+    let (content_tx, mut content_rx) = mpsc::unbounded_channel::<String>();
+    let session_key_for_persist = session_key.clone();
+
+    tokio::spawn(async move {
+        let mut full_content = String::new();
+        while let Some(chunk) = content_rx.recv().await {
+            full_content.push_str(&chunk);
+        }
+
+        if full_content.is_empty() {
+            return;
+        }
+
+        let db = get_db();
+        let msg = ChatMessage {
+            _key: Some(uuid::Uuid::new_v4().to_string()),
+            session_key: session_key_for_persist.clone(),
+            role: "assistant".to_string(),
+            content: full_content,
+            tokens: None,
+            created_at: chrono::Utc::now().to_rfc3339(),
+        };
+
+        if insert_message(db, msg).await.is_ok() {
+            spawn_5w1h_tagging(session_key_for_persist).await;
+        }
+    });
+
+    let (event_tx, event_rx) = mpsc::unbounded_channel::<Result<Event, std::convert::Infallible>>();
+
+    tokio::spawn(async move {
+        let mut buffer = String::new();
+        let mut body = response.bytes_stream();
+
+        while let Some(chunk_result) = body.next().await {
+            match chunk_result {
+                Ok(chunk) => {
+                    buffer.push_str(&String::from_utf8_lossy(&chunk));
+
+                    while let Some(raw_event) = next_sse_block(&mut buffer) {
+                        let Some((event_name, data)) = parse_sse_block(&raw_event) else {
+                            continue;
+                        };
+
+                        match event_name.as_str() {
+                            "chat_chunk" => {
+                                let Ok(json) = serde_json::from_str::<serde_json::Value>(&data) else {
+                                    continue;
+                                };
+                                let Some(chunk_text) = json.get("chunk").and_then(|value| value.as_str()) else {
+                                    continue;
+                                };
+                                if chunk_text.is_empty() {
+                                    continue;
+                                }
+
+                                let _ = content_tx.send(chunk_text.to_string());
+                                let payload = serde_json::json!({
+                                    "message": { "content": chunk_text }
+                                });
+                                let _ = event_tx.send(Ok(
+                                    Event::default().event("chat_chunk").data(payload.to_string()),
+                                ));
+                            }
+                            "chat_complete" => {
+                                let _ = event_tx.send(done_event());
+                                return;
+                            }
+                            "error" => {
+                                let _ = event_tx.send(Ok(Event::default().event("chat_error").data(data)));
+                                let _ = event_tx.send(done_event());
+                                return;
+                            }
+                            "intent_detected"
+                            | "tool_call_start"
+                            | "tool_call_result"
+                            | "da_query_start"
+                            | "da_query_result"
+                            | "ka_search_result"
+                            | "bpa_step_start" => {
+                                let _ = event_tx.send(Ok(Event::default().event(event_name).data(data)));
+                            }
+                            "heartbeat" => {}
+                            _ => {}
+                        }
+                    }
+                }
+                Err(_) => {
+                    let _ = event_tx.send(Ok(
+                        Event::default()
+                            .event("chat_error")
+                            .data(serde_json::json!({ "error": "upstream_stream_error" }).to_string()),
+                    ));
+                    let _ = event_tx.send(done_event());
+                    return;
+                }
+            }
+        }
+
+        let _ = event_tx.send(done_event());
     });
 
     let sse_stream: ChatEventStream = Box::pin(UnboundedReceiverStream::new(event_rx));

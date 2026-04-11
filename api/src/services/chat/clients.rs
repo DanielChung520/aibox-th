@@ -3,7 +3,7 @@
 //! # Description
 //! 集中管理聊天模組對 AITask、Knowledge Agent、Qdrant 與 SeaweedFS 的 HTTP 呼叫
 //!
-//! # Last Update: 2026-04-11 02:46:07
+//! # Last Update: 2026-04-11 08:42:17
 //! # Author: AI Agent
 //! # Version: 1.0.0
 
@@ -19,6 +19,24 @@ pub async fn call_aitask_chat(body: serde_json::Value) -> Result<reqwest::Respon
     let response = HTTP_CLIENT
         .post(format!("{}/v1/chat/completions", CONFIG.ai_services.aitask_url))
         .json(&body)
+        .send()
+        .await
+        .map_err(|_| StatusCode::BAD_GATEWAY)?;
+
+    if !response.status().is_success() {
+        return Err(StatusCode::BAD_GATEWAY);
+    }
+
+    Ok(response)
+}
+
+pub async fn call_aitask_graph_chat(
+    body: serde_json::Value,
+) -> Result<reqwest::Response, StatusCode> {
+    let response = HTTP_CLIENT
+        .post(format!("{}/v1/graph/chat", CONFIG.ai_services.aitask_url))
+        .json(&body)
+        .timeout(std::time::Duration::from_secs(120))
         .send()
         .await
         .map_err(|_| StatusCode::BAD_GATEWAY)?;

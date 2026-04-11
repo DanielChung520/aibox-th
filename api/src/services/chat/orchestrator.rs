@@ -3,7 +3,7 @@
 //! # Description
 //! 負責送出訊息主流程、意圖路由、LLM fallback 與 5W1H 標記協調
 //!
-//! # Last Update: 2026-04-11 02:46:07
+//! # Last Update: 2026-04-11 08:42:17
 //! # Author: AI Agent
 //! # Version: 1.0.0
 
@@ -13,19 +13,12 @@ use crate::api::intent::{route_tool_intent, sse_text_to_stream, summarize_text, 
 use crate::config::CONFIG;
 use crate::db::{get_db, ChatMessage, ModelProvider, SendMessageRequest};
 
-use super::clients::{call_aitask_chat, call_aitask_tagging};
+use super::clients::{call_aitask_chat, call_aitask_graph_chat, call_aitask_tagging};
 use super::models::ChatSse;
-use super::repo::{
-    extract_user_key_from_headers, get_message_history, get_session_with_messages,
-    get_system_param, insert_message, load_chat_defaults,
-};
-use super::sse_proxy::stream_aitask_response;
+use super::repo::{extract_user_key_from_headers, get_message_history, get_session_with_messages, get_system_param, insert_message, load_chat_defaults};
+use super::sse_proxy::{stream_aitask_response, stream_langgraph_response};
 
-pub async fn handle_send_message(
-    headers: HeaderMap,
-    session_key: String,
-    payload: SendMessageRequest,
-) -> Result<ChatSse, StatusCode> {
+pub async fn handle_send_message(headers: HeaderMap, session_key: String, payload: SendMessageRequest) -> Result<ChatSse, StatusCode> {
     if payload.content.trim().is_empty() {
         return Err(StatusCode::BAD_REQUEST);
     }
@@ -112,6 +105,14 @@ pub async fn handle_send_message(
         }));
     }
 
+    let orchestrator_mode = get_system_param(db, "task_chat.orchestrator_mode").await.unwrap_or_else(|| "legacy".to_string());
+
+    if orchestrator_mode == "langgraph" {
+        let graph_body = serde_json::json!({ "session_id": session_key, "user_id": user_key, "message": payload.content, "mode": "chat" });
+        let response = call_aitask_graph_chat(graph_body).await?;
+        return Ok(stream_langgraph_response(response, session_key).await);
+    }
+
     let client = reqwest::Client::new();
 
     if CONFIG.ai_services.intent_router_enabled {
@@ -174,7 +175,8 @@ pub async fn handle_send_message(
 
             match sse_text_result {
                 Ok(sse_text) => {
-                    let persist_text = sse_text.clone();
+                    let stream_text = sse_text.clone();
+                    let persist_text = sse_text;
                     let session_key_for_persist = session_key.clone();
                     tokio::spawn(async move {
                         let db = get_db();
@@ -207,7 +209,7 @@ pub async fn handle_send_message(
                         }
                     });
 
-                    return Ok(axum::response::sse::Sse::new(sse_text_to_stream(sse_text)));
+                    return Ok(axum::response::sse::Sse::new(sse_text_to_stream(stream_text)));
                 }
                 Err(error) => {
                     eprintln!("[chat] summarize_text failed: {:?}, falling back to LLM", error);
