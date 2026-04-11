@@ -1,9 +1,9 @@
 /**
  * @file        SSE 串流連線管理
  * @description 使用 fetch + ReadableStream 解析聊天 SSE 事件
- * @lastUpdate  2026-04-10 23:00:01
+ * @lastUpdate  2026-04-11 10:54:59
  * @author      Daniel Chung
- * @version     1.1.0
+ * @version     1.2.0
  */
 
 import { FileStatusPayload, SendMessageRequest } from './api';
@@ -113,6 +113,101 @@ function parseSSEEvent(rawEvent: string): { event: string; data: string } {
   return { event, data: dataLines.join('\n') };
 }
 
+/** 統一分派 SSE 事件到對應的 callback */
+function dispatchSSEEvent(
+  evt: { event: string; data: string },
+  callbacks: ExtendedSSECallbacks,
+): void {
+  switch (evt.event) {
+    case 'thinking_chunk': {
+      try {
+        const payload = JSON.parse(evt.data) as SSEChunkPayload;
+        const delta = payload.message?.thinking ?? '';
+        if (delta && callbacks.onThinkingChunk) callbacks.onThinkingChunk(delta);
+      } catch { callbacks.onError('SSE thinking_chunk 解析失敗'); }
+      break;
+    }
+    case 'chat_chunk': {
+      try {
+        const payload = JSON.parse(evt.data) as SSEChunkPayload;
+        const delta = extractChunkDelta(payload);
+        if (delta) callbacks.onChunk(delta);
+      } catch { callbacks.onError('SSE chunk 解析失敗'); }
+      break;
+    }
+    case 'chat_done':
+      callbacks.onDone();
+      break;
+    case 'chat_error': {
+      try {
+        const payload = JSON.parse(evt.data) as SSEErrorPayload;
+        callbacks.onError(payload.error ?? '串流處理失敗');
+      } catch { callbacks.onError('SSE error 解析失敗'); }
+      break;
+    }
+    case 'intent_detected': {
+      try { callbacks.onIntentDetected?.(JSON.parse(evt.data) as IntentDetectedPayload); }
+      catch { /* ignore optional event parse errors */ }
+      break;
+    }
+    case 'tool_call_start': {
+      try { callbacks.onToolCallStart?.(JSON.parse(evt.data) as ToolCallStartPayload); }
+      catch { /* ignore */ }
+      break;
+    }
+    case 'tool_call_result': {
+      try { callbacks.onToolCallResult?.(JSON.parse(evt.data) as ToolCallResultPayload); }
+      catch { /* ignore */ }
+      break;
+    }
+    case 'da_query_start': {
+      try { callbacks.onDaQueryStart?.(JSON.parse(evt.data) as DaQueryStartPayload); }
+      catch { /* ignore */ }
+      break;
+    }
+    case 'da_query_result': {
+      try { callbacks.onDaQueryResult?.(JSON.parse(evt.data) as DaQueryResultPayload); }
+      catch { /* ignore */ }
+      break;
+    }
+    case 'ka_search_result': {
+      try { callbacks.onKaSearchResult?.(JSON.parse(evt.data) as KaSearchResultPayload); }
+      catch { /* ignore */ }
+      break;
+    }
+    case 'bpa_step_start': {
+      try { callbacks.onBpaStepStart?.(JSON.parse(evt.data) as BpaStepStartPayload); }
+      catch { /* ignore */ }
+      break;
+    }
+    case 'bpa_step_complete': {
+      try { callbacks.onBpaStepComplete?.(JSON.parse(evt.data) as BpaStepCompletePayload); }
+      catch { /* ignore */ }
+      break;
+    }
+    case 'bpa_ask_user': {
+      try { callbacks.onBpaAskUser?.(JSON.parse(evt.data) as BpaAskUserPayload); }
+      catch { /* ignore */ }
+      break;
+    }
+    case 'bpa_complete': {
+      try { callbacks.onBpaComplete?.(JSON.parse(evt.data) as BpaCompletePayload); }
+      catch { /* ignore */ }
+      break;
+    }
+    case 'bpa_failed': {
+      try { callbacks.onBpaFailed?.(JSON.parse(evt.data) as BpaFailedPayload); }
+      catch { /* ignore */ }
+      break;
+    }
+    case 'session_state': {
+      try { callbacks.onSessionState?.(JSON.parse(evt.data) as SessionStatePayload); }
+      catch { /* ignore */ }
+      break;
+    }
+  }
+}
+
 export function sendMessageSSE(
   sessionKey: string,
   request: SendMessageRequest,
@@ -155,94 +250,7 @@ export function sendMessageSSE(
         if (done) {
           if (buffer.trim()) {
             const evt = parseSSEEvent(buffer);
-            if (evt.event === 'thinking_chunk') {
-              try {
-                const payload = JSON.parse(evt.data) as SSEChunkPayload;
-                const delta = payload.message?.thinking ?? '';
-                if (delta && callbacks.onThinkingChunk) {
-                  callbacks.onThinkingChunk(delta);
-                }
-              } catch {
-                callbacks.onError('SSE thinking_chunk 解析失敗');
-              }
-            } else if (evt.event === 'chat_chunk') {
-              try {
-                const payload = JSON.parse(evt.data) as SSEChunkPayload;
-                const delta = extractChunkDelta(payload);
-                if (delta) callbacks.onChunk(delta);
-              } catch {
-                callbacks.onError('SSE chunk 解析失敗');
-              }
-            } else if (evt.event === 'chat_done') {
-              callbacks.onDone();
-            } else if (evt.event === 'chat_error') {
-              try {
-                const payload = JSON.parse(evt.data) as SSEErrorPayload;
-                callbacks.onError(payload.error ?? '串流處理失敗');
-              } catch {
-                callbacks.onError('SSE error 解析失敗');
-              }
-            } else if (evt.event === 'intent_detected') {
-              try {
-                const payload = JSON.parse(evt.data) as IntentDetectedPayload;
-                callbacks.onIntentDetected?.(payload);
-              } catch { /* ignore */ }
-            } else if (evt.event === 'tool_call_start') {
-              try {
-                const payload = JSON.parse(evt.data) as ToolCallStartPayload;
-                callbacks.onToolCallStart?.(payload);
-              } catch { /* ignore */ }
-            } else if (evt.event === 'tool_call_result') {
-              try {
-                const payload = JSON.parse(evt.data) as ToolCallResultPayload;
-                callbacks.onToolCallResult?.(payload);
-              } catch { /* ignore */ }
-            } else if (evt.event === 'da_query_start') {
-              try {
-                const payload = JSON.parse(evt.data) as DaQueryStartPayload;
-                callbacks.onDaQueryStart?.(payload);
-              } catch { /* ignore */ }
-            } else if (evt.event === 'da_query_result') {
-              try {
-                const payload = JSON.parse(evt.data) as DaQueryResultPayload;
-                callbacks.onDaQueryResult?.(payload);
-              } catch { /* ignore */ }
-            } else if (evt.event === 'ka_search_result') {
-              try {
-                const payload = JSON.parse(evt.data) as KaSearchResultPayload;
-                callbacks.onKaSearchResult?.(payload);
-              } catch { /* ignore */ }
-            } else if (evt.event === 'bpa_step_start') {
-              try {
-                const payload = JSON.parse(evt.data) as BpaStepStartPayload;
-                callbacks.onBpaStepStart?.(payload);
-              } catch { /* ignore */ }
-            } else if (evt.event === 'bpa_step_complete') {
-              try {
-                const payload = JSON.parse(evt.data) as BpaStepCompletePayload;
-                callbacks.onBpaStepComplete?.(payload);
-              } catch { /* ignore */ }
-            } else if (evt.event === 'bpa_ask_user') {
-              try {
-                const payload = JSON.parse(evt.data) as BpaAskUserPayload;
-                callbacks.onBpaAskUser?.(payload);
-              } catch { /* ignore */ }
-            } else if (evt.event === 'bpa_complete') {
-              try {
-                const payload = JSON.parse(evt.data) as BpaCompletePayload;
-                callbacks.onBpaComplete?.(payload);
-              } catch { /* ignore */ }
-            } else if (evt.event === 'bpa_failed') {
-              try {
-                const payload = JSON.parse(evt.data) as BpaFailedPayload;
-                callbacks.onBpaFailed?.(payload);
-              } catch { /* ignore */ }
-            } else if (evt.event === 'session_state') {
-              try {
-                const payload = JSON.parse(evt.data) as SessionStatePayload;
-                callbacks.onSessionState?.(payload);
-              } catch { /* ignore */ }
-            }
+            if (evt.event) dispatchSSEEvent(evt, callbacks);
           }
           break;
         }
@@ -253,142 +261,7 @@ export function sendMessageSSE(
 
         for (const rawEvent of events) {
           const evt = parseSSEEvent(rawEvent);
-          if (!evt.event) continue;
-
-          if (evt.event === 'thinking_chunk') {
-            try {
-              const payload = JSON.parse(evt.data) as SSEChunkPayload;
-              const delta = payload.message?.thinking ?? '';
-              if (delta && callbacks.onThinkingChunk) {
-                callbacks.onThinkingChunk(delta);
-              }
-            } catch {
-              callbacks.onError('SSE thinking_chunk 解析失敗');
-            }
-            continue;
-          }
-
-          if (evt.event === 'chat_chunk') {
-            try {
-              const payload = JSON.parse(evt.data) as SSEChunkPayload;
-              const delta = extractChunkDelta(payload);
-              if (delta) callbacks.onChunk(delta);
-            } catch {
-              callbacks.onError('SSE chunk 解析失敗');
-            }
-            continue;
-          }
-
-          if (evt.event === 'chat_done') {
-            callbacks.onDone();
-            continue;
-          }
-
-          if (evt.event === 'chat_error') {
-            try {
-              const payload = JSON.parse(evt.data) as SSEErrorPayload;
-              callbacks.onError(payload.error ?? '串流處理失敗');
-            } catch {
-              callbacks.onError('SSE error 解析失敗');
-            }
-            continue;
-          }
-
-          if (evt.event === 'intent_detected') {
-            try {
-              const payload = JSON.parse(evt.data) as IntentDetectedPayload;
-              callbacks.onIntentDetected?.(payload);
-            } catch { /* ignore parse errors for optional events */ }
-            continue;
-          }
-
-          if (evt.event === 'tool_call_start') {
-            try {
-              const payload = JSON.parse(evt.data) as ToolCallStartPayload;
-              callbacks.onToolCallStart?.(payload);
-            } catch { /* ignore */ }
-            continue;
-          }
-
-          if (evt.event === 'tool_call_result') {
-            try {
-              const payload = JSON.parse(evt.data) as ToolCallResultPayload;
-              callbacks.onToolCallResult?.(payload);
-            } catch { /* ignore */ }
-            continue;
-          }
-
-          if (evt.event === 'da_query_start') {
-            try {
-              const payload = JSON.parse(evt.data) as DaQueryStartPayload;
-              callbacks.onDaQueryStart?.(payload);
-            } catch { /* ignore */ }
-            continue;
-          }
-
-          if (evt.event === 'da_query_result') {
-            try {
-              const payload = JSON.parse(evt.data) as DaQueryResultPayload;
-              callbacks.onDaQueryResult?.(payload);
-            } catch { /* ignore */ }
-            continue;
-          }
-
-          if (evt.event === 'ka_search_result') {
-            try {
-              const payload = JSON.parse(evt.data) as KaSearchResultPayload;
-              callbacks.onKaSearchResult?.(payload);
-            } catch { /* ignore */ }
-            continue;
-          }
-
-          if (evt.event === 'bpa_step_start') {
-            try {
-              const payload = JSON.parse(evt.data) as BpaStepStartPayload;
-              callbacks.onBpaStepStart?.(payload);
-            } catch { /* ignore */ }
-            continue;
-          }
-
-          if (evt.event === 'bpa_step_complete') {
-            try {
-              const payload = JSON.parse(evt.data) as BpaStepCompletePayload;
-              callbacks.onBpaStepComplete?.(payload);
-            } catch { /* ignore */ }
-            continue;
-          }
-
-          if (evt.event === 'bpa_ask_user') {
-            try {
-              const payload = JSON.parse(evt.data) as BpaAskUserPayload;
-              callbacks.onBpaAskUser?.(payload);
-            } catch { /* ignore */ }
-            continue;
-          }
-
-          if (evt.event === 'bpa_complete') {
-            try {
-              const payload = JSON.parse(evt.data) as BpaCompletePayload;
-              callbacks.onBpaComplete?.(payload);
-            } catch { /* ignore */ }
-            continue;
-          }
-
-          if (evt.event === 'bpa_failed') {
-            try {
-              const payload = JSON.parse(evt.data) as BpaFailedPayload;
-              callbacks.onBpaFailed?.(payload);
-            } catch { /* ignore */ }
-            continue;
-          }
-
-          if (evt.event === 'session_state') {
-            try {
-              const payload = JSON.parse(evt.data) as SessionStatePayload;
-              callbacks.onSessionState?.(payload);
-            } catch { /* ignore */ }
-            continue;
-          }
+          if (evt.event) dispatchSSEEvent(evt, callbacks);
         }
       }
     } catch (error) {

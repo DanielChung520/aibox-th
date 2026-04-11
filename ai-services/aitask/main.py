@@ -17,7 +17,7 @@ from contextlib import asynccontextmanager
 from typing import AsyncGenerator, Optional
 
 import httpx
-from arango import ArangoClient  # type: ignore[attr-defined]
+from arango.client import ArangoClient
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
 from langchain_core.messages import HumanMessage

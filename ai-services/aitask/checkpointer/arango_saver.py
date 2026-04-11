@@ -14,7 +14,7 @@ from collections.abc import Iterable
 from datetime import UTC, datetime
 from typing import AsyncIterator, Protocol, Sequence, TypeAlias, cast, runtime_checkable
 
-from arango import ArangoClient  # type: ignore[attr-defined]
+from arango.client import ArangoClient
 from arango.database import StandardDatabase
 from arango.typings import DataTypes
 from langchain_core.runnables import RunnableConfig
