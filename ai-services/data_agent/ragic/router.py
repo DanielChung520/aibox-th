@@ -1,10 +1,12 @@
 """
 @file        router.py
 @description FastAPI routes for RagicDataAgent — query + schema + intent + NL endpoints.
-@lastUpdate  2026-04-13 02:14:43
+@lastUpdate  2026-04-13 02:46:54
 @author      Daniel Chung
-@version     1.9.0
+@version     2.0.0
 """
+
+from __future__ import annotations
 
 import json
 import logging
@@ -56,9 +58,11 @@ from data_agent.ragic.models import (
     SchemaUpsertRequest,
 )
 from data_agent.ragic.intent_store import IntentVectorStore
-from data_agent.ragic.nl_parser import RagicNLParser
+from data_agent.ragic.nl_parser import ParseResult, RagicNLParser
+from data_agent.ragic.pandas_engine import fetch_and_aggregate
 from data_agent.ragic.query_engine import RagicQueryEngine
-from data_agent.ragic.query_router import route_query_with_text
+from data_agent.ragic.query_router import RouteDecision, route_query_with_text
+from data_agent.ragic.schema_linker import load_fields_from_arango
 from data_agent.ragic.schema_store import RagicSchemaStore
 from data_agent.ragic.schema_sync import RagicSchemaSync
 
@@ -517,6 +521,99 @@ def _estimate_tokens(records: list[RagicRecord]) -> int:
     return len(raw) // 4
 
 
+async def _handle_path_b(
+    request: NLQueryRequest,
+    parsed: ParseResult,
+    route_decision: RouteDecision,
+    account: str,
+    tab_path: str,
+    sheet_index: int,
+    intent_block: NLIntentMatch | None,
+    confidence: str,
+    start: float,
+) -> NLQueryResponse:
+    """Execute Path B: fetch Ragic data → pandas aggregation → return result."""
+    agg_result = route_decision.aggregation_result
+    if not agg_result or not agg_result.plan:
+        return NLQueryResponse(
+            code=2,
+            status="error",
+            post_error=NLPostError(
+                error_code=2,
+                raw_error="aggregation plan is None",
+                message="聚合計畫生成失敗",
+            ),
+            intent=intent_block,
+        )
+
+    client = await _build_client_async(account=account)
+
+    fields = await load_fields_from_arango(parsed.table_key)
+    field_label_map = {f["field_id"]: f["field_name"] for f in fields}
+
+    pandas_result = await fetch_and_aggregate(
+        client=client,
+        tab_path=tab_path,
+        sheet_index=sheet_index,
+        plan=agg_result.plan,
+        field_label_map=field_label_map,
+    )
+
+    if not pandas_result.success:
+        return NLQueryResponse(
+            code=2,
+            status="error",
+            post_error=NLPostError(
+                error_code=2,
+                raw_error=pandas_result.error_message,
+                message=f"聚合查詢失敗：{pandas_result.error_message}",
+            ),
+            intent=intent_block,
+            metadata=NLQueryMetadata(
+                connection=account,
+                table_key=parsed.table_key,
+                query=request.query,
+                translated_params=route_decision.translated_params,
+            ),
+        )
+
+    total_ms = round((time.monotonic() - start) * 1000, 2)
+
+    agg_records = [
+        RagicRecord(ragic_id=f"agg_{i}", fields=row)
+        for i, row in enumerate(pandas_result.data)
+    ]
+
+    return NLQueryResponse(
+        code=0,
+        status="success",
+        result=NLResultSet(
+            records=agg_records,
+            record_count=pandas_result.row_count,
+            pagination=RagicPagination(
+                offset=0,
+                limit=pandas_result.row_count,
+                returned_count=pandas_result.row_count,
+                has_more=False,
+            ),
+            field_labels=field_label_map,
+            execution_time_ms=total_ms,
+            stats=NLResultStats(
+                total_fields=len(pandas_result.columns),
+                estimated_tokens=_estimate_tokens(agg_records),
+            ),
+        ),
+        intent=intent_block,
+        metadata=NLQueryMetadata(
+            connection=account,
+            table_key=parsed.table_key,
+            output_format=request.output_format,
+            query=request.query,
+            translated_params=route_decision.translated_params,
+        ),
+    )
+
+
 @router.post("/query", response_model=None)
 async def nl_query(request: NLQueryRequest) -> Union[NLQueryResponse, Response]:
     account = request.connection_name or _DEFAULT_ACCOUNT
@@ -664,6 +761,19 @@ async def nl_query(request: NLQueryRequest) -> Union[NLQueryResponse, Response]:
 
     route_decision = await route_query_with_text(parsed, stripped)
     routed_params = route_decision.translated_params
+
+    if route_decision.path_used == "pandas_engine" and route_decision.aggregation_result:
+        return await _handle_path_b(
+            request=request,
+            parsed=parsed,
+            route_decision=route_decision,
+            account=account,
+            tab_path=tab_path,
+            sheet_index=sheet_index,
+            intent_block=intent_block,
+            confidence=confidence,
+            start=start,
+        )
 
     query_params = _nl_parser.translated_to_query_params(routed_params)
 
