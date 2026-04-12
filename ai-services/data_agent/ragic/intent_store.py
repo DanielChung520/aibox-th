@@ -1,10 +1,10 @@
 """
 @file        intent_store.py
-@description Qdrant-backed store for Ragic query intents.
+@description Qdrant-backed vector store for data query intents.
              Supports upsert, search (by vector similarity), list, and delete.
-@lastUpdate  2026-04-11 13:03:28
+@lastUpdate  2026-04-12 23:23:55
 @author      Daniel Chung
-@version     1.0.0
+@version     1.1.0
 """
 
 import hashlib
@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-COLLECTION_NAME = "ragic_intents"
+COLLECTION_NAME = "data_agent_intents"
 
 
 async def _get_embedding_model() -> str:
@@ -66,7 +66,7 @@ def _deterministic_point_id(seed: str) -> int:
     return int(digest[:15], 16)
 
 
-class RagicIntentStore:
+class IntentVectorStore:
     """CRUD operations for Ragic query intents in Qdrant."""
 
     def __init__(

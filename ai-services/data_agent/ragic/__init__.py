@@ -38,7 +38,7 @@ from data_agent.ragic.formatter import to_csv_bytes, to_excel_bytes
 from data_agent.ragic.graph_query import RagicGraphQuery
 from data_agent.ragic.import_orchestrator import RagicImportOrchestrator
 from data_agent.ragic.intent_generator import IntentGenerator
-from data_agent.ragic.intent_store import RagicIntentStore
+from data_agent.ragic.intent_store import IntentVectorStore
 from data_agent.ragic.md_parser import RagicMDParser
 from data_agent.ragic.md_parser_relations import RelationExtractor
 from data_agent.ragic.models_phase9 import (
@@ -68,7 +68,7 @@ __all__ = [
     "RagicConfigLoader",
     "RagicGraphQuery",
     "RagicImportOrchestrator",
-    "RagicIntentStore",
+    "IntentVectorStore",
     "RagicMDParser",
     "RagicNLParser",
     "RagicQueryEngine",

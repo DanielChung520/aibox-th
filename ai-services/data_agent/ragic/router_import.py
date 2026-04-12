@@ -18,7 +18,7 @@ from data_agent.ragic.arango_writer import RagicArangoWriter
 from data_agent.ragic.config_loader import RagicConfigLoader
 from data_agent.ragic.graph_query import RagicGraphQuery
 from data_agent.ragic.import_orchestrator import RagicImportOrchestrator
-from data_agent.ragic.intent_store import RagicIntentStore
+from data_agent.ragic.intent_store import IntentVectorStore
 from data_agent.ragic.models_phase9 import (
     GraphQueryResult,
     ImportResult,
@@ -57,11 +57,11 @@ class _StepExecutorAdapter:
 
 
 _schema_store = RagicSchemaStore()
-_intent_store = RagicIntentStore()
+_intent_store = IntentVectorStore()
 _arango_writer = RagicArangoWriter()
 _graph_query = RagicGraphQuery()
 _config_loader = RagicConfigLoader()
-_query_engine = RagicQueryEngine(_schema_store)
+_query_engine = RagicQueryEngine()
 _step_executor = RagicStepExecutor(_query_engine, _config_loader)
 _result_merger = ResultMerger()
 _import_orchestrator = RagicImportOrchestrator(_schema_store, _intent_store, _arango_writer)

@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 
 from data_agent.ragic.arango_writer import RagicArangoWriter
 from data_agent.ragic.intent_generator import IntentGenerator
-from data_agent.ragic.intent_store import RagicIntentStore
+from data_agent.ragic.intent_store import IntentVectorStore
 from data_agent.ragic.md_parser import RagicMDParser
 from data_agent.ragic.models_phase9 import ImportResult
 from data_agent.ragic.schema_store import RagicSchemaStore
@@ -30,7 +30,7 @@ class RagicImportOrchestrator:
     def __init__(
         self,
         schema_store: RagicSchemaStore,
-        intent_store: RagicIntentStore,
+        intent_store: IntentVectorStore,
         arango_writer: RagicArangoWriter,
     ) -> None:
         self._schema_store = schema_store

@@ -55,7 +55,7 @@ from data_agent.ragic.models import (
     SchemaSearchResult,
     SchemaUpsertRequest,
 )
-from data_agent.ragic.intent_store import RagicIntentStore
+from data_agent.ragic.intent_store import IntentVectorStore
 from data_agent.ragic.nl_parser import RagicNLParser
 from data_agent.ragic.query_engine import RagicQueryEngine
 from data_agent.ragic.schema_store import RagicSchemaStore
@@ -388,7 +388,7 @@ async def schema_count() -> SchemaCountResponse:
 # Intent endpoints
 # ---------------------------------------------------------------------------
 
-_intent_store = RagicIntentStore()
+_intent_store = IntentVectorStore()
 
 
 class IntentUpsertResponse(BaseModel):
@@ -432,7 +432,7 @@ async def intent_search(request: IntentSearchRequest) -> IntentSearchResponse:
         payload = hit.get("payload", {})
         if not isinstance(payload, dict):
             continue
-        intent = RagicIntentStore.payload_to_intent(payload)
+        intent = IntentVectorStore.payload_to_intent(payload)
         raw_score = hit.get("score", 0.0)
         hit_score = float(raw_score) if isinstance(raw_score, (int, float)) else 0.0
         results.append(
@@ -468,7 +468,7 @@ async def intent_list(
     for point in points:
         payload = point.get("payload", {})
         if isinstance(payload, dict):
-            intents.append(RagicIntentStore.payload_to_intent(payload))
+            intents.append(IntentVectorStore.payload_to_intent(payload))
 
     return IntentListResponse(intents=intents, total=len(intents))
 
@@ -491,7 +491,7 @@ _nl_parser = RagicNLParser(
     schema_store=_schema_store,
 )
 
-_query_engine = RagicQueryEngine(schema_store=_schema_store)
+_query_engine = RagicQueryEngine()
 
 
 _FRIENDLY_RAGIC_MESSAGES: dict[type, str] = {
