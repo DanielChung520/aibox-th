@@ -1,10 +1,10 @@
 """
 @file        arango_writer.py
-@description Write ParsedTable schemas and fields to ArangoDB collections
-             (da_table_info_ragic, da_field_info_ragic, da_table_relation_ragic).
-@lastUpdate  2026-04-11 18:24:42
+@description Write ParsedTable schemas, fields, and intents to ArangoDB collections
+             (da_table_info_ragic, da_field_info_ragic, da_table_relation_ragic, intent_catalog).
+@lastUpdate  2026-04-12 21:06:05
 @author      Daniel Chung
-@version     1.2.0
+@version     1.3.0
 """
 
 from __future__ import annotations
@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING
 import httpx
 
 if TYPE_CHECKING:
+    from data_agent.ragic.models import RagicIntent
     from data_agent.ragic.models_phase9 import ParsedField, ParsedTable, TableRelationEdge
 
 logger = logging.getLogger(__name__)
@@ -29,6 +30,7 @@ ARANGO_PASSWORD = os.getenv("ARANGO_PASSWORD", "abc_desktop_2026")
 _TABLE_COLLECTION = "da_table_info_ragic"
 _FIELD_COLLECTION = "da_field_info_ragic"
 _RELATION_COLLECTION = "da_table_relation_ragic"
+_INTENT_COLLECTION = "intent_catalog"
 _BATCH_SIZE = 50
 
 
@@ -191,3 +193,50 @@ class RagicArangoWriter:
                     )
         logger.info("Upserted %d docs into '%s'", total, collection)
         return total
+
+    async def fetch_table_id_map(self, account: str) -> dict[str, dict[str, str]]:
+        aql = (
+            "FOR t IN da_table_info_ragic "
+            "FILTER t.account == @account "
+            "LET tk = CONCAT(t.tab, '/', t.sheet_key) "
+            "RETURN {table_key: tk, table_id: t._key, sheet_key: t.sheet_key}"
+        )
+        result: dict[str, dict[str, str]] = {}
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.post(
+                f"{self._base}/_api/cursor",
+                json={"query": aql, "bindVars": {"account": account}},
+                auth=self._auth,
+            )
+            if resp.status_code in (200, 201):
+                for row in resp.json().get("result", []):
+                    result[row["table_key"]] = {
+                        "table_id": row["table_id"],
+                        "sheet_key": row["sheet_key"],
+                    }
+        logger.info("Fetched table_id_map: %d entries for account '%s'", len(result), account)
+        return result
+
+    async def write_intents(self, intents: list[RagicIntent], account: str) -> int:
+        docs: list[dict[str, object]] = []
+        for intent in intents:
+            docs.append({
+                "_key": intent.intent_id,
+                "intent_id": intent.intent_id,
+                "account": intent.account,
+                "scope": "data_agent",
+                "description": intent.description,
+                "action": intent.action,
+                "table_key": intent.table_key,
+                "table_id": intent.table_id,
+                "sheet_key": intent.sheet_key,
+                "nl_patterns": intent.nl_patterns,
+                "filter_template": (
+                    intent.filter_template.model_dump()
+                    if intent.filter_template
+                    else None
+                ),
+                "api_template": intent.api_template,
+                "source": "auto_generated",
+            })
+        return await self._batch_upsert(_INTENT_COLLECTION, docs)

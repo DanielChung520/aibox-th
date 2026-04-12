@@ -223,10 +223,19 @@ _DESC_TEMPLATES: dict[str, str] = {
 
 class IntentGenerator:
 
-    def generate(self, tables: list[ParsedTable], account: str) -> list[RagicIntent]:
+    def generate(
+        self,
+        tables: list[ParsedTable],
+        account: str,
+        table_id_map: dict[str, dict[str, str]] | None = None,
+    ) -> list[RagicIntent]:
+        id_map = table_id_map or {}
         intents: list[RagicIntent] = []
         for table in tables:
             table_key = f"{table.tab_path}/{table.sheet_index}"
+            mapped = id_map.get(table_key, {})
+            table_id = mapped.get("table_id", "")
+            sheet_key = mapped.get("sheet_key", "")
             field_names = [f.name for f in table.fields]
             for action in _ACTIONS:
                 for lang in _LANGS:
@@ -246,6 +255,8 @@ class IntentGenerator:
                             description=_DESC_TEMPLATES[action].format(name=table.table_name),
                             action=action,
                             table_key=table_key,
+                            table_id=table_id,
+                            sheet_key=sheet_key,
                         )
                     )
         return intents

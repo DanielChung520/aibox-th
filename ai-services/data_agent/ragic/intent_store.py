@@ -131,6 +131,8 @@ class RagicIntentStore:
                 "description": intent.description,
                 "action": intent.action,
                 "table_key": intent.table_key,
+                "table_id": intent.table_id,
+                "sheet_key": intent.sheet_key,
                 "filter_template": filter_payload,
                 "api_template": intent.api_template,
             }
@@ -286,6 +288,8 @@ class RagicIntentStore:
             description=str(payload.get("description", "")),
             action=str(payload.get("action", "list")),
             table_key=str(payload.get("table_key", "")),
+            table_id=str(payload.get("table_id", "")),
+            sheet_key=str(payload.get("sheet_key", "")),
             filter_template=filter_tpl,
             api_template=str(payload.get("api_template", "")),
         )

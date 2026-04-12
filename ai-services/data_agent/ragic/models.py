@@ -186,6 +186,8 @@ class RagicIntent(BaseModel):
     description: str = ""
     action: str = "list"
     table_key: str = ""
+    table_id: str = ""
+    sheet_key: str = ""
     filter_template: Optional[RagicFilterTemplate] = None
     api_template: str = ""
 

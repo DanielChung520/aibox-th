@@ -1,9 +1,9 @@
 """
 @file        import_orchestrator.py
 @description Orchestrate end-to-end MD schema import: parse → ArangoDB → Qdrant → intents.
-@lastUpdate  2026-04-11 17:12:44
+@lastUpdate  2026-04-12 21:06:05
 @author      Daniel Chung
-@version     1.0.0
+@version     1.1.0
 """
 
 from __future__ import annotations
@@ -23,8 +23,6 @@ if TYPE_CHECKING:
     from data_agent.ragic.models_phase9 import ParsedTable
 
 logger = logging.getLogger(__name__)
-
-_INTENT_BATCH = 20
 
 
 class RagicImportOrchestrator:
@@ -117,15 +115,14 @@ class RagicImportOrchestrator:
         result: ImportResult,
     ) -> None:
         try:
+            table_id_map = await self._arango_writer.fetch_table_id_map(account)
             gen = IntentGenerator()
-            intents = gen.generate(tables, account)
+            intents = gen.generate(tables, account, table_id_map=table_id_map)
             result.intents_generated = len(intents)
-            for i in range(0, len(intents), _INTENT_BATCH):
-                batch = intents[i : i + _INTENT_BATCH]
-                await self._intent_store.upsert(batch)
-            logger.info("Qdrant: %d intents generated and vectorized", len(intents))
+            written = await self._arango_writer.write_intents(intents, account)
+            logger.info("ArangoDB intent_catalog: %d intents written (%d generated)", written, len(intents))
         except Exception as e:
-            msg = f"Intent generation/vectorization failed: {e}"
+            msg = f"Intent generation/ArangoDB write failed: {e}"
             logger.warning(msg)
             result.errors.append(msg)
 

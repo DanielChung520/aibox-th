@@ -106,8 +106,12 @@ export default function SchemaIntentModal({ open, onClose }: SchemaIntentModalPr
   const columns = [
     { title: 'Intent ID', dataIndex: 'intent_id', key: 'intent_id', width: 160, render: (t: string) => <Text code>{t}</Text> },
     {
-      title: '目標表單', dataIndex: 'table_key', key: 'table_key', width: 110,
+      title: '目標表單', dataIndex: 'table_id', key: 'table_id', width: 120,
       render: (t: string) => t ? <Tag color="blue">{t}</Tag> : '-',
+    },
+    {
+      title: 'Sheet Key', dataIndex: 'sheet_key', key: 'sheet_key', width: 100,
+      render: (t: string) => t ? <Text code>{t}</Text> : '-',
     },
     { title: '動作', dataIndex: 'action', key: 'action', width: 80, render: (t: string) => t || '-' },
     { title: 'Domain Intent', dataIndex: 'bpa_domain_intent', key: 'bpa_domain_intent', width: 160, ellipsis: true },

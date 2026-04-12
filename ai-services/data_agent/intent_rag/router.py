@@ -239,12 +239,17 @@ async def embed_sync(
                     "intent_type": str(intent.get("intent_type", "")),
                     "group": str(intent.get("group", "")),
                     "tables": intent.get("tables", []),
+                    "table_id": str(intent.get("table_id", "")),
+                    "sheet_key": str(intent.get("sheet_key", "")),
+                    "table_key": str(intent.get("table_key", "")),
+                    "action": str(intent.get("action", "")),
                     "generation_strategy": str(
                         intent.get("generation_strategy", "template")
                     ),
                     "sql_template": str(intent.get("sql_template", "")),
                     "core_fields": intent.get("core_fields", []),
                     "nl_examples": nl_examples,
+                    "nl_patterns": intent.get("nl_patterns", []),
                     "example_sqls": intent.get("example_sqls", []),
                     "tool_name": str(intent.get("tool_name", "")),
                     "name": str(intent.get("name", "")),

@@ -35,6 +35,8 @@ export interface IntentCatalogEntry {
   response_strategy?: 'direct_llm' | 'confirm_then_execute' | 'clarify_first' | 'handoff_bpa';
 
   // ── DataAgent (NL→SQL model) ──
+  table_id?: string;
+  sheet_key?: string;
   group?: string;
   tables?: string[];
   generation_strategy?: 'template' | 'small_llm' | 'large_llm';

@@ -75,10 +75,7 @@ async fn list_catalog(
     let mut bind_entries: Vec<(String, Value)> = Vec::new();
 
     let agent_scope = params.get("agent_scope").filter(|v| !v.trim().is_empty());
-    let collection = match agent_scope {
-        Some(ref s) if s.as_str() == "data_agent" => "da_ragic_intents",
-        _ => COLLECTION,
-    };
+    let collection = COLLECTION;
 
     if let Some(ref scope) = agent_scope {
         filters.push("d.agent_scope == @agent_scope".into());
