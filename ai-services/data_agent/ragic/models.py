@@ -2,9 +2,9 @@
 @file        models.py
 @description Pydantic models for RagicDataAgent — API client, Schema, Intent, NL Parser, and QueryEngine types.
              Phase 9-11 models are in models_phase9.py and re-exported here.
-@lastUpdate  2026-04-13 01:43:49
+@lastUpdate  2026-04-13 03:08:43
 @author      Daniel Chung
-@version     1.8.0
+@version     1.9.0
 """
 
 from enum import Enum
@@ -366,6 +366,7 @@ class NLQueryMetadata(BaseModel):
     output_format: str = "json"
     query: str = ""
     translated_params: Optional[TranslatedParams] = None
+    path_used: str = ""
 
 
 # ---------------------------------------------------------------------------

@@ -1,7 +1,7 @@
 /**
  * @file        Data Agent API 服務層 - 型別定義
  * @description DA 的 Schema、Intents、Query 等型別介面定義
- * @lastUpdate  2026-04-12 08:50:59
+ * @lastUpdate  2026-04-13 03:08:43
  * @author      Daniel Chung
  */
 
@@ -331,6 +331,7 @@ export interface RagicNLQueryMetadata {
   output_format: string;
   query: string;
   translated_params: RagicNLTranslatedParams | null;
+  path_used?: string;
 }
 
 export interface RagicNLQueryResponse {

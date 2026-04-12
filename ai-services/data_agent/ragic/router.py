@@ -1,9 +1,9 @@
 """
 @file        router.py
 @description FastAPI routes for RagicDataAgent — query + schema + intent + NL endpoints.
-@lastUpdate  2026-04-13 02:46:54
+@lastUpdate  2026-04-13 03:08:43
 @author      Daniel Chung
-@version     2.0.0
+@version     2.1.0
 """
 
 from __future__ import annotations
@@ -574,6 +574,7 @@ async def _handle_path_b(
                 table_key=parsed.table_key,
                 query=request.query,
                 translated_params=route_decision.translated_params,
+                path_used=route_decision.path_used,
             ),
         )
 
@@ -583,6 +584,16 @@ async def _handle_path_b(
         RagicRecord(ragic_id=f"agg_{i}", fields=row)
         for i, row in enumerate(pandas_result.data)
     ]
+
+    post_error_block: NLPostError | None = None
+    if pandas_result.row_count == 0:
+        post_error_block = NLPostError(
+            error_code=0,
+            message=(
+                "聚合查詢完成，但未產生任何結果。"
+                "可能原因：1. 該時段無相關記錄 2. 篩選條件過嚴"
+            ),
+        )
 
     return NLQueryResponse(
         code=0,
@@ -604,12 +615,14 @@ async def _handle_path_b(
             ),
         ),
         intent=intent_block,
+        post_error=post_error_block,
         metadata=NLQueryMetadata(
             connection=account,
             table_key=parsed.table_key,
             output_format=request.output_format,
             query=request.query,
             translated_params=route_decision.translated_params,
+            path_used=route_decision.path_used,
         ),
     )
 
@@ -810,6 +823,7 @@ async def nl_query(request: NLQueryRequest) -> Union[NLQueryResponse, Response]:
                 table_key=parsed.table_key,
                 query=request.query,
                 translated_params=routed_params,
+                path_used=route_decision.path_used,
             ),
         )
 
@@ -892,6 +906,7 @@ async def nl_query(request: NLQueryRequest) -> Union[NLQueryResponse, Response]:
             output_format=request.output_format,
             query=request.query,
             translated_params=routed_params,
+            path_used=route_decision.path_used,
         ),
     )
 

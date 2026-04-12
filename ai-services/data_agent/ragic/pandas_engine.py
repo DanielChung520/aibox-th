@@ -3,16 +3,18 @@
 @description Pandas-based local aggregation engine for Path B queries.
              Fetches full table data via Ragic API, converts to DataFrame,
              applies filters, groupby, and aggregation using pandas operations.
-@lastUpdate  2026-04-13 02:56:46
+@lastUpdate  2026-04-13 03:08:43
 @author      Daniel Chung
-@version     1.0.0
+@version     1.1.0
 """
 
 from __future__ import annotations
 
 import logging
+import math
 import time
 
+import numpy as np
 import pandas as pd
 
 from data_agent.ragic.aggregation_builder import AggregationPlan
@@ -37,6 +39,25 @@ _PANDAS_AGG_MAP: dict[str, str] = {
     "min": "min",
     "max": "max",
 }
+
+
+def _coerce_native(val: object) -> object:
+    """Convert numpy/pandas scalar types to native Python for JSON safety."""
+    if isinstance(val, np.integer):
+        return int(val)
+    if isinstance(val, np.floating):
+        v = float(val)
+        return None if math.isnan(v) else v
+    if isinstance(val, np.bool_):
+        return bool(val)
+    if isinstance(val, np.ndarray):
+        return val.tolist()
+    return val
+
+
+def _coerce_records(rows: list[dict[str, object]]) -> list[dict[str, object]]:
+    """Coerce all values in record dicts to JSON-safe native Python types."""
+    return [{k: _coerce_native(v) for k, v in row.items()} for row in rows]
 
 
 class PandasEngineResult:
@@ -293,7 +314,7 @@ async def fetch_and_aggregate(
     if plan.limit and plan.limit < len(agg_df):
         agg_df = agg_df.head(plan.limit)
 
-    records = agg_df.to_dict(orient="records")
+    records = _coerce_records(agg_df.to_dict(orient="records"))
     columns = list(agg_df.columns)
 
     elapsed = (time.monotonic() - start) * 1000

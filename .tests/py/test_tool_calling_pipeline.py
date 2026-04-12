@@ -247,8 +247,8 @@ class TestQueryRouter:
         assert decision.path_used == "fallback"
 
     @pytest.mark.asyncio
-    async def test_fallback_on_aggregate_type(self) -> None:
-        parsed = self._make_parse_result(query_type="aggregate")
+    async def test_fallback_on_aggregate_no_table_key(self) -> None:
+        parsed = self._make_parse_result(query_type="aggregate", table_key="")
         decision = await route_query_with_text(parsed, "test query")
         assert decision.path_used == "fallback"
 
