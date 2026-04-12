@@ -1,7 +1,7 @@
 /**
  * @file        Data Agent API 服務層
  * @description DA 的 Schema、Intents、Query 等 API 接口定義
- * @lastUpdate  2026-04-11 18:10:32
+ * @lastUpdate  2026-04-12 08:50:59
  * @author      Daniel Chung
  */
 
@@ -28,6 +28,20 @@ export type {
   RagicGraphQueryResult,
   RagicStepResult,
   RagicMultiStepResult,
+  RagicIntentItem,
+  RagicNLQueryOptions,
+  RagicNLQueryRequest,
+  RagicNLWhereClause,
+  RagicNLTranslatedParams,
+  RagicNLRecord,
+  RagicNLPagination,
+  RagicNLClarification,
+  RagicNLResultStats,
+  RagicNLResultSet,
+  RagicNLIntentMatch,
+  RagicNLPostError,
+  RagicNLQueryMetadata,
+  RagicNLQueryResponse,
 } from './dataAgentApi_types';
 
 import { dataAgentApi_endpoints } from './dataAgentApi_endpoints';

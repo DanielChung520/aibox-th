@@ -5,9 +5,9 @@
 //! 使用 DuckDB 連線工廠模式（每次查詢建立獨立連線）避免 mutex poison 問題。
 //! /nl2sql proxy 轉發到 Python data_agent 服務。
 //!
-//! # Last Update: 2026-03-23 22:20:13
+//! # Last Update: 2026-04-12 01:19:50
 //! # Author: Daniel Chung
-//! # Version: 1.2.0
+//! # Version: 1.3.0
 
 use crate::config::CONFIG;
 use crate::db::get_db;
@@ -32,6 +32,7 @@ pub fn create_da_query_router() -> Router {
         .route("/api/v1/da/query", post(execute_da_query))
         .route("/api/v1/da/query/sql", post(execute_direct_sql))
         .route("/api/v1/da/query/nl2sql", post(proxy_nl2sql))
+        .route("/api/v1/da/ragic/query", post(proxy_ragic_nl_query))
         .route("/api/v1/da/query/tables/{table_name}/preview", get(proxy_table_preview))
         .route("/api/v1/da/health", get(da_health))
         .route("/api/v1/da/sync/status", get(get_sync_status))
@@ -218,6 +219,29 @@ async fn proxy_nl2sql(Json(payload): Json<Value>) -> Result<impl IntoResponse, S
         .await
         .map_err(|e| {
             eprintln!("proxy_nl2sql error: {e}");
+            StatusCode::BAD_GATEWAY
+        })?;
+
+    let body: Value = resp.json().await.map_err(|_| StatusCode::BAD_GATEWAY)?;
+    Ok(Json(body))
+}
+
+/// Proxy POST /api/v1/da/ragic/query → data_agent:8003/ragic/query
+async fn proxy_ragic_nl_query(Json(payload): Json<Value>) -> Result<impl IntoResponse, StatusCode> {
+    let url = format!("{}/ragic/query", CONFIG.ai_services.data_agent_url);
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(120))
+        .build()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let resp = client
+        .post(&url)
+        .json(&payload)
+        .send()
+        .await
+        .map_err(|e| {
+            eprintln!("proxy_ragic_nl_query error: {e}");
             StatusCode::BAD_GATEWAY
         })?;
 

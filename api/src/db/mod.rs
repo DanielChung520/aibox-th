@@ -411,6 +411,7 @@ async fn seed_params(db: &Database<ReqwestClient>) -> Result<(), String> {
         ("task_chat.max_history_messages", "20", "number", false, "task_chat"),
         ("task_chat.greeting_message", "你好！我是你的 AI 工作助理，有什麼可以幫你的嗎？", "string", false, "task_chat"),
         ("task_chat.system_prompt", "你是一個綜合工作協作者，可以天南地北無所不談，協助使用者完成各種工作任務。", "string", false, "task_chat"),
+        ("ragic.default_graph_modules", "TRADE", "string", false, "ragic"),
     ];
 
     let now = Utc::now().to_rfc3339();

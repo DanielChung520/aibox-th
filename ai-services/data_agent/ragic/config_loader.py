@@ -1,17 +1,18 @@
 """
 @file        config_loader.py
 @description Multi-tenant configuration loader for Ragic accounts.
-             Reads connection settings from Ragic system management table
-             (ragic-setup/6) with in-memory TTL cache.
-@lastUpdate  2026-04-11 13:28:14
+             Reads connection settings from system_params (ArangoDB),
+             Ragic system management table (ragic-setup/6), or env vars.
+@lastUpdate  2026-04-12 01:22:59
 @author      Daniel Chung
-@version     1.0.0
+@version     1.1.0
 """
 
 import logging
 import os
 import time
 
+from data_agent.config_reader import get_param
 from data_agent.ragic.client import RagicAPIClient
 from data_agent.ragic.models import RagicConnectionConfig, RagicQueryParams
 
@@ -40,6 +41,7 @@ class RagicConfigLoader:
         self._cache: dict[str, RagicConnectionConfig] = {}
         self._cache_ts: float = 0.0
         self._all_loaded: bool = False
+        self._db_params_loaded: bool = False
 
     def _master_client(self) -> RagicAPIClient:
         config = RagicConnectionConfig(
@@ -54,9 +56,29 @@ class RagicConfigLoader:
             return False
         return (time.monotonic() - self._cache_ts) < self._cache_ttl
 
+    async def _load_from_system_params(self) -> None:
+        if self._db_params_loaded:
+            return
+        self._db_params_loaded = True
+        try:
+            api_key = await get_param("ragic.api_key")
+            if api_key and not self._master_api_key:
+                self._master_api_key = api_key
+                logger.info("Loaded ragic.api_key from system_params")
+            account = await get_param("ragic.database")
+            if account and self._master_account == _MASTER_ACCOUNT:
+                self._master_account = account
+            server = await get_param("ragic.server_prefix")
+            if server and self._master_server == _MASTER_SERVER:
+                self._master_server = server
+        except Exception as exc:
+            logger.warning("Failed to load Ragic params from system_params: %s", exc)
+
     async def get_all_connections(self) -> list[RagicConnectionConfig]:
         if self._is_cache_valid():
             return list(self._cache.values())
+
+        await self._load_from_system_params()
 
         if not self._master_api_key:
             logger.debug("No master API key, returning env-based fallback only")

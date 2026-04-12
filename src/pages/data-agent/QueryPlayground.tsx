@@ -1,549 +1,614 @@
 /**
  * @file        Data Agent Query Playground
- * @description 用於測試和執行自然語言查詢的互動式介面
- * @lastUpdate  2026-03-24 19:01:41
+ * @description NL→Ragic 自然語言查詢工作台，支援意圖匹配與 Ragic API 查詢
+ *              兼容舊版（NLQueryData）與新版（五區塊 NLQueryResponse）API 回應格式
+ * @lastUpdate  2026-04-12 09:52:47
  * @author      Daniel Chung
+ * @version     1.2.0
  */
 
-import { useState, useEffect } from 'react';
-import { 
-  Card, Input, Button, Select, Table, Tag, Space, 
-  Typography, Spin, Alert, Divider, Row, Col, 
-  Badge, Collapse, Empty, Statistic, App, Tabs, Descriptions, theme,
-  Radio, Steps, Progress
-} from 'antd';
-import { 
-  PlayCircleOutlined, CopyOutlined, ClearOutlined, 
-  DatabaseOutlined, ClockCircleOutlined,
-  TableOutlined, BranchesOutlined, ThunderboltOutlined,
-  InfoCircleOutlined, CheckCircleOutlined, CloseCircleOutlined,
-  LikeOutlined, DislikeOutlined, QuestionCircleOutlined, WarningOutlined
+import { useState, useCallback } from 'react';
+import { Card, Input, Button, Table, Tag, Space, Typography, Spin, Alert, Row, Col, Statistic, App, Tabs, Descriptions, Result, theme, Collapse } from 'antd';
+import {
+  PlayCircleOutlined, ClearOutlined, DatabaseOutlined, TableOutlined,
+  ThunderboltOutlined, SearchOutlined, FileTextOutlined,
+  ExclamationCircleOutlined, CloseCircleOutlined, CheckCircleOutlined,
 } from '@ant-design/icons';
-import { dataAgentApi, TableInfo, QueryResponse, NL2SqlResponse } from '../../services/dataAgentApi';
+import { dataAgentApi, RagicNLQueryResponse } from '../../services/dataAgentApi';
 import { useContentTokens } from '../../contexts/AppThemeProvider';
-
-import type { TabsProps } from 'antd';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
-const { Option } = Select;
 
-type QueryMode = 'SQL' | 'AQL';
-
-interface AqlQueryResult {
-  columns: string[];
-  rows: Record<string, unknown>[];
+// ---------------------------------------------------------------------------
+// 舊版 API 回應格式（向下兼容）
+// ---------------------------------------------------------------------------
+interface LegacyNLQueryData {
+  query: string;
+  intent_matched: { intent_id: string; score: number; action: string; table_key: string } | null;
+  translated_params: { where: unknown[]; limit: number; offset: number; naming: string; order_field: string | null; order_direction: string } | null;
+  records: { ragic_id: string; fields: Record<string, unknown> }[];
+  record_count: number;
+  pagination: { offset: number; limit: number; returned_count: number; has_more: boolean };
+  execution_time_ms: number;
+  field_labels: Record<string, string>;
 }
+
+interface LegacyResponse {
+  code: number;
+  data: LegacyNLQueryData;
+  error: string | null;
+  metadata: { connection: string; table_key: string; output_format: string } | null;
+}
+
+/**
+ * 偵測 API 回應是舊版（{code, data, error, metadata}）還是新版（{code, status, ...}），
+ * 統一轉換成 RagicNLQueryResponse 格式。
+ */
+function normalizeResponse(raw: unknown): RagicNLQueryResponse {
+  const obj = raw as Record<string, unknown>;
+
+  // 新版格式已有 status 欄位
+  if (typeof obj.status === 'string' && ['success', 'clarification_needed', 'error'].includes(obj.status)) {
+    return obj as unknown as RagicNLQueryResponse;
+  }
+
+  // 舊版格式：{ code, data: {...}, error, metadata }
+  const legacy = obj as unknown as LegacyResponse;
+  const d = legacy.data;
+  if (!d) {
+    return {
+      code: legacy.code ?? -1,
+      status: 'error',
+      clarification: null,
+      result: null,
+      intent: null,
+      post_error: { error_code: legacy.code ?? -1, raw_error: legacy.error || '', message: legacy.error || '未知錯誤' },
+      metadata: null,
+    };
+  }
+
+  const im = d.intent_matched;
+  return {
+    code: legacy.code,
+    status: legacy.code === 0 ? 'success' : 'error',
+    clarification: null,
+    result: {
+      records: d.records || [],
+      record_count: d.record_count ?? 0,
+      pagination: d.pagination ?? { offset: 0, limit: 1000, returned_count: 0, has_more: false },
+      field_labels: d.field_labels ?? {},
+      execution_time_ms: d.execution_time_ms ?? 0,
+      stats: null,
+    },
+    intent: im ? {
+      intent_id: im.intent_id,
+      score: im.score,
+      confidence: im.score >= 0.65 ? 'high' : im.score >= 0.45 ? 'medium' : 'low',
+      action: im.action,
+      table_key: im.table_key,
+    } : null,
+    post_error: legacy.error ? { error_code: legacy.code, raw_error: legacy.error, message: legacy.error } : null,
+    metadata: legacy.metadata ? {
+      connection: legacy.metadata.connection ?? '',
+      table_key: legacy.metadata.table_key ?? '',
+      output_format: legacy.metadata.output_format ?? 'json',
+      query: d.query ?? '',
+      translated_params: d.translated_params ? {
+        where: ((d.translated_params.where ?? []) as unknown[]).map(w => {
+          const wc = w as Record<string, string>;
+          return { field_id: wc.field_id, operator: wc.operator as 'eq' | 'like' | 'gte' | 'lte' | 'gt' | 'lt' | 'regex', value: wc.value };
+        }),
+        limit: d.translated_params.limit ?? 1000,
+        offset: d.translated_params.offset ?? 0,
+        naming: d.translated_params.naming ?? 'EID',
+        order_field: d.translated_params.order_field ?? undefined,
+        order_direction: d.translated_params.order_direction,
+      } : null,
+    } : null,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
 
 export default function QueryPlayground() {
   const { message } = App.useApp();
   const { token } = theme.useToken();
   const contentTokens = useContentTokens();
-  const [queryMode, setQueryMode] = useState<QueryMode>('SQL');
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
-  const [tables, setTables] = useState<TableInfo[]>([]);
-  const [selectedModule, setSelectedModule] = useState<string>('ALL');
-  const [moduleScope, setModuleScope] = useState<string[]>([]);
-  
-  // AQL State
-  const [aqlResult, setAqlResult] = useState<AqlQueryResult | null>(null);
-  const [aqlQueryResponse, setAqlQueryResponse] = useState<QueryResponse | null>(null);
-  
-  // SQL State
-  const [sqlResponse, setSqlResponse] = useState<NL2SqlResponse | null>(null);
-  
-  // Common State
-  const [error, setError] = useState<string | null>(null);
-  const [executionTime, setExecutionTime] = useState<number | null>(null);
-  const [sqlCopied, setSqlCopied] = useState(false);
+  const [result, setResult] = useState<RagicNLQueryResponse | null>(null);
   const [activeTab, setActiveTab] = useState('result');
-  const [feedbackGiven, setFeedbackGiven] = useState<'up' | 'down' | null>(null);
 
-  useEffect(() => {
-    dataAgentApi.listTables()
-      .then(res => setTables(res.data.data || []))
-      .catch(err => console.error('載入資料表失敗', err));
-  }, []);
+  const quickTemplates = [
+    '查詢所有採購訂單',
+    '列出所有供應商',
+    '查詢上個月的進貨單',
+    '查詢庫存異動記錄',
+    '查詢所有報價單',
+    '查詢本月銷售訂單',
+    '查詢所有生產製令單',
+    '查詢近30天收貨單',
+    '查詢所有員工清單',
+    '查詢品項的基本資訊',
+  ];
 
-  const handleExecuteAql = async (startTime: number) => {
-    try {
-      const params: Parameters<typeof dataAgentApi.query>[0] = {
-        query: query,
-        options: {
-          timezone: 'Asia/Taipei',
-          limit: 100,
-          return_debug: true,
-          ...(moduleScope.length > 0 ? { module_scope: moduleScope } : {})
-        }
-      };
-
-      const res = await dataAgentApi.query(params);
-      const data = res.data;
-
-      if (data.code === 0) {
-        setAqlResult({
-          columns: data.data?.columns || [],
-          rows: data.data?.results || []
-        });
-        setAqlQueryResponse(data);
-        setActiveTab('intent');
-      } else {
-        setError(data.message || '查詢執行失敗');
-      }
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : '查詢執行失敗');
-    } finally {
-      setExecutionTime(Date.now() - startTime);
-      setLoading(false);
-    }
-  };
-
-  const handleExecuteSql = async () => {
-    try {
-      const res = await dataAgentApi.nl2sql({ natural_language: query });
-      const data = res.data;
-      // Always store response for clarification/error_explanation display
-      setSqlResponse(data);
-      if (data.success) {
-        setActiveTab('result');
-      } else if (data.clarification?.needs_clarification) {
-        // Pre-query clarification — not a real error
-        setActiveTab('result');
-      } else {
-        setError(data.error || '查詢執行失敗');
-      }
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : '查詢執行失敗');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleExecute = async () => {
-    if (!query.trim()) {
-      message.warning('請輸入查詢內容');
-      return;
-    }
-
+  const handleExecute = useCallback(async (overrideQuery?: string) => {
+    const q = (overrideQuery ?? query).trim();
+    if (!q) { message.warning('請輸入查詢內容'); return; }
     setLoading(true);
-    setError(null);
-    setAqlResult(null);
-    setAqlQueryResponse(null);
-    setSqlResponse(null);
-    setExecutionTime(null);
-    setFeedbackGiven(null);
-
-    const startTime = Date.now();
-
-    if (queryMode === 'AQL') {
-      await handleExecuteAql(startTime);
-    } else {
-      await handleExecuteSql();
+    setResult(null);
+    try {
+      const res = await dataAgentApi.ragicNLQuery({
+        query: q,
+        connection_name: '2025shianyong',
+      });
+      const normalized = normalizeResponse(res.data);
+      setResult(normalized);
+      if (normalized.status === 'success') setActiveTab('result');
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : '查詢執行失敗';
+      setResult({
+        code: -1,
+        status: 'error',
+        clarification: null,
+        result: null,
+        intent: null,
+        post_error: {
+          error_code: -1,
+          raw_error: err instanceof Error ? err.message : 'unknown',
+          message: errMsg,
+        },
+        metadata: null,
+      });
+    } finally {
+      setLoading(false);
     }
-  };
+  }, [query, message]);
 
   const handleClear = () => {
     setQuery('');
-    setAqlResult(null);
-    setAqlQueryResponse(null);
-    setSqlResponse(null);
-    setError(null);
-    setExecutionTime(null);
-    setSqlCopied(false);
-    setFeedbackGiven(null);
+    setResult(null);
+    setActiveTab('result');
   };
 
-  const handleCopySql = () => {
-    const textToCopy = queryMode === 'SQL' 
-      ? sqlResponse?.generated_sql 
-      : aqlQueryResponse?.data?.sql;
-      
-    if (textToCopy) {
-      navigator.clipboard.writeText(textToCopy);
-      setSqlCopied(true);
-      message.success('SQL 已複製到剪貼簿');
-      setTimeout(() => setSqlCopied(false), 2000);
+  const handleSuggestionClick = useCallback((suggestion: string) => {
+    setQuery(suggestion);
+    handleExecute(suggestion);
+  }, [handleExecute]);
+
+  // ---------------------------------------------------------------------------
+  // 結果表格欄位
+  // ---------------------------------------------------------------------------
+
+  const buildColumns = () => {
+    const rs = result?.result;
+    if (!rs || rs.records.length === 0) return [];
+    const labels = rs.field_labels || {};
+    const fieldIds = Object.keys(rs.records[0].fields)
+      .filter(fid => !fid.startsWith('_')); // 過濾內部欄位
+    return fieldIds.map(fid => ({
+      title: labels[fid] || fid,
+      dataIndex: ['fields', fid],
+      key: fid,
+      ellipsis: true,
+      render: (val: unknown) => val === null || val === undefined || val === '' ? <Text type="secondary">-</Text> : String(val),
+    }));
+  };
+
+  // ---------------------------------------------------------------------------
+  // 狀態渲染區域
+  // ---------------------------------------------------------------------------
+
+  /** 錯誤狀態：顯示 Result + raw_error 展開 */
+  const renderError = () => {
+    if (!result || result.status !== 'error') return null;
+    const pe = result.post_error;
+    return (
+      <Result
+        status="error"
+        title="查詢執行失敗"
+        subTitle={pe?.message || '發生未知錯誤'}
+        extra={
+          <Button type="primary" icon={<PlayCircleOutlined />} onClick={() => handleExecute()}>
+            重新執行
+          </Button>
+        }
+      >
+        {pe?.raw_error && (
+          <Collapse
+            items={[{
+              key: 'raw',
+              label: '錯誤詳情',
+              children: <pre style={{ fontSize: 12, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{pe.raw_error}</pre>,
+            }]}
+          />
+        )}
+        {result.intent && (
+          <Descriptions bordered size="small" column={1} style={{ marginTop: 16 }}>
+            <Descriptions.Item label="匹配意圖">{result.intent.intent_id}</Descriptions.Item>
+            <Descriptions.Item label="匹配分數">{(result.intent.score * 100).toFixed(1)}%</Descriptions.Item>
+            <Descriptions.Item label="目標表單">{result.intent.table_key}</Descriptions.Item>
+          </Descriptions>
+        )}
+      </Result>
+    );
+  };
+
+  /** 澄清狀態：顯示 Alert + 可點擊建議 */
+  const renderClarification = () => {
+    if (!result || result.status !== 'clarification_needed') return null;
+    const cl = result.clarification;
+    return (
+      <Result
+        status="warning"
+        icon={<ExclamationCircleOutlined />}
+        title="需要進一步澄清"
+        subTitle={cl?.message || '無法理解您的查詢意圖'}
+        extra={
+          cl?.suggestions && cl.suggestions.length > 0 ? (
+            <Space direction="vertical" align="center" size="middle">
+              <Text type="secondary">試試以下查詢：</Text>
+              <Space wrap>
+                {cl.suggestions.map(s => (
+                  <Tag.CheckableTag
+                    key={s}
+                    checked={false}
+                    onChange={() => handleSuggestionClick(s)}
+                    style={{ padding: '4px 12px', fontSize: 14 }}
+                  >
+                    {s}
+                  </Tag.CheckableTag>
+                ))}
+              </Space>
+            </Space>
+          ) : undefined
+        }
+      >
+        {result.intent && (
+          <Descriptions bordered size="small" column={1} style={{ marginTop: 16 }}>
+            <Descriptions.Item label="部分匹配意圖">{result.intent.intent_id}</Descriptions.Item>
+            <Descriptions.Item label="匹配分數">{(result.intent.score * 100).toFixed(1)}%</Descriptions.Item>
+          </Descriptions>
+        )}
+      </Result>
+    );
+  };
+
+  /** 成功狀態上方提示（中確信提示 / 0 筆提示） */
+  const renderSuccessAlerts = () => {
+    if (!result || result.status !== 'success') return null;
+    const alerts: React.ReactNode[] = [];
+
+    if (result.clarification?.message) {
+      alerts.push(
+        <Alert
+          key="clarification"
+          type="info"
+          message={result.clarification.message}
+          showIcon
+          style={{ marginBottom: 12 }}
+        />
+      );
     }
-  };
 
-  const handleModuleChange = (module: string) => {
-    setSelectedModule(module);
-    setModuleScope(module === 'ALL' ? [] : [module]);
-  };
-
-  const handleFeedback = async (action: 'thumbs_up' | 'thumbs_down') => {
-    if (!sqlResponse?.matched_intent?.intent_id || !query.trim()) return;
-    setFeedbackGiven(action === 'thumbs_up' ? 'up' : 'down');
-    if (action === 'thumbs_up') {
-      try {
-        await dataAgentApi.feedbackIntent(sqlResponse.matched_intent.intent_id, { action, nl_query: query.trim() });
-        message.success('已將查詢加入意圖訓練資料');
-      } catch { message.error('回饋提交失敗'); }
-    } else {
-      message.info('感謝您的回饋');
+    if (result.post_error?.message) {
+      alerts.push(
+        <Alert
+          key="post_error"
+          type="warning"
+          message={result.post_error.message}
+          showIcon
+          style={{ marginBottom: 12 }}
+        />
+      );
     }
+
+    return alerts.length > 0 ? <>{alerts}</> : null;
   };
 
-  const renderGenerateSqlCard = () => {
-    if (queryMode !== 'SQL' || !sqlResponse?.matched_intent) return null;
-    const intent = sqlResponse.matched_intent;
-    const scorePercent = Math.round(intent.score * 100);
-    const scoreColor = scorePercent >= 80 ? contentTokens.colorSuccess : scorePercent >= 60 ? contentTokens.colorPrimary : contentTokens.colorWarning;
-    const strategyConfig: Record<string, { color: string; label: string }> = {
-      template: { color: 'green', label: '模板替換' },
-      small_llm: { color: 'blue', label: 'Small LLM' },
-      large_llm: { color: 'orange', label: 'Large LLM' },
-    };
-    const strategy = strategyConfig[intent.generation_strategy] ?? { color: 'default', label: intent.generation_strategy };
+  // ---------------------------------------------------------------------------
+  // Tabs（僅在 success 狀態顯示）
+  // ---------------------------------------------------------------------------
+
+  const renderTabs = () => {
+    const rs = result?.result;
+    const intent = result?.intent;
+    const meta = result?.metadata;
 
     return (
-      <Card title="Generate SQL 分析" style={{ marginBottom: 16 }}>
-        <Space orientation="vertical" style={{ width: '100%' }} size={12}>
-          <Row>
-            <Col span={8}><Text type="secondary">意圖分類</Text></Col>
-            <Col span={16}><Tag color="purple">{intent.intent_type}</Tag></Col>
-          </Row>
-          <Row>
-            <Col span={8}><Text type="secondary">意圖群組</Text></Col>
-            <Col span={16}><Tag color="cyan">{intent.group}</Tag></Col>
-          </Row>
-          <Row>
-            <Col span={8}><Text type="secondary">生成策略</Text></Col>
-            <Col span={16}><Tag color={strategy.color}>{strategy.label}</Tag></Col>
-          </Row>
-          <Row align="middle">
-            <Col span={8}><Text type="secondary">置信度</Text></Col>
-            <Col span={16}>
-              <Space>
-                <Progress percent={scorePercent} size="small" style={{ width: 120 }} strokeColor={scoreColor} showInfo={false} />
-                <Text style={{ color: scoreColor, fontWeight: 600 }}>{scorePercent}%</Text>
+      <Tabs
+        activeKey={activeTab}
+        onChange={setActiveTab}
+        items={[
+          {
+            key: 'result',
+            label: <Space><TableOutlined />結果 {rs && <Tag>{rs.record_count} 筆</Tag>}</Space>,
+            children: rs && rs.records.length > 0 ? (
+              <Table
+                columns={buildColumns()}
+                dataSource={rs.records}
+                rowKey="ragic_id"
+                pagination={{ pageSize: 10, showSizeChanger: true, pageSizeOptions: ['10', '20', '50'] }}
+                scroll={{ x: 'max-content' }}
+                size="small"
+              />
+            ) : (
+              <Result
+                status="info"
+                icon={<SearchOutlined />}
+                title="查詢完成，未找到符合條件的資料"
+                subTitle="請嘗試調整查詢條件或換個描述方式"
+              />
+            )
+          },
+          {
+            key: 'intent',
+            label: <Space><ThunderboltOutlined />意圖匹配</Space>,
+            children: intent ? (
+              <Descriptions bordered size="small" column={1}>
+                <Descriptions.Item label="意圖 ID">{intent.intent_id}</Descriptions.Item>
+                <Descriptions.Item label="匹配分數">
+                  <Text style={{
+                    color: intent.score >= 0.8
+                      ? contentTokens.colorSuccess
+                      : intent.score >= 0.6
+                        ? contentTokens.colorPrimary
+                        : contentTokens.colorWarning
+                  }}>
+                    {(intent.score * 100).toFixed(1)}%
+                  </Text>
+                </Descriptions.Item>
+                <Descriptions.Item label="信心等級">
+                  {renderConfidenceTag(intent.confidence)}
+                </Descriptions.Item>
+                <Descriptions.Item label="操作類型">{intent.action}</Descriptions.Item>
+                <Descriptions.Item label="目標表單">{intent.table_key}</Descriptions.Item>
+              </Descriptions>
+            ) : (
+              <Alert message="未匹配到意圖" type="info" showIcon />
+            )
+          },
+          {
+            key: 'params',
+            label: <Space><SearchOutlined />查詢參數</Space>,
+            children: meta?.translated_params ? (
+              <Space direction="vertical" style={{ width: '100%' }}>
+                {meta.translated_params.where && meta.translated_params.where.length > 0 && (
+                  <Table
+                    size="small"
+                    dataSource={meta.translated_params.where}
+                    rowKey={(_r, i) => i?.toString() || '0'}
+                    pagination={false}
+                    columns={[
+                      { title: '欄位 ID', dataIndex: 'field_id' },
+                      { title: '運算符', dataIndex: 'operator' },
+                      { title: '值', dataIndex: 'value', render: (val: unknown) => String(val) }
+                    ]}
+                  />
+                )}
+                <Descriptions bordered size="small" column={2}>
+                  <Descriptions.Item label="Limit">{meta.translated_params.limit ?? '-'}</Descriptions.Item>
+                  <Descriptions.Item label="Offset">{meta.translated_params.offset ?? '-'}</Descriptions.Item>
+                </Descriptions>
               </Space>
-            </Col>
-          </Row>
-          {intent.tables.length > 0 && (
-            <Row>
-              <Col span={8}><Text type="secondary">相關資料表</Text></Col>
-              <Col span={16}>
-                <Space wrap size={4}>
-                  {intent.tables.map(t => <Tag key={t}>{t}</Tag>)}
-                </Space>
+            ) : (
+              <Alert message="無查詢參數" type="info" showIcon />
+            )
+          },
+          {
+            key: 'debug',
+            label: <Space><FileTextOutlined />偵錯</Space>,
+            children: (
+              <Space direction="vertical" style={{ width: '100%' }}>
+                <Descriptions bordered size="small" column={1}>
+                  <Descriptions.Item label="回應碼">{result?.code ?? '-'}</Descriptions.Item>
+                  <Descriptions.Item label="狀態">{result?.status || '-'}</Descriptions.Item>
+                  <Descriptions.Item label="連線名稱">{meta?.connection || '-'}</Descriptions.Item>
+                  <Descriptions.Item label="表單鍵值">{meta?.table_key || '-'}</Descriptions.Item>
+                  <Descriptions.Item label="輸出格式">{meta?.output_format || '-'}</Descriptions.Item>
+                  <Descriptions.Item label="原始查詢">{meta?.query || '-'}</Descriptions.Item>
+                </Descriptions>
+                {rs?.field_labels && Object.keys(rs.field_labels).length > 0 && (
+                  <Collapse
+                    items={[{
+                      key: 'labels',
+                      label: `欄位標籤 (${Object.keys(rs.field_labels).length} 個)`,
+                      children: <pre style={{ fontSize: 12 }}>{JSON.stringify(rs.field_labels, null, 2)}</pre>,
+                    }]}
+                  />
+                )}
+                {result?.post_error?.raw_error && (
+                  <Collapse
+                    items={[{
+                      key: 'raw_error',
+                      label: 'Raw Error',
+                      children: <pre style={{ fontSize: 12, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{result.post_error.raw_error}</pre>,
+                    }]}
+                  />
+                )}
+              </Space>
+            )
+          }
+        ]}
+      />
+    );
+  };
+
+  // ---------------------------------------------------------------------------
+  // 共用元件
+  // ---------------------------------------------------------------------------
+
+  const renderConfidenceTag = (confidence: string) => {
+    const map: Record<string, { color: string; label: string }> = {
+      high: { color: 'green', label: '高確信' },
+      medium: { color: 'orange', label: '中確信' },
+      low: { color: 'red', label: '低確信' },
+    };
+    const cfg = map[confidence] || { color: 'default', label: confidence || '-' };
+    return <Tag color={cfg.color}>{cfg.label}</Tag>;
+  };
+
+  // ---------------------------------------------------------------------------
+  // 主結果區域渲染
+  // ---------------------------------------------------------------------------
+
+  const renderResultArea = () => {
+    if (loading) {
+      return (
+        <div style={{ textAlign: 'center', padding: '40px 0' }}>
+          <Spin size="large" />
+          <div style={{ marginTop: 16, color: token.colorTextSecondary }}>查詢執行中...</div>
+        </div>
+      );
+    }
+
+    if (!result) {
+      return (
+        <Result
+          icon={<DatabaseOutlined style={{ color: token.colorTextQuaternary }} />}
+          title={<Text type="secondary">輸入自然語言查詢並點擊執行</Text>}
+          subTitle={<Text type="secondary" style={{ fontSize: 12 }}>支援中文自然語言，如「查詢所有採購訂單」</Text>}
+        />
+      );
+    }
+
+    if (result.status === 'error') return renderError();
+    if (result.status === 'clarification_needed') return renderClarification();
+
+    // success
+    return (
+      <>
+        {renderSuccessAlerts()}
+        {renderTabs()}
+      </>
+    );
+  };
+
+  // ---------------------------------------------------------------------------
+  // 右側統計面板
+  // ---------------------------------------------------------------------------
+
+  const renderStatsPanel = () => {
+    const rs = result?.result;
+    const hasStats = result?.status === 'success' && rs;
+    const intent = result?.intent;
+
+    return (
+      <Card title="查詢統計" size="small" style={{ marginBottom: 24 }}>
+        {hasStats ? (
+          <>
+            <Row gutter={16}>
+              <Col span={8}>
+                <Statistic title="執行時間" value={rs.execution_time_ms ?? 0} precision={0} suffix="ms" />
+              </Col>
+              <Col span={8}>
+                <Statistic title="結果筆數" value={rs.record_count ?? 0} />
+              </Col>
+              <Col span={8}>
+                <Statistic title="預估 Tokens" value={rs.stats?.estimated_tokens ?? 0} />
               </Col>
             </Row>
-          )}
-          <Row>
-            <Col span={8}><Text type="secondary">意圖描述</Text></Col>
-            <Col span={16}><Text>{intent.description}</Text></Col>
-          </Row>
-          <Row>
-            <Col span={8}><Text type="secondary">Intent ID</Text></Col>
-            <Col span={16}><Text code style={{ fontSize: 11 }}>{intent.intent_id}</Text></Col>
-          </Row>
-        </Space>
+            <Space style={{ marginTop: 16 }} wrap>
+              {intent && renderConfidenceTag(intent.confidence)}
+              {rs.stats && <Tag>{rs.stats.total_fields} 個欄位</Tag>}
+              {rs.pagination?.has_more && <Tag color="blue">還有更多資料</Tag>}
+            </Space>
+          </>
+        ) : result ? (
+          <Space direction="vertical" style={{ width: '100%' }}>
+            <Tag
+              color={result.status === 'error' ? 'error' : 'warning'}
+              icon={result.status === 'error' ? <CloseCircleOutlined /> : <ExclamationCircleOutlined />}
+            >
+              {result.status === 'error' ? '查詢失敗' : '需要澄清'}
+            </Tag>
+            {intent && (
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                意圖匹配：{intent.intent_id} ({(intent.score * 100).toFixed(0)}%)
+              </Text>
+            )}
+          </Space>
+        ) : (
+          <Text type="secondary">執行查詢後顯示統計資訊</Text>
+        )}
       </Card>
     );
   };
 
-  const availableModules = [...new Set(tables.map(t => t.module))];
-
-  const quickTemplatesAql = [
-    { label: '採購訂單查詢', query: '查詢上個月的採購訂單', module: 'MM' },
-    { label: '供應商列表', query: '列出所有供應商', module: 'MM' },
-    { label: '銷售訂單', query: '查詢本月銷售訂單', module: 'SD' },
-    { label: '員工清單', query: '查詢所有員工', module: 'BASE' },
-    { label: '進貨單查詢', query: '查詢近30天進貨單', module: 'PUR' },
-  ];
-  const quickTemplatesSql = [
-    ...([
-      '查詢上個月的採購訂單',
-      '列出所有供應商',
-      '各供應商的採購金額排名',
-      '查詢庫存異動記錄',
-      '本月物料入庫總量',
-      // 採購流程
-      '查詢所有詢價單',
-      '查詢一筆詢價單的完整採購流程',
-      '查詢所有採購單(PO)',
-      '查詢近30天收貨單',
-      '查詢所有進貨退出單',
-      // 訂單/報價流程
-      '查詢所有報價單',
-      '查詢所有訂購單(SO)',
-      '查詢一張訂購單的完整生命週期',
-      // 生產需求流程
-      '查詢所有生產需求單',
-      '查詢所有物料需求單(MRP)',
-      '查詢所有採購預算表',
-      // 生產執行流程
-      '查詢所有生產製令單',
-      '查詢所有領料單',
-      '查詢所有派工單',
-      // 品檢與入庫
-      '查詢近30天進貨檢驗(IQC)記錄',
-      '查詢本月成品入庫記錄',
-      // 跨流程追蹤
-      '追蹤一張訂購單從報價到入庫的完整流程',
-    ].map(q => ({ label: q, query: q, module: 'MM' }))),
-    ...(['查詢近30天各供應商的進貨明細', '各部門的員工人數', '查詢在職中的員工清單', '查詢品項的基本資訊'].map(q => ({ label: q, query: q, module: 'BASE' }))),
-  ];
-  const templatesToUse = queryMode === 'SQL' ? quickTemplatesSql : quickTemplatesAql;
-
-const renderResultTabs = () => {
-    const isAql = queryMode === 'AQL';
-    const hasData = isAql ? !!aqlResult : !!sqlResponse;
-    if (!hasData || loading) return null;
-
-    const columns = (isAql ? aqlResult?.columns : sqlResponse?.execution_result?.columns)?.map(col => ({
-      title: col, dataIndex: col, key: col, ellipsis: true,
-      render: (val: unknown) => (val === null || val === undefined) ? <Text type="secondary">-</Text> : typeof val === 'number' ? val.toLocaleString() : String(val)
-    })) || [];
-
-    const rows = (isAql ? aqlResult?.rows : sqlResponse?.execution_result?.rows) || [];
-    const sqlText = isAql ? aqlQueryResponse?.data?.sql : sqlResponse?.generated_sql;
-    const CodeBlock = ({ content }: { content: string }) => (
-      <pre style={{ background: token.colorFillTertiary, padding: 16, borderRadius: 6, overflow: 'auto', maxHeight: 300, fontSize: 12 }}>{content}</pre>
-    );
-
-    const items: TabsProps['items'] = [
-      { key: 'result', label: <span><TableOutlined /> 結果</span>, children: rows.length > 0 ? <Table columns={columns} dataSource={rows} rowKey={(_, index) => String(index)} pagination={{ pageSize: 10 }} size="small" scroll={{ x: 'max-content' }} /> : <Empty description="無查詢結果" /> },
-      { key: 'sql', label: <span><BranchesOutlined /> SQL</span>, children: <div><Button type="link" icon={<CopyOutlined />} onClick={handleCopySql} style={{ marginBottom: 8, padding: 0 }}>{sqlCopied ? '已複製!' : '複製 SQL'}</Button><CodeBlock content={sqlText || '-'} /></div> },
-      { key: 'intent', label: <span><ThunderboltOutlined /> Intent</span>, children: <CodeBlock content={JSON.stringify(isAql ? aqlQueryResponse?.intent : sqlResponse?.matched_intent, null, 2) || ''} /> },
-    ];
-
-    if (!isAql && sqlResponse) {
-      items.push(
-        { key: 'plan', label: <span>Query Plan</span>, children: <CodeBlock content={JSON.stringify(sqlResponse.query_plan, null, 2) || ''} /> },
-        { key: 'validation', label: <span>Validation</span>, children: <div><Alert type={sqlResponse.validation?.is_valid ? 'success' : 'error'} description={`Valid: ${sqlResponse.validation?.is_valid}`} style={{ marginBottom: 16 }} /><CodeBlock content={JSON.stringify(sqlResponse.validation, null, 2) || ''} /></div> },
-        { key: 'pipeline', label: <span>Pipeline</span>, children: <Steps direction="vertical" size="small" current={sqlResponse.phases.length} items={sqlResponse.phases.map(p => ({ title: p.phase, description: `${p.duration_ms} ms ${p.error ? `- ${p.error}` : ''}`, status: (p.success ? 'finish' : 'error') as 'finish' | 'error', icon: p.success ? <CheckCircleOutlined style={{ color: token.colorSuccess }} /> : <CloseCircleOutlined style={{ color: token.colorError }} /> }))} /> }
-      );
-    }
-
-    if (isAql && aqlQueryResponse) {
-      items.push({
-        key: 'debug', label: <span><InfoCircleOutlined /> Debug</span>, children: <Descriptions bordered column={1} size="small">
-          <Descriptions.Item label="Cache Hit">{aqlQueryResponse.cache_hit ? <Badge status="success" text="是" /> : <Badge status="default" text="否" />}</Descriptions.Item>
-          <Descriptions.Item label="Execution Time">{aqlQueryResponse.data?.metadata?.duration_ms}ms</Descriptions.Item>
-          <Descriptions.Item label="Truncated">{aqlQueryResponse.data?.metadata?.truncated ? <Badge status="warning" text="是" /> : <Badge status="success" text="否" />}</Descriptions.Item>
-          <Descriptions.Item label="Trace ID"><Text code>{aqlQueryResponse.data?.metadata?.trace_id}</Text></Descriptions.Item>
-        </Descriptions>
-      });
-    }
-
-    return <Tabs activeKey={activeTab} onChange={setActiveTab} items={items} />;
-  };
+  // ---------------------------------------------------------------------------
+  // JSX
+  // ---------------------------------------------------------------------------
 
   return (
-    <div>
+    <div style={{ padding: 24 }}>
       <Title level={4} style={{ marginBottom: 24, display: 'flex', alignItems: 'center', gap: 12 }}>
-        <DatabaseOutlined /> 
+        <DatabaseOutlined />
         Data Agent Query Playground
-        <Radio.Group 
-          value={queryMode} 
-          onChange={e => {
-            setQueryMode(e.target.value);
-            handleClear();
-          }}
-          optionType="button"
-          buttonStyle="solid"
-          size="middle"
-          style={{ marginLeft: 'auto' }}
-        >
-          <Radio.Button value="SQL">數據湖查詢 (NL→SQL)</Radio.Button>
-          <Radio.Button value="AQL">ArangoDB 查詢 (NL→AQL)</Radio.Button>
-        </Radio.Group>
+        <Tag color="blue" style={{ marginLeft: 'auto' }}>NL → Ragic</Tag>
+        {result?.status && (
+          <Tag
+            color={result.status === 'success' ? 'success' : result.status === 'error' ? 'error' : 'warning'}
+            icon={result.status === 'success' ? <CheckCircleOutlined /> : result.status === 'error' ? <CloseCircleOutlined /> : <ExclamationCircleOutlined />}
+          >
+            {result.status === 'success' ? '成功' : result.status === 'error' ? '失敗' : '待澄清'}
+          </Tag>
+        )}
       </Title>
 
-      <Row gutter={16}>
+      <Row gutter={24}>
         <Col span={14}>
-          <Card 
-            title="查詢輸入" 
-            extra={
-              queryMode === 'AQL' && (
-                <Select value={selectedModule} onChange={handleModuleChange} style={{ width: 120 }}>
-                  <Option value="ALL">全部模組</Option>
-                  {availableModules.map(m => <Option key={m} value={m}>{m}</Option>)}
-                </Select>
-              )
-            }
-          >
-            <Space orientation="vertical" style={{ width: '100%' }} size="middle">
-              <TextArea
-                value={query}
-                onChange={e => setQuery(e.target.value)}
-                placeholder="輸入自然語言查詢..."
-                rows={4}
-                style={{ fontSize: 14 }}
-              />
-              
-              <div>
-                <Text type="secondary" style={{ marginBottom: 8, display: 'block' }}>
-                  快速範本：
-                </Text>
-                <Space wrap>
-                  {templatesToUse.map((t, idx) => (
-                    <Button 
-                      key={idx} 
-                      size="small"
-                      onClick={() => {
-                        setQuery(t.query);
-                        if (queryMode === 'AQL') {
-                          setSelectedModule(t.module);
-                          setModuleScope([t.module]);
-                        }
-                      }}
-                    >
-                      {t.label}
-                    </Button>
-                  ))}
-                </Space>
-              </div>
-
+          <Card title="自然語言查詢" size="small" style={{ marginBottom: 24 }}>
+            <TextArea
+              rows={4}
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              onPressEnter={e => { if (!e.shiftKey) { e.preventDefault(); handleExecute(); } }}
+              placeholder="請輸入自然語言查詢，例如：查詢所有採購訂單..."
+              style={{ marginBottom: 16 }}
+            />
+            <Space style={{ marginBottom: 16, flexWrap: 'wrap' }}>
+              {quickTemplates.map(t => (
+                <Tag
+                  key={t}
+                  color="processing"
+                  style={{ cursor: 'pointer' }}
+                  onClick={() => handleSuggestionClick(t)}
+                >
+                  {t}
+                </Tag>
+              ))}
+            </Space>
+            <Row justify="end">
               <Space>
-                <Button type="primary" icon={<PlayCircleOutlined />} onClick={handleExecute} loading={loading} size="large">
-                  執行查詢
-                </Button>
-                <Button icon={<ClearOutlined />} onClick={handleClear} size="large">
+                <Button icon={<ClearOutlined />} onClick={handleClear} disabled={loading}>
                   清除
                 </Button>
+                <Button type="primary" icon={<PlayCircleOutlined />} onClick={() => handleExecute()} loading={loading}>
+                  執行查詢
+                </Button>
               </Space>
-            </Space>
+            </Row>
           </Card>
 
-          <Card 
-            title={<Space><span>查詢結果</span>{((queryMode === 'AQL' && aqlResult) || (queryMode === 'SQL' && sqlResponse)) && <Tag color="blue">{(queryMode === 'AQL' ? aqlResult?.rows.length : sqlResponse?.execution_result?.row_count) ?? 0} 列</Tag>}</Space>}
-            extra={queryMode === 'SQL' && sqlResponse?.success && !feedbackGiven ? (
-              <Space><Button size="small" icon={<LikeOutlined />} onClick={() => handleFeedback('thumbs_up')}>有用</Button><Button size="small" icon={<DislikeOutlined />} onClick={() => handleFeedback('thumbs_down')}>無用</Button></Space>
-            ) : feedbackGiven ? (<Tag color={feedbackGiven === 'up' ? 'green' : 'default'}>{feedbackGiven === 'up' ? '已加入訓練' : '已回饋'}</Tag>) : null}
-            style={{ marginTop: 16 }}
-          >
-            {loading && (
-              <div style={{ textAlign: 'center', padding: 40 }}>
-                <Spin size="large" />
-                <div style={{ marginTop: 16 }}><Text type="secondary">正在執行查詢...</Text></div>
-              </div>
-            )}
-
-            {error && (
-              <Alert type="error" showIcon style={{ marginBottom: 16 }} description={
-                <div>
-                  <Text>{error}</Text>
-                  {queryMode === 'SQL' && sqlResponse?.generated_sql && !sqlResponse?.error_explanation && (
-                    <div style={{ marginTop: 12 }}>
-                      <Text type="secondary" strong>產生的 SQL：</Text>
-                      <pre style={{ background: token.colorFillTertiary, padding: 12, borderRadius: 6, overflow: 'auto', maxHeight: 200, fontSize: 12, marginTop: 4 }}>{sqlResponse.generated_sql}</pre>
-                    </div>
-                  )}
-                </div>
-              } />
-            )}
-
-            {sqlResponse?.clarification?.needs_clarification && (
-              <Alert
-                type="warning"
-                icon={<QuestionCircleOutlined />}
-                showIcon
-                message="查詢需要澄清"
-                description={
-                  <div>
-                    <Text>{sqlResponse.clarification.reason}</Text>
-                    {sqlResponse.clarification.questions.length > 0 && (
-                      <ul style={{ marginTop: 8, paddingLeft: 20 }}>
-                        {sqlResponse.clarification.questions.map((q, i) => (
-                          <li key={i}><Text strong>{q.field ? `[${q.field}] ` : ''}</Text>{q.question}</li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                }
-                style={{ marginBottom: 16 }}
-              />
-            )}
-
-            {sqlResponse?.error_explanation && (
-              <Alert
-                type="error"
-                icon={<WarningOutlined />}
-                showIcon
-                message={`執行異常：${sqlResponse.error_explanation.error_type}`}
-                description={
-                  <div>
-                    <Text>{sqlResponse.error_explanation.explanation}</Text>
-                    {sqlResponse.error_explanation.suggestions.length > 0 && (
-                      <ul style={{ marginTop: 8, paddingLeft: 20 }}>
-                        {sqlResponse.error_explanation.suggestions.map((s, i) => (
-                          <li key={i}>{s}</li>
-                        ))}
-                      </ul>
-                    )}
-                    {sqlResponse.generated_sql && (
-                      <div style={{ marginTop: 12 }}>
-                        <Text type="secondary" strong>產生的 SQL：</Text>
-                        <pre style={{ background: token.colorFillTertiary, padding: 12, borderRadius: 6, overflow: 'auto', maxHeight: 200, fontSize: 12, marginTop: 4 }}>{sqlResponse.generated_sql}</pre>
-                      </div>
-                    )}
-                  </div>
-                }
-                style={{ marginBottom: 16 }}
-              />
-            )}
-
-            {renderResultTabs()}
-
-            {!loading && !error && !aqlResult && !sqlResponse && <Empty description="輸入查詢並點擊執行" />}
+          <Card title="查詢結果" size="small">
+            {renderResultArea()}
           </Card>
         </Col>
 
         <Col span={10}>
-          <Card title="查詢統計" style={{ marginBottom: 16 }}>
-            <Row gutter={16}>
-              <Col span={12}>
-                <Statistic 
-                  title="執行時間" 
-                  value={(queryMode === 'SQL' ? sqlResponse?.total_time_ms : executionTime) ?? 0} 
-                  suffix="ms"
-                  prefix={<ClockCircleOutlined />}
-                  styles={{ content: { fontSize: 24 } }}
-                />
-              </Col>
-              <Col span={12}>
-                <Statistic 
-                  title="結果列數" 
-                  value={(queryMode === 'SQL' ? sqlResponse?.execution_result?.row_count : aqlResult?.rows.length) ?? 0} 
-                  prefix={<TableOutlined />}
-                  styles={{ content: { fontSize: 24 } }}
-                />
-              </Col>
-            </Row>
-          </Card>
+          {renderStatsPanel()}
 
-          {renderGenerateSqlCard()}
-
-          {queryMode === 'AQL' && (
-            <Card title="可用資料表" style={{ marginBottom: 16 }}>
-              <Collapse 
-                ghost
-                items={availableModules.map(module => ({
-                  key: module,
-                  label: <Tag color="blue">{module}</Tag>,
-                  children: (
-                    <Space orientation="vertical" style={{ width: '100%' }}>
-                      {tables.filter(t => t.module === module).map(t => (
-                        <div key={t.table_id} style={{ display: 'flex', justifyContent: 'space-between' }}>
-                          <Text>{t.table_name}</Text>
-                          <Text type="secondary" style={{ fontSize: 12 }}>{t.sheet_key || '-'}</Text>
-                        </div>
-                      ))}
-                    </Space>
-                  )
-                }))}
-              />
-            </Card>
-          )}
-
-          <Card title="使用說明">
-            <Text type="secondary">1. 選擇查詢模式 → 2. 輸入自然語言 → 3. 執行查詢 → 4. 查看結果/SQL/Plan</Text>
-            <Divider style={{ margin: '12px 0' }} />
-            <Alert type="info" description="複雜查詢可能需要較長時間處理，建議縮小查詢範圍以獲得更快回應。" showIcon />
+          <Card title="使用說明" size="small">
+            <Space direction="vertical" size="small" style={{ width: '100%' }}>
+              <Text>輸入自然語言查詢 → 執行 → 查看結果</Text>
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                支援 Enter 快速執行（Shift+Enter 換行）
+              </Text>
+              <Alert message="查詢範圍：2025shianyong 帳號下所有 Ragic 表單" type="info" showIcon style={{ marginTop: 8 }} />
+            </Space>
           </Card>
         </Col>
       </Row>

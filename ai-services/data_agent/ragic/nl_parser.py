@@ -3,10 +3,10 @@
 @description NL → Ragic API parameter translator.
              Matches user query to stored intents via Qdrant vector search,
              then translates to RagicQueryParams. Falls back to LLM for
-             unmatched or ambiguous queries.
-@lastUpdate  2026-04-11 17:43:04
+             unmatched or ambiguous queries. Three-tier confidence system.
+@lastUpdate  2026-04-12 08:50:59
 @author      Daniel Chung
-@version     1.1.0
+@version     1.2.0
 """
 
 import json
@@ -14,6 +14,7 @@ import logging
 import os
 import re
 import time
+from datetime import date
 
 import httpx
 
@@ -34,8 +35,8 @@ logger = logging.getLogger(__name__)
 
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 
-# Intent match score ≥ this → use template directly, skip LLM
-TEMPLATE_CONFIDENCE_THRESHOLD = 0.60
+CONFIDENCE_HIGH_THRESHOLD = 0.65
+CONFIDENCE_LOW_THRESHOLD = 0.45
 
 
 async def _get_small_model() -> str:
@@ -83,20 +84,29 @@ class RagicNLParser:
 
         resolved_table_key = table_key or (matched_intent.table_key if matched_intent else "")
 
-        if matched_intent and match_score >= TEMPLATE_CONFIDENCE_THRESHOLD:
+        confidence = "low"
+        llm_fallback_failed = False
+
+        if matched_intent and match_score >= CONFIDENCE_HIGH_THRESHOLD:
             translated = self._translate_from_template(
                 matched_intent, opts
             )
-        else:
+            confidence = "high"
+        elif matched_intent and match_score >= CONFIDENCE_LOW_THRESHOLD:
             translated = await self._translate_via_llm(
                 query, account, resolved_table_key, opts
             )
+            confidence = "medium"
+            llm_fallback_failed = len(translated.where) == 0 and not translated.order_field
+        else:
+            translated = TranslatedParams(limit=opts.limit, naming="EID")
+            confidence = "low"
 
         if not resolved_table_key and translated.where:
             pass
 
         multi_table_hint = False
-        if match_score < TEMPLATE_CONFIDENCE_THRESHOLD:
+        if match_score < CONFIDENCE_HIGH_THRESHOLD:
             multi_table_hint, _ = await self._detect_multi_table_intent(
                 query, account
             )
@@ -118,6 +128,8 @@ class RagicNLParser:
             table_key=resolved_table_key,
             parse_time_ms=round(elapsed_ms, 2),
             multi_table_hint=multi_table_hint,
+            confidence=confidence,
+            llm_fallback_failed=llm_fallback_failed,
         )
 
     async def _detect_multi_table_intent(
@@ -207,10 +219,12 @@ class RagicNLParser:
             return TranslatedParams(limit=opts.limit, naming="EID")
 
     def _build_llm_prompt(self, query: str, schema_context: str) -> str:
+        today = date.today().strftime("%Y/%m/%d")
         schema_section = f"\n【欄位清單】\n{schema_context}\n" if schema_context else ""
         return (
             "你是 RagicDataAgent 的查詢參數翻譯器。"
             "將使用者的自然語言轉換為 Ragic API 查詢參數。"
+            f"\n【今天日期】{today}"
             f"{schema_section}"
             "【規則】"
             "1. where: 篩選條件陣列 (field_id, operator:eq/like/gt/gte/lt/lte/regex, value) "
@@ -275,6 +289,8 @@ class ParseResult:
         "table_key",
         "parse_time_ms",
         "multi_table_hint",
+        "confidence",
+        "llm_fallback_failed",
     )
 
     def __init__(
@@ -284,9 +300,13 @@ class ParseResult:
         table_key: str,
         parse_time_ms: float,
         multi_table_hint: bool = False,
+        confidence: str = "low",
+        llm_fallback_failed: bool = False,
     ) -> None:
         self.intent_matched = intent_matched
         self.translated_params = translated_params
         self.table_key = table_key
         self.parse_time_ms = parse_time_ms
         self.multi_table_hint = multi_table_hint
+        self.confidence = confidence
+        self.llm_fallback_failed = llm_fallback_failed

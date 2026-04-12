@@ -42,6 +42,9 @@ export interface IntentCatalogEntry {
   core_fields?: string[];
   example_sqls?: string[];
   bpa_domain_intent?: string;
+  table_key?: string;
+  action?: string;
+  nl_patterns?: string[];
 }
 
 export interface IntentCatalogListResponse {
@@ -88,7 +91,7 @@ export const intentCatalogApi = {
     ),
 
   syncToQdrant: (data: { agent_scope: AgentScope; model?: string }) =>
-    api.post<{ code: number; data: { synced_count: number; status: string } }>(
+    api.post<{ synced_count: number; collection: string; status: string }>(
       '/api/v1/intents/sync-qdrant', data
     ),
 

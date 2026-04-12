@@ -60,8 +60,19 @@ export const TAB_CATEGORIES: { label: string; tabs: string[]; color: string }[] 
   },
 ];
 
-/** 大分類標籤對應色碼 */
+/** 大分類標籤對應色碼（淺色模式） */
 export const CATEGORY_COLOR_MAP: Record<string, string> = Object.fromEntries(
   TAB_CATEGORIES.map(c => [c.label, c.color])
 );
 CATEGORY_COLOR_MAP['其他'] = '#d9d9d9';
+
+/** 大分類標籤對應色碼（深色模式）— 使用較深、對比度佳的色調 */
+export const CATEGORY_COLOR_MAP_DARK: Record<string, string> = {
+  '基礎資料': '#1a3a5c',
+  '進銷存': '#1a3d1a',
+  '生產製造': '#3d2e0a',
+  '品質/ISO': '#3d1a1a',
+  'CRM/SCM': '#2a1a3d',
+  '管理': '#0a3d3d',
+  '其他': '#3d3d3d',
+};

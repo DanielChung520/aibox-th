@@ -1,15 +1,17 @@
 /**
  * @file        Data Agent Schema 導入區塊
- * @description Schema 頁面的資料表導入按鈕與上傳邏輯
- * @lastUpdate  2026-04-11 18:13:37
+ * @description Schema 頁面的資料表導入按鈕與上傳邏輯，含圖譜與意圖 Modal
+ * @lastUpdate  2026-04-11 22:24:32
  * @author      Daniel Chung
- * @version     1.0.0
+ * @version     2.0.0
  */
 
 import { useState, useRef } from 'react';
 import { Button, Modal, Space, Typography, App } from 'antd';
-import { ImportOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
+import { ImportOutlined, ExclamationCircleOutlined, ApartmentOutlined, BookOutlined } from '@ant-design/icons';
 import { dataAgentApi } from '../../services/dataAgentApi';
+import SchemaGraphModal from './SchemaGraphModal';
+import SchemaIntentModal from './SchemaIntentModal';
 
 const { Text } = Typography;
 
@@ -23,6 +25,8 @@ export default function SchemaImportSection({ onImportSuccess }: SchemaImportSec
   const { message } = App.useApp();
   const [importConfirmVisible, setImportConfirmVisible] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [graphOpen, setGraphOpen] = useState(false);
+  const [intentOpen, setIntentOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleImportClick = () => {
@@ -75,9 +79,18 @@ export default function SchemaImportSection({ onImportSuccess }: SchemaImportSec
 
   return (
     <>
-      <Button icon={<ImportOutlined />} onClick={handleImportClick} loading={importing}>
-        導入 Ragic 資料表定義
-      </Button>
+      <Space.Compact>
+        <Button icon={<ApartmentOutlined />} onClick={() => setGraphOpen(true)}>
+          顯示圖譜
+        </Button>
+        <Button icon={<BookOutlined />} onClick={() => setIntentOpen(true)}>
+          資料字典意圖
+        </Button>
+        <Button icon={<ImportOutlined />} onClick={handleImportClick} loading={importing}>
+          導入 Ragic 資料表定義
+        </Button>
+      </Space.Compact>
+
       <input
         ref={fileInputRef}
         type="file"
@@ -111,6 +124,9 @@ export default function SchemaImportSection({ onImportSuccess }: SchemaImportSec
           <p><Text type="warning">此操作不可逆，請確認是否要繼續？</Text></p>
         </div>
       </Modal>
+
+      <SchemaGraphModal open={graphOpen} onClose={() => setGraphOpen(false)} account={DEFAULT_ACCOUNT} />
+      <SchemaIntentModal open={intentOpen} onClose={() => setIntentOpen(false)} />
     </>
   );
 }

@@ -33,6 +33,9 @@ _ENV_FALLBACKS: dict[str, tuple[str, str]] = {
     "da.large_llm_model": ("NL2SQL_LARGE_MODEL", "qwen3-coder:30b"),
     "da.data_source": ("DA_DATA_SOURCE", "sap"),
     "intent.match_threshold": ("MATCH_THRESHOLD", "0.45"),
+    "ragic.api_key": ("RAGIC_API_KEY", ""),
+    "ragic.database": ("RAGIC_MASTER_ACCOUNT", "2025shianyong"),
+    "ragic.server_prefix": ("RAGIC_MASTER_SERVER", "ap15"),
 }
 
 

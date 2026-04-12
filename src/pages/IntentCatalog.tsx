@@ -112,8 +112,8 @@ function OrchestratorPanel() {
     setIsSyncing(true);
     try {
       const res = await intentCatalogApi.syncToQdrant({ agent_scope: 'orchestrator', model: settings.embeddingModel });
-      if (res.data.code === 0) {
-        message.success(`同步成功，共 ${res.data.data.synced_count} 筆`);
+      if (res.data.status === 'ok') {
+        message.success(`同步成功，共 ${res.data.synced_count} 筆`);
       } else {
         message.error('同步失敗');
       }
@@ -601,8 +601,8 @@ function DataAgentPanel() {
     setIsSyncing(true);
     try {
       const res = await intentCatalogApi.syncToQdrant({ agent_scope: 'data_agent', model: settings.embeddingModel });
-      if (res.data.code === 0) {
-        message.success(`同步成功，共 ${res.data.data.synced_count} 筆`);
+      if (res.data.status === 'ok') {
+        message.success(`同步成功，共 ${res.data.synced_count} 筆`);
       } else {
         message.error('同步失敗');
       }

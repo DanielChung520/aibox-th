@@ -7,7 +7,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import { Modal, Table, App } from 'antd';
+import { Modal, Table, App, Input } from 'antd';
 import { dataAgentApi, FieldInfo } from '../../services/dataAgentApi';
 
 interface SchemaDataPreviewModalProps {
@@ -30,6 +30,7 @@ export default function SchemaDataPreviewModal({
   const [dataTotal, setDataTotal] = useState(0);
   const [dataPage, setDataPage] = useState(1);
   const [dataPageSize, setDataPageSize] = useState(20);
+  const [searchText, setSearchText] = useState('');
 
   const loadData = async (page: number, pageSize: number) => {
     if (!tableId || !visible) return;
@@ -67,6 +68,7 @@ export default function SchemaDataPreviewModal({
       setDataFields([]);
       setDataTotal(0);
       setDataPage(1);
+      setSearchText('');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, tableId]);
@@ -74,6 +76,14 @@ export default function SchemaDataPreviewModal({
   const handlePageChange = (page: number, pageSize: number) => {
     loadData(page, pageSize);
   };
+
+  const filteredRows = searchText
+    ? dataRows.filter(row =>
+        Object.values(row).some(v =>
+          v != null && String(v).toLowerCase().includes(searchText.toLowerCase())
+        )
+      )
+    : dataRows;
 
   return (
     <Modal
@@ -83,8 +93,17 @@ export default function SchemaDataPreviewModal({
       footer={null}
       width="80%"
     >
+      <div style={{ marginBottom: 12 }}>
+        <Input.Search
+          placeholder="搜尋資料內容"
+          allowClear
+          onSearch={(v) => setSearchText(v)}
+          onChange={(e) => { if (!e.target.value) setSearchText(''); }}
+          style={{ width: 260 }}
+        />
+      </div>
       <Table
-        dataSource={dataRows}
+        dataSource={filteredRows}
         rowKey={(_record, idx) => `row_${idx ?? 0}`}
         loading={dataLoading}
         size="small"

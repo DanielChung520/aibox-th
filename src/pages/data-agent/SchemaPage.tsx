@@ -7,8 +7,8 @@
  */
 
 import { useState, useEffect } from 'react';
-import { Card, Table, Form, Tabs, App, Typography } from 'antd';
-import { DatabaseOutlined } from '@ant-design/icons';
+import { Card, Table, Form, Tabs, App, Typography, Input, Button, Space, theme } from 'antd';
+import { DatabaseOutlined, SettingOutlined } from '@ant-design/icons';
 import { dataAgentApi, TableInfo, FieldInfo } from '../../services/dataAgentApi';
 
 import { TAB_LABELS, TAB_CATEGORIES } from './schemaConstants';
@@ -18,11 +18,13 @@ import SchemaDataPreviewModal from './SchemaDataPreviewModal';
 import SchemaImportSection from './SchemaImportSection';
 import SchemaColumnsModal from './SchemaColumnsModal';
 import SchemaEditModal from './SchemaEditModal';
+import SchemaSettingsDrawer from './SchemaSettingsDrawer';
 
 const { Title, Text } = Typography;
 
 export default function SchemaPage() {
   const { message } = App.useApp();
+  const { token: antToken } = theme.useToken();
   const [tables, setTables] = useState<TableInfo[]>([]);
   const [loading, setLoading] = useState(false);
   const [tableModalVisible, setTableModalVisible] = useState(false);
@@ -38,9 +40,12 @@ export default function SchemaPage() {
   const [columns, setColumns] = useState<FieldInfo[]>([]);
   const [columnsLoading, setColumnsLoading] = useState(false);
 
+  const [searchText, setSearchText] = useState('');
+
   const [dataModalVisible, setDataModalVisible] = useState(false);
   const [dataModalTitle, setDataModalTitle] = useState('');
   const [dataTableId, setDataTableId] = useState('');
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const loadTables = async () => {
     setLoading(true);
@@ -120,6 +125,10 @@ export default function SchemaPage() {
       }
     }
     if (selectedTab !== 'ALL' && t.tab !== selectedTab) return false;
+    if (searchText) {
+      const s = searchText.toLowerCase();
+      if (!t.table_name.toLowerCase().includes(s) && !t.table_id.toLowerCase().includes(s)) return false;
+    }
     return true;
   });
 
@@ -172,7 +181,10 @@ export default function SchemaPage() {
             有效 {enabledCount} / 無效 {disabledCount}
           </Text>
         </Title>
-        <SchemaImportSection onImportSuccess={loadTables} />
+        <Space>
+          <Button type="text" icon={<SettingOutlined />} onClick={() => setSettingsOpen(true)} title="模型設置" />
+          <SchemaImportSection onImportSuccess={loadTables} />
+        </Space>
       </div>
 
       <Card style={{ flex: 1, display: 'flex', flexDirection: 'column' }} styles={{ body: { padding: '12px 24px 0', flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' } }}>
@@ -181,9 +193,40 @@ export default function SchemaPage() {
           selectedCategory={selectedCategory} 
           onSelect={(val) => { setSelectedCategory(val); setSelectedTab('ALL'); }} 
         />
+
+        <div style={{ marginBottom: 8 }}>
+          <Input.Search
+            placeholder="搜尋表名或 Table ID"
+            allowClear
+            onSearch={(v) => setSearchText(v)}
+            onChange={(e) => { if (!e.target.value) setSearchText(''); }}
+            style={{ width: 260 }}
+          />
+        </div>
         
         {availableTabs.length > 0 && (
-          <Tabs type="card" size="small" activeKey={selectedTab} onChange={setSelectedTab} items={tabItems} style={{ marginBottom: 8 }} />
+          <>
+            <style>{`
+              .schema-tabs .ant-tabs-tab:not(.ant-tabs-tab-active):hover {
+                background: rgba(255,255,255,0.18) !important;
+                border-color: rgba(53,114,212,0.5) !important;
+              }
+              /* 深色模式下提高非選中 tab 的預設可見度 */
+              .schema-tabs[data-dark="true"] .ant-tabs-tab:not(.ant-tabs-tab-active) {
+                background: rgba(255,255,255,0.06) !important;
+              }
+            `}</style>
+            <Tabs
+              type="card"
+              size="small"
+              activeKey={selectedTab}
+              onChange={setSelectedTab}
+              items={tabItems}
+              style={{ marginBottom: 8 }}
+              className="schema-tabs"
+              data-dark={antToken.colorBgBase === '#0f172a' ? 'true' : 'false'}
+            />
+          </>
         )}
 
         <div className="schema-table-fill">
@@ -230,6 +273,8 @@ export default function SchemaPage() {
         tableName={dataModalTitle}
         onCancel={() => setDataModalVisible(false)}
       />
+
+      <SchemaSettingsDrawer open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </div>
   );
 }

@@ -1,7 +1,7 @@
 /**
  * @file        Data Agent API 服務層 - API 端點函式
  * @description DA 的 Schema、Intents、Query 等 API 端點定義
- * @lastUpdate  2026-04-11 18:10:32
+ * @lastUpdate  2026-04-12 01:22:59
  * @author      Daniel Chung
  */
 
@@ -17,6 +17,9 @@ import type {
   RagicImportResult,
   RagicGraphQueryResult,
   RagicMultiStepResult,
+  RagicIntentItem,
+  RagicNLQueryRequest,
+  RagicNLQueryResponse,
 } from './dataAgentApi_types';
 
 export const dataAgentApi_endpoints = {
@@ -175,4 +178,12 @@ export const dataAgentApi_endpoints = {
     api.post<{ code: number; data: RagicMultiStepResult | null; error: string | null }>(
       '/api/v1/da/ragic/query/multi-step', data, { timeout: 120000 }
     ),
+
+  listRagicIntents: (account: string, limit = 500) =>
+    api.get<{ code: number; data: RagicIntentItem[]; total: number }>(
+      '/api/v1/da/ragic/intents', { params: { account, limit } }
+    ),
+
+  ragicNLQuery: (data: RagicNLQueryRequest) =>
+    api.post<RagicNLQueryResponse>('/api/v1/da/ragic/query', data, { timeout: 120000 }),
 };

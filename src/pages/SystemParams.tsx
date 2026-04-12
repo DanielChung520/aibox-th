@@ -146,6 +146,7 @@ export default function SystemParams() {
     'ragic.database': '資料庫名稱 (如 2025shianyong)',
     'ragic.service_account': '服務帳號',
     'ragic.api_key': 'API Key',
+    'ragic.default_graph_modules': '圖譜預設模組（逗號分隔，如 TRADE,MFG,QC,CRM_SCM,MGMT）',
   };
 
   const renderParamInput = (param: SystemParam) => {

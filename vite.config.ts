@@ -97,6 +97,7 @@ export default defineConfig(async () => ({
     port: 1420,
     strictPort: true,
     host: host || false,
+    allowedHosts: ["dy.ent4i.com", "localhost"],
     hmr: host
       ? {
           protocol: "ws",
@@ -108,6 +109,18 @@ export default defineConfig(async () => ({
       ignored: ["**/src-tauri/**"],
     },
     proxy: {
+      // Ragic proxy data → Rust Gateway (port 6500)
+      '/api/v1/da/ragic/proxy': {
+        target: 'http://localhost:6500',
+        changeOrigin: true,
+      },
+      // Other Ragic endpoints → Python Data Agent (port 8003)
+      '/api/v1/da/ragic': {
+        target: 'http://localhost:8003',
+        changeOrigin: true,
+        rewrite: (path: string) => path.replace('/api/v1/da/ragic', '/ragic'),
+      },
+      // All other API → Rust Gateway (port 6500)
       '/api': {
         target: 'http://localhost:6500',
         changeOrigin: true,

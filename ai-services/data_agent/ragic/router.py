@@ -1,13 +1,15 @@
 """
 @file        router.py
 @description FastAPI routes for RagicDataAgent — query + schema + intent + NL endpoints.
-@lastUpdate  2026-04-11 13:28:14
+@lastUpdate  2026-04-12 08:50:59
 @author      Daniel Chung
-@version     1.5.0
+@version     1.7.0
 """
 
+import json
 import logging
 import os
+import re
 import time
 from typing import Optional, Union
 
@@ -17,17 +19,28 @@ from pydantic import BaseModel, Field
 
 from data_agent.ragic.client import RagicAPIClient
 from data_agent.ragic.config_loader import RagicConfigLoader
-from data_agent.ragic.exceptions import RagicError
+from data_agent.ragic.exceptions import (
+    RagicAuthError,
+    RagicError,
+    RagicForbiddenError,
+    RagicNotFoundError,
+    RagicRateLimitError,
+    RagicTimeoutError,
+)
 from data_agent.ragic.formatter import to_csv_bytes, to_excel_bytes
 from data_agent.ragic.models import (
     IntentSearchRequest,
     IntentSearchResponse,
     IntentSearchResult,
     IntentUpsertRequest,
-    NLQueryData,
+    NLClarification,
+    NLIntentMatch,
+    NLPostError,
     NLQueryMetadata,
     NLQueryRequest,
     NLQueryResponse,
+    NLResultSet,
+    NLResultStats,
     RagicConnectionConfig,
     RagicIntent,
     RagicOperator,
@@ -262,14 +275,6 @@ async def query_records_get(
 
 def _ragic_error_to_http(exc: RagicError) -> int:
     """Map RagicError subclass to HTTP status code."""
-    from data_agent.ragic.exceptions import (
-        RagicAuthError,
-        RagicForbiddenError,
-        RagicNotFoundError,
-        RagicRateLimitError,
-        RagicTimeoutError,
-    )
-
     mapping: dict[type, int] = {
         RagicAuthError: 401,
         RagicForbiddenError: 403,
@@ -489,34 +494,121 @@ _nl_parser = RagicNLParser(
 _query_engine = RagicQueryEngine(schema_store=_schema_store)
 
 
+_FRIENDLY_RAGIC_MESSAGES: dict[type, str] = {
+    RagicTimeoutError: "查詢逾時，Ragic 伺服器回應較慢，請稍後再試",
+    RagicAuthError: "API 金鑰已失效，請至系統設定更新 Ragic 連線資訊",
+    RagicForbiddenError: "權限不足，無法存取此 Ragic 表單",
+    RagicNotFoundError: "找不到對應的 Ragic 表單，請確認表單路徑是否正確",
+    RagicRateLimitError: "查詢頻率過高（Ragic 限制每秒 5 次），請稍候再試",
+}
+
+_CLARIFICATION_SUGGESTIONS = [
+    "查詢上個月的進貨單",
+    "列出所有採購訂單",
+    "查詢庫存表",
+    "查詢近 30 天收貨單",
+]
+
+
+def _estimate_tokens(records: list[RagicRecord]) -> int:
+    if not records:
+        return 0
+    raw = json.dumps([r.model_dump() for r in records], ensure_ascii=False)
+    return len(raw) // 4
+
+
 @router.post("/query", response_model=None)
 async def nl_query(request: NLQueryRequest) -> Union[NLQueryResponse, Response]:
-    if not _DEFAULT_API_KEY:
-        return NLQueryResponse(
-            code=1,
-            error="RAGIC_API_KEY not configured",
-        )
-
     account = request.connection_name or _DEFAULT_ACCOUNT
     start = time.monotonic()
 
+    stripped = request.query.strip()
+    if len(stripped) == 0:
+        return NLQueryResponse(
+            code=1,
+            status="clarification_needed",
+            clarification=NLClarification(
+                message="請輸入查詢內容",
+                suggestions=_CLARIFICATION_SUGGESTIONS,
+            ),
+        )
+    if len(stripped) < 4:
+        return NLQueryResponse(
+            code=1,
+            status="clarification_needed",
+            clarification=NLClarification(
+                message="查詢內容過短，請提供更詳細的描述",
+                suggestions=_CLARIFICATION_SUGGESTIONS,
+            ),
+        )
+    if not re.search(r"[\u4e00-\u9fff]", stripped) and not re.search(r"[a-zA-Z]", stripped):
+        return NLQueryResponse(
+            code=1,
+            status="clarification_needed",
+            clarification=NLClarification(
+                message="無法識別有效的查詢語句",
+                suggestions=_CLARIFICATION_SUGGESTIONS,
+            ),
+        )
+
     try:
         parsed = await _nl_parser.parse(
-            query=request.query,
+            query=stripped,
             account=account,
             table_key=request.table_key,
             options=request.options,
         )
     except Exception as exc:
-        return NLQueryResponse(code=2, error=f"NL parse failed: {exc}")
+        return NLQueryResponse(
+            code=2,
+            status="error",
+            post_error=NLPostError(
+                error_code=2,
+                raw_error=str(exc),
+                message=f"自然語言解析失敗：{exc}",
+            ),
+        )
+
+    confidence = parsed.confidence
+
+    intent_block: NLIntentMatch | None = None
+    if parsed.intent_matched:
+        intent_block = NLIntentMatch(
+            intent_id=parsed.intent_matched.intent_id,
+            score=parsed.intent_matched.score,
+            confidence=confidence,
+            action=parsed.intent_matched.action,
+            table_key=parsed.intent_matched.table_key,
+        )
+
+    if confidence == "low":
+        return NLQueryResponse(
+            code=5,
+            status="clarification_needed",
+            clarification=NLClarification(
+                message="無法理解您的查詢意圖，請嘗試更具體的描述",
+                suggestions=_CLARIFICATION_SUGGESTIONS,
+            ),
+            intent=intent_block,
+            metadata=NLQueryMetadata(
+                connection=account,
+                query=request.query,
+                translated_params=parsed.translated_params,
+            ),
+        )
 
     if not parsed.table_key:
         return NLQueryResponse(
             code=3,
-            error="無法判斷要查詢的表格，請指定 table_key 或新增對應 Intent",
-            data=NLQueryData(
+            status="clarification_needed",
+            clarification=NLClarification(
+                message="無法判斷要查詢的表格，請指定 table_key 或新增對應 Intent",
+                suggestions=_CLARIFICATION_SUGGESTIONS,
+            ),
+            intent=intent_block,
+            metadata=NLQueryMetadata(
+                connection=account,
                 query=request.query,
-                intent_matched=parsed.intent_matched,
                 translated_params=parsed.translated_params,
             ),
         )
@@ -525,7 +617,13 @@ async def nl_query(request: NLQueryRequest) -> Union[NLQueryResponse, Response]:
     if len(parts) != 2:
         return NLQueryResponse(
             code=4,
-            error=f"table_key 格式錯誤，應為 'tab_path/sheet_index'：{parsed.table_key}",
+            status="error",
+            post_error=NLPostError(
+                error_code=4,
+                raw_error=f"table_key format invalid: {parsed.table_key}",
+                message=f"table_key 格式錯誤，應為 'tab_path/sheet_index'：{parsed.table_key}",
+            ),
+            intent=intent_block,
         )
 
     tab_path = parts[0]
@@ -534,7 +632,13 @@ async def nl_query(request: NLQueryRequest) -> Union[NLQueryResponse, Response]:
     except ValueError:
         return NLQueryResponse(
             code=4,
-            error=f"sheet_index 不是數字：{parts[1]}",
+            status="error",
+            post_error=NLPostError(
+                error_code=4,
+                raw_error=f"sheet_index not a number: {parts[1]}",
+                message=f"sheet_index 不是數字：{parts[1]}",
+            ),
+            intent=intent_block,
         )
 
     query_params = _nl_parser.translated_to_query_params(parsed.translated_params)
@@ -554,12 +658,23 @@ async def nl_query(request: NLQueryRequest) -> Union[NLQueryResponse, Response]:
             auto_paginate=request.options.auto_paginate,
         )
     except RagicError as exc:
+        friendly = _FRIENDLY_RAGIC_MESSAGES.get(
+            type(exc),
+            f"查詢過程中發生錯誤：{exc}。請稍後重試",
+        )
         return NLQueryResponse(
             code=_ragic_error_to_http(exc),
-            error=str(exc),
-            data=NLQueryData(
+            status="error",
+            post_error=NLPostError(
+                error_code=_ragic_error_to_http(exc),
+                raw_error=str(exc),
+                message=friendly,
+            ),
+            intent=intent_block,
+            metadata=NLQueryMetadata(
+                connection=account,
+                table_key=parsed.table_key,
                 query=request.query,
-                intent_matched=parsed.intent_matched,
                 translated_params=parsed.translated_params,
             ),
         )
@@ -596,12 +711,30 @@ async def nl_query(request: NLQueryRequest) -> Union[NLQueryResponse, Response]:
         for r in engine_result.records
     ]
 
+    post_error_block: NLPostError | None = None
+    if engine_result.record_count == 0:
+        post_error_block = NLPostError(
+            error_code=0,
+            message=(
+                "查詢完成，但未找到符合條件的資料。"
+                "可能原因：1. 該時段無相關記錄 2. 篩選條件過嚴"
+            ),
+        )
+
+    clarification_block: NLClarification | None = None
+    if confidence == "medium":
+        table_name = parsed.intent_matched.table_key if parsed.intent_matched else parsed.table_key
+        clarification_block = NLClarification(
+            message=f"系統推測您想查詢「{table_name}」，若不正確請換方式描述",
+        )
+
+    estimated_tokens = _estimate_tokens(records_as_ragic)
+
     return NLQueryResponse(
         code=0,
-        data=NLQueryData(
-            query=request.query,
-            intent_matched=parsed.intent_matched,
-            translated_params=parsed.translated_params,
+        status="success",
+        clarification=clarification_block,
+        result=NLResultSet(
             records=records_as_ragic,
             record_count=engine_result.record_count,
             pagination=RagicPagination(
@@ -610,13 +743,21 @@ async def nl_query(request: NLQueryRequest) -> Union[NLQueryResponse, Response]:
                 returned_count=engine_result.record_count,
                 has_more=engine_result.has_more,
             ),
-            execution_time_ms=total_ms,
             field_labels=field_labels,
+            execution_time_ms=total_ms,
+            stats=NLResultStats(
+                total_fields=len(field_labels),
+                estimated_tokens=estimated_tokens,
+            ),
         ),
+        intent=intent_block,
+        post_error=post_error_block,
         metadata=NLQueryMetadata(
             connection=account,
             table_key=parsed.table_key,
             output_format=request.output_format,
+            query=request.query,
+            translated_params=parsed.translated_params,
         ),
     )
 

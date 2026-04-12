@@ -1,9 +1,9 @@
 """
 @file        router_import.py
 @description FastAPI routes for Phase 9-11: MD import, graph query, multi-step query.
-@lastUpdate  2026-04-11 17:52:08
+@lastUpdate  2026-04-11 20:39:24
 @author      Daniel Chung
-@version     1.2.0
+@version     1.3.0
 """
 
 from __future__ import annotations
@@ -150,6 +150,51 @@ async def get_all_relations(
         return GraphAllRelationsResponse(data=[r.model_dump() for r in relations])
     except Exception as e:
         logger.exception("Get all relations failed")
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+class IntentListItem(BaseModel):
+    intent_id: str = ""
+    account: str = ""
+    description: str = ""
+    action: str = "list"
+    table_key: str = ""
+    nl_patterns: list[str] = Field(default_factory=list)
+    api_template: str = ""
+
+
+class IntentListResponse(BaseModel):
+    code: int = 0
+    data: list[IntentListItem] = Field(default_factory=list)
+    total: int = 0
+
+
+@router.get("/intents", response_model=IntentListResponse)
+async def list_ragic_intents(
+    account: str = Query(...),
+    limit: int = Query(default=500, ge=1, le=2000),
+) -> IntentListResponse:
+    try:
+        points = await _intent_store.list_all(account=account, limit=limit)
+        items: list[IntentListItem] = []
+        for pt in points:
+            payload = pt.get("payload", {})
+            if not isinstance(payload, dict):
+                continue
+            nl_raw = payload.get("nl_patterns", [])
+            nl_list = [str(p) for p in nl_raw] if isinstance(nl_raw, list) else []
+            items.append(IntentListItem(
+                intent_id=str(payload.get("intent_id", "")),
+                account=str(payload.get("account", "")),
+                description=str(payload.get("description", "")),
+                action=str(payload.get("action", "list")),
+                table_key=str(payload.get("table_key", "")),
+                nl_patterns=nl_list,
+                api_template=str(payload.get("api_template", "")),
+            ))
+        return IntentListResponse(data=items, total=len(items))
+    except Exception as e:
+        logger.exception("List ragic intents failed")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 

@@ -1,7 +1,7 @@
 /**
  * @file        Data Agent API 服務層 - 型別定義
  * @description DA 的 Schema、Intents、Query 等型別介面定義
- * @lastUpdate  2026-04-11 18:10:32
+ * @lastUpdate  2026-04-12 08:50:59
  * @author      Daniel Chung
  */
 
@@ -235,4 +235,110 @@ export interface RagicMultiStepResult {
   total_time_ms: number;
   partial_failure: boolean;
   errors: string[];
+}
+
+export interface RagicIntentItem {
+  intent_id: string;
+  account: string;
+  description: string;
+  action: string;
+  table_key: string;
+  nl_patterns: string[];
+  api_template: string;
+}
+
+// ---------------------------------------------------------------------------
+// NL → Ragic Query (POST /ragic/query) — Standard Response Protocol
+// ---------------------------------------------------------------------------
+
+export interface RagicNLQueryOptions {
+  include_subtables?: boolean;
+  limit?: number;
+  auto_paginate?: boolean;
+}
+
+export interface RagicNLQueryRequest {
+  query: string;
+  connection_name?: string;
+  table_key?: string;
+  output_format?: 'json' | 'csv' | 'excel';
+  options?: RagicNLQueryOptions;
+}
+
+export interface RagicNLWhereClause {
+  field_id: string;
+  operator: 'eq' | 'like' | 'gte' | 'lte' | 'gt' | 'lt' | 'regex';
+  value: string;
+}
+
+export interface RagicNLTranslatedParams {
+  where: RagicNLWhereClause[];
+  limit: number;
+  offset: number;
+  naming?: string;
+  order_field?: string | null;
+  order_direction?: string;
+}
+
+export interface RagicNLRecord {
+  ragic_id: string;
+  fields: Record<string, unknown>;
+}
+
+export interface RagicNLPagination {
+  offset: number;
+  limit: number;
+  returned_count: number;
+  has_more: boolean;
+}
+
+export interface RagicNLClarification {
+  message: string;
+  suggestions: string[];
+}
+
+export interface RagicNLResultStats {
+  total_fields: number;
+  estimated_tokens: number;
+}
+
+export interface RagicNLResultSet {
+  records: RagicNLRecord[];
+  record_count: number;
+  pagination: RagicNLPagination;
+  field_labels: Record<string, string>;
+  execution_time_ms: number;
+  stats: RagicNLResultStats | null;
+}
+
+export interface RagicNLIntentMatch {
+  intent_id: string;
+  score: number;
+  confidence: string;
+  action: string;
+  table_key: string;
+}
+
+export interface RagicNLPostError {
+  error_code: number;
+  raw_error: string;
+  message: string;
+}
+
+export interface RagicNLQueryMetadata {
+  connection: string;
+  table_key: string;
+  output_format: string;
+  query: string;
+  translated_params: RagicNLTranslatedParams | null;
+}
+
+export interface RagicNLQueryResponse {
+  code: number;
+  status: 'success' | 'clarification_needed' | 'error';
+  clarification: RagicNLClarification | null;
+  result: RagicNLResultSet | null;
+  intent: RagicNLIntentMatch | null;
+  post_error: RagicNLPostError | null;
+  metadata: RagicNLQueryMetadata | null;
 }

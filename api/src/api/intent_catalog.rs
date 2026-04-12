@@ -74,8 +74,13 @@ async fn list_catalog(
     let mut filters: Vec<String> = Vec::new();
     let mut bind_entries: Vec<(String, Value)> = Vec::new();
 
-    // ── scope filter (REQUIRED for meaningful queries) ──
-    if let Some(scope) = params.get("agent_scope").filter(|v| !v.trim().is_empty()) {
+    let agent_scope = params.get("agent_scope").filter(|v| !v.trim().is_empty());
+    let collection = match agent_scope {
+        Some(ref s) if s.as_str() == "data_agent" => "da_ragic_intents",
+        _ => COLLECTION,
+    };
+
+    if let Some(ref scope) = agent_scope {
         filters.push("d.agent_scope == @agent_scope".into());
         bind_entries.push(("agent_scope".into(), serde_json::json!(scope)));
     }
@@ -145,7 +150,7 @@ async fn list_catalog(
 
     // ── total count ──
     let count_query = format!(
-        "FOR d IN {COLLECTION}{filter_clause} COLLECT WITH COUNT INTO length RETURN length"
+        "FOR d IN {collection}{filter_clause} COLLECT WITH COUNT INTO length RETURN length"
     );
     let count_bind: HashMap<&str, Value> = bind_entries
         .iter()
@@ -165,7 +170,7 @@ async fn list_catalog(
     bind_entries.push(("page_size".into(), serde_json::json!(page_size)));
 
     let records_query = format!(
-        "FOR d IN {COLLECTION}{filter_clause} \
+        "FOR d IN {collection}{filter_clause} \
          SORT d.priority DESC, d.intent_id ASC \
          LIMIT @offset, @page_size RETURN d"
     );

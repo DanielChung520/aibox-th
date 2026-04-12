@@ -1,9 +1,9 @@
 """
 @file        graph_query.py
 @description Query cross-table relation graph from ArangoDB (BFS traversal + path finding).
-@lastUpdate  2026-04-11 17:12:44
+@lastUpdate  2026-04-11 20:39:24
 @author      Daniel Chung
-@version     1.0.0
+@version     1.1.0
 """
 
 from __future__ import annotations
@@ -32,17 +32,16 @@ _LIMIT = 1000
 
 
 def _parse_relation_doc(doc: dict[str, object]) -> TableRelationEdge:
-    left = str(doc.get("left_table", ""))
-    right = str(doc.get("right_table", ""))
-    left_name = left.split("_", 1)[-1] if "_" in left else left
-    right_name = right.split("_", 1)[-1] if "_" in right else right
-    join_type = str(doc.get("join_type", "LEFT"))
-    rel_type = "link" if join_type != "load" else "load"
+    left = str(doc.get("source_table", "") or doc.get("left_table", ""))
+    right = str(doc.get("target_table", "") or doc.get("right_table", ""))
+    left_field = str(doc.get("source_field", "") or doc.get("left_field", ""))
+    right_field = str(doc.get("target_field", "") or doc.get("right_field", ""))
+    rel_type = str(doc.get("relation_type", "link"))
     return TableRelationEdge(
-        from_table=left_name,
-        from_field=str(doc.get("left_field", "")),
-        to_table=right_name,
-        to_field=str(doc.get("right_field", "")),
+        from_table=left,
+        from_field=left_field,
+        to_table=right,
+        to_field=right_field,
         relation_type=rel_type,
         sync_mode=str(doc.get("sync_mode", "")) or None,
     )
@@ -73,45 +72,43 @@ class RagicGraphQuery:
     async def get_related_tables(
         self, table_name: str, account: str, depth: int = 1
     ) -> GraphQueryResult:
-        table_id = f"{account}_{table_name}"
+        _ = account
         visited: set[str] = {table_name}
         all_relations: list[GraphRelation] = []
-        frontier: set[str] = {table_id}
+        frontier: set[str] = {table_name}
 
         for current_depth in range(depth):
             if not frontier:
                 break
-            docs = await self._fetch_relations_for_ids(list(frontier), account)
+            docs = await self._fetch_relations_for_tables(list(frontier))
             next_frontier: set[str] = set()
             for doc in docs:
-                left = str(doc.get("left_table", ""))
-                right = str(doc.get("right_table", ""))
-                left_name = left.split("_", 1)[-1] if "_" in left else left
-                right_name = right.split("_", 1)[-1] if "_" in right else right
-                left_field = str(doc.get("left_field", ""))
-                right_field = str(doc.get("right_field", ""))
+                left = str(doc.get("source_table", "") or doc.get("left_table", ""))
+                right = str(doc.get("target_table", "") or doc.get("right_table", ""))
+                left_field = str(doc.get("source_field", "") or doc.get("left_field", ""))
+                right_field = str(doc.get("target_field", "") or doc.get("right_field", ""))
 
                 if left in frontier:
                     all_relations.append(GraphRelation(
-                        target_table=right_name,
+                        target_table=right,
                         target_field=right_field,
                         source_field=left_field,
                         relation_type="link",
                         direction="outgoing",
                     ))
-                    if right_name not in visited:
-                        visited.add(right_name)
+                    if right not in visited:
+                        visited.add(right)
                         next_frontier.add(right)
                 if right in frontier:
                     all_relations.append(GraphRelation(
-                        target_table=left_name,
+                        target_table=left,
                         target_field=left_field,
                         source_field=right_field,
                         relation_type="link",
                         direction="incoming",
                     ))
-                    if left_name not in visited:
-                        visited.add(left_name)
+                    if left not in visited:
+                        visited.add(left)
                         next_frontier.add(left)
             frontier = next_frontier
 
@@ -151,26 +148,27 @@ class RagicGraphQuery:
         return None
 
     async def get_all_relations(self, account: str) -> list[TableRelationEdge]:
+        _ = account
         aql = (
             f"FOR r IN {_COLLECTION} "
-            "FILTER r.account == @account "
+            "FILTER r.data_source == 'ragic' "
             f"LIMIT {_LIMIT} "
             "RETURN r"
         )
-        docs = await self._execute_aql(aql, {"account": account})
+        docs = await self._execute_aql(aql, {})
         return [_parse_relation_doc(d) for d in docs]
 
-    async def _fetch_relations_for_ids(
-        self, table_ids: list[str], account: str
+    async def _fetch_relations_for_tables(
+        self, table_names: list[str],
     ) -> list[dict[str, object]]:
         aql = (
             f"FOR r IN {_COLLECTION} "
-            "FILTER r.account == @account "
-            "AND (r.left_table IN @ids OR r.right_table IN @ids) "
+            "FILTER r.data_source == 'ragic' "
+            "AND (r.source_table IN @names OR r.target_table IN @names) "
             f"LIMIT {_LIMIT} "
             "RETURN r"
         )
-        return await self._execute_aql(aql, {"account": account, "ids": table_ids})
+        return await self._execute_aql(aql, {"names": table_names})
 
     async def _execute_aql(
         self, aql: str, bind_vars: dict[str, object]

@@ -771,7 +771,7 @@ async fn ragic_proxy_data(
     let client = reqwest::Client::new();
     let ragic_resp = client
         .get(&ragic_url)
-        .basic_auth(&api_key, Some(""))
+        .header("Authorization", format!("Basic {}", api_key))
         .send()
         .await
         .map_err(|e| {

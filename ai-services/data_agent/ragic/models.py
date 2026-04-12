@@ -2,9 +2,9 @@
 @file        models.py
 @description Pydantic models for RagicDataAgent — API client, Schema, Intent, NL Parser, and QueryEngine types.
              Phase 9-11 models are in models_phase9.py and re-exported here.
-@lastUpdate  2026-04-11 16:58:26
+@lastUpdate  2026-04-12 08:50:59
 @author      Daniel Chung
-@version     1.5.0
+@version     1.7.0
 """
 
 from enum import Enum
@@ -264,12 +264,48 @@ class TranslatedParams(BaseModel):
 
 
 class NLQueryResponse(BaseModel):
-    """POST /ragic/query response body."""
+    """POST /ragic/query — standard response protocol."""
 
     code: int = 0
-    data: Optional["NLQueryData"] = None
-    error: Optional[str] = None
+    status: str = "success"
+    clarification: Optional["NLClarification"] = None
+    result: Optional["NLResultSet"] = None
+    intent: Optional["NLIntentMatch"] = None
+    post_error: Optional["NLPostError"] = None
     metadata: Optional["NLQueryMetadata"] = None
+
+
+class NLClarification(BaseModel):
+    message: str
+    suggestions: list[str] = Field(default_factory=list)
+
+
+class NLResultSet(BaseModel):
+    records: list[RagicRecord] = Field(default_factory=list)
+    record_count: int = 0
+    pagination: RagicPagination = Field(default_factory=RagicPagination)
+    field_labels: dict[str, str] = Field(default_factory=dict)
+    execution_time_ms: float = 0.0
+    stats: Optional["NLResultStats"] = None
+
+
+class NLResultStats(BaseModel):
+    total_fields: int = 0
+    estimated_tokens: int = 0
+
+
+class NLIntentMatch(BaseModel):
+    intent_id: str
+    score: float
+    confidence: str = ""
+    action: str = ""
+    table_key: str = ""
+
+
+class NLPostError(BaseModel):
+    error_code: int = 0
+    raw_error: str = ""
+    message: str = ""
 
 
 class NLQueryData(BaseModel):
@@ -287,6 +323,8 @@ class NLQueryMetadata(BaseModel):
     connection: str = ""
     table_key: str = ""
     output_format: str = "json"
+    query: str = ""
+    translated_params: Optional[TranslatedParams] = None
 
 
 # ---------------------------------------------------------------------------
