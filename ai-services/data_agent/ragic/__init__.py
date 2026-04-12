@@ -4,9 +4,9 @@ RagicDataAgent - Natural Language to Ragic API query translator.
 Reads data directly from Ragic Cloud API (zero local sync).
 Schema and Intents stored in Qdrant for vector retrieval.
 
-# Last Update: 2026-04-11 18:10:32
+# Last Update: 2026-04-13 02:14:43
 # Author: Daniel Chung
-# Version: 1.5.0
+# Version: 1.6.0
 
 Modules:
     client              - RagicAPIClient (HTTP GET, rate-limit, pagination)
@@ -19,6 +19,9 @@ Modules:
     intent_generator    - Auto-generate intents (3 actions × 3 languages)
     nl_parser           - NL → Intent match → parameter translation
     query_engine        - Execute queries with field-label resolution
+    query_router        - Path A/B routing (tool-calling vs fallback)
+    tool_calling_engine - Ollama JSON Schema constrained generation
+    schema_linker       - Intent → table → field schema → enum constraint
     formatter           - Multi-format output (CSV with BOM, Excel)
     config_loader       - Multi-tenant config from Ragic system module
     schema_sync         - Auto-sync table schemas from Ragic API
@@ -57,10 +60,13 @@ from data_agent.ragic.models_phase9 import (
 from data_agent.ragic.multi_step_orchestrator import MultiStepOrchestrator
 from data_agent.ragic.nl_parser import RagicNLParser
 from data_agent.ragic.query_engine import RagicQueryEngine
+from data_agent.ragic.query_router import RouteDecision
 from data_agent.ragic.result_merger import ResultMerger
+from data_agent.ragic.schema_linker import LinkedSchema
 from data_agent.ragic.schema_store import RagicSchemaStore
 from data_agent.ragic.schema_sync import RagicSchemaSync
 from data_agent.ragic.step_executor import RagicStepExecutor
+from data_agent.ragic.tool_calling_engine import ToolCallingResult
 
 __all__ = [
     "RagicAPIClient",
@@ -92,4 +98,7 @@ __all__ = [
     "StepResult",
     "MultiStepQuery",
     "MultiStepResult",
+    "RouteDecision",
+    "LinkedSchema",
+    "ToolCallingResult",
 ]

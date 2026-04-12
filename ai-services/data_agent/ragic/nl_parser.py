@@ -6,9 +6,9 @@
              unmatched or ambiguous queries. Three-tier confidence system.
              Date expressions are detected (not resolved) — the caller
              receives a flag so the router can return a clarification.
-@lastUpdate  2026-04-13 01:43:49
+@lastUpdate  2026-04-13 02:14:43
 @author      Daniel Chung
-@version     1.5.0
+@version     1.6.0
 """
 
 import logging
@@ -114,6 +114,10 @@ class RagicNLParser:
 
         elapsed_ms = (time.monotonic() - start) * 1000
 
+        resolved_query_type = (
+            matched_intent.query_type if matched_intent else "simple_filter"
+        )
+
         return ParseResult(
             intent_matched=intent_info,
             translated_params=translated,
@@ -123,6 +127,7 @@ class RagicNLParser:
             confidence=confidence,
             llm_fallback_failed=llm_fallback_failed,
             date_clarification_needed=needs_date_clarification,
+            query_type=resolved_query_type,
         )
 
     async def _detect_multi_table_intent(
@@ -183,6 +188,7 @@ class ParseResult:
         "confidence",
         "llm_fallback_failed",
         "date_clarification_needed",
+        "query_type",
     )
 
     def __init__(
@@ -195,6 +201,7 @@ class ParseResult:
         confidence: str = "low",
         llm_fallback_failed: bool = False,
         date_clarification_needed: bool = False,
+        query_type: str = "simple_filter",
     ) -> None:
         self.intent_matched = intent_matched
         self.translated_params = translated_params
@@ -204,3 +211,4 @@ class ParseResult:
         self.confidence = confidence
         self.llm_fallback_failed = llm_fallback_failed
         self.date_clarification_needed = date_clarification_needed
+        self.query_type = query_type

@@ -1,9 +1,9 @@
 """
 @file        router.py
 @description FastAPI routes for RagicDataAgent — query + schema + intent + NL endpoints.
-@lastUpdate  2026-04-12 23:43:06
+@lastUpdate  2026-04-13 02:14:43
 @author      Daniel Chung
-@version     1.8.0
+@version     1.9.0
 """
 
 import json
@@ -58,6 +58,7 @@ from data_agent.ragic.models import (
 from data_agent.ragic.intent_store import IntentVectorStore
 from data_agent.ragic.nl_parser import RagicNLParser
 from data_agent.ragic.query_engine import RagicQueryEngine
+from data_agent.ragic.query_router import route_query_with_text
 from data_agent.ragic.schema_store import RagicSchemaStore
 from data_agent.ragic.schema_sync import RagicSchemaSync
 
@@ -661,7 +662,10 @@ async def nl_query(request: NLQueryRequest) -> Union[NLQueryResponse, Response]:
             intent=intent_block,
         )
 
-    query_params = _nl_parser.translated_to_query_params(parsed.translated_params)
+    route_decision = await route_query_with_text(parsed, stripped)
+    routed_params = route_decision.translated_params
+
+    query_params = _nl_parser.translated_to_query_params(routed_params)
 
     if request.options.include_subtables:
         query_params.subtables = 1
@@ -695,7 +699,7 @@ async def nl_query(request: NLQueryRequest) -> Union[NLQueryResponse, Response]:
                 connection=account,
                 table_key=parsed.table_key,
                 query=request.query,
-                translated_params=parsed.translated_params,
+                translated_params=routed_params,
             ),
         )
 
@@ -777,7 +781,7 @@ async def nl_query(request: NLQueryRequest) -> Union[NLQueryResponse, Response]:
             table_key=parsed.table_key,
             output_format=request.output_format,
             query=request.query,
-            translated_params=parsed.translated_params,
+            translated_params=routed_params,
         ),
     )
 
