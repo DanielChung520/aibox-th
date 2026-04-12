@@ -2,9 +2,9 @@
 @file        intent_generator.py
 @description Auto-generate RagicIntent objects from ParsedTable list.
              Generates 3 actions × 3 languages = 9 intents per table.
-@lastUpdate  2026-04-11 17:12:44
+@lastUpdate  2026-04-13 01:43:49
 @author      Daniel Chung
-@version     1.0.0
+@version     1.1.0
 """
 
 from __future__ import annotations
@@ -20,94 +20,23 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _TRAD_TO_SIMP: dict[str, str] = {
-    "採購": "采购",
-    "銷售": "销售",
-    "庫存": "库存",
-    "供應商": "供应商",
-    "應收": "应收",
-    "應付": "应付",
-    "報價": "报价",
-    "訂單": "订单",
-    "發票": "发票",
-    "倉庫": "仓库",
-    "產品": "产品",
-    "物料": "物料",
-    "員工": "员工",
-    "薪資": "薪资",
-    "請假": "请假",
-    "審核": "审核",
-    "簽核": "签核",
-    "資料": "资料",
-    "數據": "数据",
-    "設備": "设备",
-    "維修": "维修",
-    "客戶": "客户",
-    "廠商": "厂商",
-    "單": "单",
-    "項": "项",
-    "點": "点",
-    "條": "条",
-    "張": "张",
-    "據": "据",
-    "機": "机",
-    "開": "开",
-    "關": "关",
-    "門": "门",
-    "車": "车",
-    "號": "号",
-    "類": "类",
-    "價": "价",
-    "計": "计",
-    "總": "总",
-    "記": "记",
-    "錄": "录",
-    "對": "对",
-    "帳": "账",
-    "費": "费",
-    "預": "预",
-    "進": "进",
-    "過": "过",
-    "歷": "历",
-    "時": "时",
-    "間": "间",
-    "請": "请",
-    "問": "问",
-    "題": "题",
-    "業": "业",
-    "務": "务",
-    "現": "现",
-    "場": "场",
-    "查詢": "查询",
-    "顯示": "显示",
-    "清單": "清单",
-    "搜尋": "搜寻",
-    "篩選": "筛选",
-    "統計": "统计",
-    "報表": "报表",
-    "匯出": "汇出",
-    "品項": "品项",
-    "名稱": "名称",
-    "編號": "编号",
-    "規格": "规格",
-    "數量": "数量",
-    "金額": "金额",
-    "日期": "日期",
-    "狀態": "状态",
-    "備註": "备注",
-    "聯繫": "联系",
-    "電話": "电话",
-    "地址": "地址",
-    "管理": "管理",
-    "系統": "系统",
-    "權限": "权限",
-    "流程": "流程",
-    "範本": "范本",
-    "單據": "单据",
-    "繳款": "缴款",
-    "結算": "结算",
+    "採購": "采购", "銷售": "销售", "庫存": "库存", "供應商": "供应商",
+    "應收": "应收", "應付": "应付", "報價": "报价", "訂單": "订单",
+    "發票": "发票", "倉庫": "仓库", "產品": "产品", "員工": "员工",
+    "薪資": "薪资", "請假": "请假", "審核": "审核", "簽核": "签核",
+    "資料": "资料", "數據": "数据", "設備": "设备", "維修": "维修",
+    "客戶": "客户", "廠商": "厂商", "查詢": "查询", "顯示": "显示",
+    "清單": "清单", "搜尋": "搜寻", "篩選": "筛选", "統計": "统计",
+    "報表": "报表", "匯出": "汇出", "品項": "品项", "名稱": "名称",
+    "編號": "编号", "規格": "规格", "數量": "数量", "金額": "金额",
+    "狀態": "状态", "備註": "备注", "電話": "电话", "管理": "管理",
+    "系統": "系统", "權限": "权限", "流程": "流程", "單據": "单据",
+    "結算": "结算", "記錄": "记录", "預算": "预算", "進貨": "进货",
+    "單": "单", "項": "项", "條": "条", "張": "张", "號": "号",
+    "類": "类", "價": "价", "計": "计", "總": "总", "費": "费",
 }
 
-_ACTIONS = ("list", "count", "search")
+_ACTIONS = ("list", "count", "search", "filter")
 _LANGS = ("zh_tw", "zh_cn", "en")
 
 
@@ -200,6 +129,28 @@ def _search_patterns_en(name: str, field_names: list[str]) -> list[str]:
     return patterns
 
 
+def _filter_patterns_zh_tw(name: str, field_names: list[str]) -> list[str]:
+    patterns = [f"篩選{name}"]
+    for fname in field_names[:3]:
+        patterns.append(f"查詢{fname}是什麼的{name}")
+    return patterns
+
+
+def _filter_patterns_zh_cn(name: str, field_names: list[str]) -> list[str]:
+    cn = _to_simplified(name)
+    patterns = [f"筛选{cn}"]
+    for fname in field_names[:3]:
+        patterns.append(f"查询{_to_simplified(fname)}是什么的{cn}")
+    return patterns
+
+
+def _filter_patterns_en(name: str, field_names: list[str]) -> list[str]:
+    patterns = [f"Filter {name} by criteria"]
+    for fname in field_names[:3]:
+        patterns.append(f"Find {name} where {fname} equals")
+    return patterns
+
+
 _PATTERN_FUNCS: dict[
     str, dict[str, object]
 ] = {
@@ -212,12 +163,30 @@ _PATTERN_FUNCS: dict[
     "search_zh_tw": {"fn": _search_patterns_zh_tw, "needs_fields": True},
     "search_zh_cn": {"fn": _search_patterns_zh_cn, "needs_fields": True},
     "search_en": {"fn": _search_patterns_en, "needs_fields": True},
+    "filter_zh_tw": {"fn": _filter_patterns_zh_tw, "needs_fields": True},
+    "filter_zh_cn": {"fn": _filter_patterns_zh_cn, "needs_fields": True},
+    "filter_en": {"fn": _filter_patterns_en, "needs_fields": True},
 }
 
 _DESC_TEMPLATES: dict[str, str] = {
     "list": "列出{name}所有記錄",
     "count": "統計{name}記錄數量",
     "search": "搜尋/篩選{name}記錄",
+    "filter": "依條件篩選{name}記錄",
+}
+
+_ACTION_QUERY_TYPE: dict[str, str] = {
+    "list": "simple_filter",
+    "count": "aggregate",
+    "search": "simple_filter",
+    "filter": "simple_filter",
+}
+
+_ACTION_GENERATION_STRATEGY: dict[str, str] = {
+    "list": "tool_calling",
+    "count": "tool_calling",
+    "search": "tool_calling",
+    "filter": "tool_calling",
 }
 
 
@@ -237,6 +206,8 @@ class IntentGenerator:
             table_id = mapped.get("table_id", "")
             sheet_key = mapped.get("sheet_key", "")
             field_names = [f.name for f in table.fields]
+            core = field_names[:5]
+            group = f"{table.tab_name}-{table.table_name}" if table.tab_name else table.table_name
             for action in _ACTIONS:
                 for lang in _LANGS:
                     key = f"{action}_{lang}"
@@ -249,14 +220,21 @@ class IntentGenerator:
                         patterns = fn(table.table_name)  # type: ignore[operator]
                     intents.append(
                         RagicIntent(
-                            account=account,
                             intent_id=intent_id,
+                            agent_scope="data_agent",
+                            account=account,
+                            name=f"{table.table_name}-{action}",
                             nl_patterns=patterns,
                             description=_DESC_TEMPLATES[action].format(name=table.table_name),
                             action=action,
                             table_key=table_key,
                             table_id=table_id,
                             sheet_key=sheet_key,
+                            tables=[table_id] if table_id else [],
+                            group=group,
+                            core_fields=core,
+                            query_type=_ACTION_QUERY_TYPE[action],
+                            generation_strategy=_ACTION_GENERATION_STRATEGY[action],
                         )
                     )
         return intents

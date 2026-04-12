@@ -2,9 +2,9 @@
 @file        models.py
 @description Pydantic models for RagicDataAgent — API client, Schema, Intent, NL Parser, and QueryEngine types.
              Phase 9-11 models are in models_phase9.py and re-exported here.
-@lastUpdate  2026-04-12 08:50:59
+@lastUpdate  2026-04-13 01:43:49
 @author      Daniel Chung
-@version     1.7.0
+@version     1.8.0
 """
 
 from enum import Enum
@@ -177,23 +177,62 @@ class RagicFilterTemplate(BaseModel):
     value: str
 
 
-class RagicIntent(BaseModel):
-    """A single intent stored in Qdrant for NL → Ragic API matching."""
+class JoinKeyMapping(BaseModel):
+    """FK mapping for cross-table intent joins."""
 
-    account: str
+    source_table: str
+    source_field: str
+    target_table: str
+    target_field: str
+
+
+class RagicIntent(BaseModel):
+    """A single intent stored in intent_catalog (ArangoDB) and synced to Qdrant."""
+
     intent_id: str
-    nl_patterns: list[str] = Field(default_factory=list)
+    agent_scope: str = "data_agent"
+    account: str = ""
+    name: str = ""
     description: str = ""
+    status: str = "enabled"
+    priority: int = 0
+
     action: str = "list"
     table_key: str = ""
     table_id: str = ""
     sheet_key: str = ""
+    tables: list[str] = Field(default_factory=list)
+    group: str = ""
+    intent_type: str = ""
+    generation_strategy: str = ""
+
+    nl_patterns: list[str] = Field(default_factory=list)
+    nl_examples: list[str] = Field(default_factory=list)
+    core_fields: list[str] = Field(default_factory=list)
     filter_template: Optional[RagicFilterTemplate] = None
     api_template: str = ""
+    sql_template: str = ""
+    example_sqls: list[str] = Field(default_factory=list)
+    bpa_domain_intent: str = ""
+
+    query_type: str = "simple_filter"
+    tool_schema: Optional[dict[str, object]] = None
+    involved_tables: list[str] = Field(default_factory=list)
+    join_keys: list[JoinKeyMapping] = Field(default_factory=list)
+
+    expected_output: Optional[dict[str, object]] = None
+    difficulty_level: str = ""
+    golden_sql: str = ""
+    test_cases: list[dict[str, object]] = Field(default_factory=list)
+
+    created_at: str = ""
+    updated_at: str = ""
+    updated_by: str = ""
 
     @property
     def point_id_seed(self) -> str:
-        return f"{self.account}_intent_{self.intent_id}"
+        scope = self.agent_scope or "data_agent"
+        return f"{scope}_intent_{self.intent_id}"
 
 
 class IntentUpsertRequest(BaseModel):
@@ -350,22 +389,3 @@ class QueryEngineResult(BaseModel):
     execution_time_ms: float = 0.0
     table_key: str = ""
     connection: str = ""
-
-
-# ---------------------------------------------------------------------------
-# Phase 9-11: Re-export from models_phase9.py
-# ---------------------------------------------------------------------------
-
-from data_agent.ragic.models_phase9 import (  # noqa: E402, F401
-    GraphQueryResult,
-    GraphRelation,
-    ImportResult,
-    LinkedFieldRef,
-    LoadedFieldRef,
-    MultiStepQuery,
-    MultiStepResult,
-    ParsedField,
-    ParsedTable,
-    StepResult,
-    TableRelationEdge,
-)

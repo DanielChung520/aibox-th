@@ -1,5 +1,12 @@
 #!/usr/bin/env python3
-"""Seed Ragic Data Agent Intents into ArangoDB intent_catalog."""
+"""
+@file        seed_ragic_intents.py
+@description Seed Ragic Data Agent Intents into ArangoDB intent_catalog.
+             High-quality hand-crafted intents with AQL templates for da_table_data_ragic.
+@lastUpdate  2026-04-13 01:54:04
+@author      Daniel Chung
+@version     1.1.0
+"""
 
 import os
 import httpx
@@ -23,7 +30,10 @@ def rag_intent(
     aql_template: str,
     core_fields: list[str],
     nl_examples: list[str],
-) -> dict:
+    query_type: str = "simple_filter",
+    priority: int = 0,
+    difficulty_level: str = "",
+) -> dict[str, object]:
     return {
         "_key": intent_id,
         "intent_id": intent_id,
@@ -39,14 +49,19 @@ def rag_intent(
         "nl_examples": nl_examples,
         "example_sqls": [],
         "tool_name": "",
+        "query_type": query_type,
+        "involved_tables": [],
+        "join_keys": [],
+        "priority": priority,
+        "difficulty_level": difficulty_level,
         "status": "enabled",
         "created_at": "2026-04-02T12:00:00Z",
-        "updated_at": "2026-04-02T12:00:00Z",
+        "updated_at": "2026-04-13T01:54:00Z",
         "updated_by": "system",
     }
 
 
-INTENTS: list[dict] = [
+INTENTS: list[dict[str, object]] = [
 
     # ── Vendors (CONFIGURATIONFILE_10) ─────────────────────────────────────────
     rag_intent(
@@ -56,7 +71,10 @@ INTENTS: list[dict] = [
         intent_type="filter",
         group="採購-供應商",
         tables=["CONFIGURATIONFILE_10"],
-        strategy="template",
+        strategy="tool_calling",
+        query_type="simple_filter",
+        priority=10,
+        difficulty_level="easy",
         aql_template=(
             "FOR d IN da_table_data_ragic "
             "FILTER d.table_id == 'CONFIGURATIONFILE_10' "
@@ -86,7 +104,7 @@ INTENTS: list[dict] = [
         intent_type="filter",
         group="採購-供應商",
         tables=["CONFIGURATIONFILE_10"],
-        strategy="template",
+        strategy="tool_calling",
         aql_template=(
             "FOR d IN da_table_data_ragic "
             "FILTER d.table_id == 'CONFIGURATIONFILE_10' "
@@ -117,7 +135,7 @@ INTENTS: list[dict] = [
         intent_type="filter",
         group="採購-供應商",
         tables=["CONFIGURATIONFILE_10"],
-        strategy="template",
+        strategy="tool_calling",
         aql_template=(
             "FOR d IN da_table_data_ragic "
             "FILTER d.table_id == 'CONFIGURATIONFILE_10' "
@@ -157,7 +175,7 @@ INTENTS: list[dict] = [
         intent_type="filter",
         group="採購-品項",
         tables=["CONFIGURATIONFILE_9"],
-        strategy="template",
+        strategy="tool_calling",
         aql_template=(
             "FOR d IN da_table_data_ragic "
             "FILTER d.table_id == 'CONFIGURATIONFILE_9' "
@@ -187,7 +205,7 @@ INTENTS: list[dict] = [
         intent_type="filter",
         group="採購-品項",
         tables=["CONFIGURATIONFILE_9"],
-        strategy="template",
+        strategy="tool_calling",
         aql_template=(
             "FOR d IN da_table_data_ragic "
             "FILTER d.table_id == 'CONFIGURATIONFILE_9' "
@@ -216,7 +234,7 @@ INTENTS: list[dict] = [
         intent_type="filter",
         group="採購-品項",
         tables=["CONFIGURATIONFILE_9"],
-        strategy="small_llm",
+        strategy="tool_calling",
         aql_template=(
             "FOR d IN da_table_data_ragic "
             "FILTER d.table_id == 'CONFIGURATIONFILE_9' "
@@ -247,7 +265,7 @@ INTENTS: list[dict] = [
         intent_type="filter",
         group="倉儲-倉庫",
         tables=["CONFIGURATIONFILE_3"],
-        strategy="template",
+        strategy="tool_calling",
         aql_template=(
             "FOR d IN da_table_data_ragic "
             "FILTER d.table_id == 'CONFIGURATIONFILE_3' "
@@ -278,7 +296,7 @@ INTENTS: list[dict] = [
         intent_type="filter",
         group="採購-採購單",
         tables=["ERP_13"],
-        strategy="template",
+        strategy="tool_calling",
         aql_template=(
             "FOR d IN da_table_data_ragic "
             "FILTER d.table_id == 'ERP_13' "
@@ -312,7 +330,7 @@ INTENTS: list[dict] = [
         intent_type="filter",
         group="採購-採購單",
         tables=["ERP_13"],
-        strategy="template",
+        strategy="tool_calling",
         aql_template=(
             "FOR d IN da_table_data_ragic "
             "FILTER d.table_id == 'ERP_13' "
@@ -351,7 +369,7 @@ INTENTS: list[dict] = [
         intent_type="filter",
         group="採購-採購單",
         tables=["ERP_13"],
-        strategy="template",
+        strategy="tool_calling",
         aql_template=(
             "FOR d IN da_table_data_ragic "
             "FILTER d.table_id == 'ERP_13' "
@@ -383,7 +401,7 @@ INTENTS: list[dict] = [
         intent_type="filter",
         group="採購-採購單",
         tables=["ERP_13"],
-        strategy="template",
+        strategy="tool_calling",
         aql_template=(
             "FOR d IN da_table_data_ragic "
             "FILTER d.table_id == 'ERP_13' "
@@ -420,7 +438,7 @@ INTENTS: list[dict] = [
         intent_type="filter",
         group="採購-進貨",
         tables=["ERP_48"],
-        strategy="template",
+        strategy="tool_calling",
         aql_template=(
             "FOR d IN da_table_data_ragic "
             "FILTER d.table_id == 'ERP_48' "
@@ -454,7 +472,7 @@ INTENTS: list[dict] = [
         intent_type="filter",
         group="採購-進貨",
         tables=["ERP_48"],
-        strategy="template",
+        strategy="tool_calling",
         aql_template=(
             "FOR d IN da_table_data_ragic "
             "FILTER d.table_id == 'ERP_48' "
@@ -491,7 +509,7 @@ INTENTS: list[dict] = [
         intent_type="filter",
         group="採購-進貨",
         tables=["ERP_48"],
-        strategy="template",
+        strategy="tool_calling",
         aql_template=(
             "FOR d IN da_table_data_ragic "
             "FILTER d.table_id == 'ERP_48' "
@@ -522,7 +540,9 @@ INTENTS: list[dict] = [
         intent_type="aggregate",
         group="採購-進貨",
         tables=["ERP_48"],
-        strategy="small_llm",
+        strategy="tool_calling",
+        query_type="aggregate",
+        difficulty_level="medium",
         aql_template=(
             "FOR d IN da_table_data_ragic "
             "FILTER d.table_id == 'ERP_48' "
@@ -552,7 +572,7 @@ INTENTS: list[dict] = [
         intent_type="filter",
         group="銷貨-銷貨單",
         tables=["ERP_26"],
-        strategy="template",
+        strategy="tool_calling",
         aql_template=(
             "FOR d IN da_table_data_ragic "
             "FILTER d.table_id == 'ERP_26' "
@@ -585,7 +605,7 @@ INTENTS: list[dict] = [
         intent_type="filter",
         group="銷貨-銷貨單",
         tables=["ERP_26"],
-        strategy="template",
+        strategy="tool_calling",
         aql_template=(
             "FOR d IN da_table_data_ragic "
             "FILTER d.table_id == 'ERP_26' "
@@ -618,7 +638,7 @@ INTENTS: list[dict] = [
         intent_type="filter",
         group="銷貨-銷貨單",
         tables=["ERP_26"],
-        strategy="template",
+        strategy="tool_calling",
         aql_template=(
             "FOR d IN da_table_data_ragic "
             "FILTER d.table_id == 'ERP_26' "
@@ -650,7 +670,9 @@ INTENTS: list[dict] = [
         intent_type="aggregate",
         group="銷貨-銷貨單",
         tables=["ERP_26"],
-        strategy="small_llm",
+        strategy="tool_calling",
+        query_type="aggregate",
+        difficulty_level="medium",
         aql_template=(
             "FOR d IN da_table_data_ragic "
             "FILTER d.table_id == 'ERP_26' "
@@ -679,7 +701,7 @@ INTENTS: list[dict] = [
         intent_type="filter",
         group="倉儲-庫存",
         tables=["STOCK_16"],
-        strategy="template",
+        strategy="tool_calling",
         aql_template=(
             "FOR d IN da_table_data_ragic "
             "FILTER d.table_id == 'STOCK_16' "
@@ -711,7 +733,7 @@ INTENTS: list[dict] = [
         intent_type="filter",
         group="倉儲-庫存",
         tables=["STOCK_16"],
-        strategy="template",
+        strategy="tool_calling",
         aql_template=(
             "FOR d IN da_table_data_ragic "
             "FILTER d.table_id == 'STOCK_16' "
@@ -745,7 +767,7 @@ INTENTS: list[dict] = [
         intent_type="filter",
         group="倉儲-庫存",
         tables=["STOCK_16"],
-        strategy="template",
+        strategy="tool_calling",
         aql_template=(
             "FOR d IN da_table_data_ragic "
             "FILTER d.table_id == 'STOCK_16' "
@@ -776,7 +798,7 @@ INTENTS: list[dict] = [
         intent_type="filter",
         group="倉儲-庫存",
         tables=["STOCK_16"],
-        strategy="template",
+        strategy="tool_calling",
         aql_template=(
             "FOR d IN da_table_data_ragic "
             "FILTER d.table_id == 'STOCK_16' "
@@ -807,7 +829,7 @@ INTENTS: list[dict] = [
         intent_type="filter",
         group="倉儲-庫存",
         tables=["STOCK_16"],
-        strategy="template",
+        strategy="tool_calling",
         aql_template=(
             "FOR d IN da_table_data_ragic "
             "FILTER d.table_id == 'STOCK_16' "
@@ -844,7 +866,7 @@ INTENTS: list[dict] = [
         intent_type="filter",
         group="倉儲-庫存",
         tables=["STOCK_17"],
-        strategy="template",
+        strategy="tool_calling",
         aql_template=(
             "FOR d IN da_table_data_ragic "
             "FILTER d.table_id == 'STOCK_17' "
@@ -875,7 +897,7 @@ INTENTS: list[dict] = [
         intent_type="filter",
         group="倉儲-庫存",
         tables=["STOCK_17"],
-        strategy="template",
+        strategy="tool_calling",
         aql_template=(
             "FOR d IN da_table_data_ragic "
             "FILTER d.table_id == 'STOCK_17' "
@@ -906,7 +928,7 @@ INTENTS: list[dict] = [
         intent_type="filter",
         group="倉儲-庫存",
         tables=["STOCK_17"],
-        strategy="template",
+        strategy="tool_calling",
         aql_template=(
             "FOR d IN da_table_data_ragic "
             "FILTER d.table_id == 'STOCK_17' "
@@ -938,7 +960,7 @@ def seed() -> tuple[int, list[str]]:
     count = 0
     errors: list[str] = []
 
-    async def _seed():
+    async def _seed() -> None:
         nonlocal count
         async with httpx.AsyncClient(timeout=30.0) as client:
             for intent in INTENTS:

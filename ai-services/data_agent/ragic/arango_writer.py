@@ -2,9 +2,9 @@
 @file        arango_writer.py
 @description Write ParsedTable schemas, fields, and intents to ArangoDB collections
              (da_table_info_ragic, da_field_info_ragic, da_table_relation_ragic, intent_catalog).
-@lastUpdate  2026-04-12 21:06:05
+@lastUpdate  2026-04-13 01:43:49
 @author      Daniel Chung
-@version     1.3.0
+@version     1.4.0
 """
 
 from __future__ import annotations
@@ -220,23 +220,44 @@ class RagicArangoWriter:
     async def write_intents(self, intents: list[RagicIntent], account: str) -> int:
         docs: list[dict[str, object]] = []
         for intent in intents:
-            docs.append({
+            doc: dict[str, object] = {
                 "_key": intent.intent_id,
                 "intent_id": intent.intent_id,
-                "account": intent.account,
-                "agent_scope": "data_agent",
+                "account": intent.account or account,
+                "agent_scope": intent.agent_scope,
+                "name": intent.name,
                 "description": intent.description,
+                "status": intent.status,
+                "priority": intent.priority,
                 "action": intent.action,
                 "table_key": intent.table_key,
                 "table_id": intent.table_id,
                 "sheet_key": intent.sheet_key,
+                "tables": intent.tables,
+                "group": intent.group,
+                "intent_type": intent.intent_type,
+                "generation_strategy": intent.generation_strategy,
                 "nl_patterns": intent.nl_patterns,
+                "nl_examples": intent.nl_examples,
+                "core_fields": intent.core_fields,
                 "filter_template": (
                     intent.filter_template.model_dump()
                     if intent.filter_template
                     else None
                 ),
                 "api_template": intent.api_template,
+                "sql_template": intent.sql_template,
+                "example_sqls": intent.example_sqls,
+                "bpa_domain_intent": intent.bpa_domain_intent,
+                "query_type": intent.query_type,
+                "tool_schema": intent.tool_schema,
+                "involved_tables": intent.involved_tables,
+                "join_keys": [jk.model_dump() for jk in intent.join_keys],
+                "expected_output": intent.expected_output,
+                "difficulty_level": intent.difficulty_level,
+                "golden_sql": intent.golden_sql,
+                "test_cases": intent.test_cases,
                 "source": "auto_generated",
-            })
+            }
+            docs.append(doc)
         return await self._batch_upsert(_INTENT_COLLECTION, docs)

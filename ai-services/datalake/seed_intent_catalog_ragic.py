@@ -7,9 +7,9 @@
               - Group B: CFG9_ITEM, CFG3_WAREHOUSE (Items & Warehouses)
               - Group C: ERP48_PURCHASE_ORDER, CFG10_VENDOR (Purchase Orders & Vendors)
               Phase 2 (Groups D-F) remain as placeholders for future migration.
-@lastUpdate  2026-04-02 10:57:30
+@lastUpdate  2026-04-13 01:54:04
 @author      Daniel Chung
-@version     2.0.0
+@version     2.1.0
 """
 
 from .seed_intent_catalog_shared import make_doc, make_orch_doc, DA
@@ -27,7 +27,7 @@ GROUP_A = [
         intent_type="filter",
         group="員工管理",
         tables=["CFG7_EMPLOYEE"],
-        generation_strategy="template",
+        generation_strategy="tool_calling",
         sql_template=(
             'SELECT "1015428", "1015429", "1015495", "1015439", "1015444" '
             "FROM read_parquet('s3://ragic/employees/*.parquet') "
@@ -48,7 +48,8 @@ GROUP_A = [
         intent_type="aggregate",
         group="員工管理",
         tables=["CFG7_EMPLOYEE", "CFG2_DEPT"],
-        generation_strategy="template",
+        generation_strategy="tool_calling",
+        query_type="aggregate",
         sql_template=(
             'SELECT "1015495", COUNT(*) AS emp_count, COUNT(CASE WHEN "1015443" = \'在職\' THEN 1 END) AS active_count '
             "FROM read_parquet('s3://ragic/employees/*.parquet') "
@@ -69,7 +70,7 @@ GROUP_A = [
         intent_type="filter",
         group="員工管理",
         tables=["CFG7_EMPLOYEE"],
-        generation_strategy="template",
+        generation_strategy="tool_calling",
         sql_template=(
             'SELECT "1015428", "1015429", "1015444", "1015495", "1015496" '
             "FROM read_parquet('s3://ragic/employees/*.parquet') "
@@ -98,7 +99,7 @@ GROUP_B = [
         intent_type="filter",
         group="物料管理",
         tables=["CFG9_ITEM"],
-        generation_strategy="template",
+        generation_strategy="tool_calling",
         sql_template=(
             'SELECT "1015486", "1015483", "1018425", "1018426", "1018434", "1018430" '
             "FROM read_parquet('s3://ragic/items/*.parquet') "
@@ -119,7 +120,7 @@ GROUP_B = [
         intent_type="filter",
         group="物料管理",
         tables=["CFG3_WAREHOUSE"],
-        generation_strategy="template",
+        generation_strategy="tool_calling",
         sql_template=(
             'SELECT "1015398", "1015397", "1015403", "1015406", "1015402" '
             "FROM read_parquet('s3://ragic/warehouses/*.parquet') "
@@ -140,7 +141,8 @@ GROUP_B = [
         intent_type="aggregate",
         group="物料管理",
         tables=["CFG9_ITEM"],
-        generation_strategy="template",
+        generation_strategy="tool_calling",
+        query_type="aggregate",
         sql_template=(
             'SELECT "1018425", "1018426", COUNT(*) AS item_count, AVG("1018432") AS avg_cost '
             "FROM read_parquet('s3://ragic/items/*.parquet') "
@@ -168,7 +170,7 @@ GROUP_C = [
         intent_type="filter",
         group="採購管理",
         tables=["ERP48_PURCHASE_ORDER"],
-        generation_strategy="template",
+        generation_strategy="tool_calling",
         sql_template=(
             'SELECT "1023120", "1023123", "1023121", "1023122", "1023148" '
             "FROM read_parquet('s3://ragic/purchase_orders/*.parquet') "
@@ -189,7 +191,8 @@ GROUP_C = [
         intent_type="aggregate",
         group="採購管理",
         tables=["ERP48_PURCHASE_ORDER", "CFG10_VENDOR"],
-        generation_strategy="template",
+        generation_strategy="tool_calling",
+        query_type="aggregate",
         sql_template=(
             'SELECT "1023122", COUNT(*) AS po_count, SUM("1023148") AS total_amount, AVG("1023148") AS avg_amount '
             "FROM read_parquet('s3://ragic/purchase_orders/*.parquet') "
@@ -210,7 +213,8 @@ GROUP_C = [
         intent_type="aggregate",
         group="採購管理",
         tables=["ERP48_PURCHASE_ORDER"],
-        generation_strategy="template",
+        generation_strategy="tool_calling",
+        query_type="aggregate",
         sql_template=(
             'SELECT "1023120", "1023129", SUM("1023130") AS total_qty, SUM("1023131") AS received_qty, SUM("1023154") AS return_qty '
             "FROM read_parquet('s3://ragic/purchase_orders/*.parquet') "
@@ -239,7 +243,7 @@ GROUP_D = [
         intent_type="filter",
         group="銷售管理",
         tables=["SALES_ORDER"],
-        generation_strategy="template",
+        generation_strategy="tool_calling",
         sql_template=(
             "SELECT so_id, so_date, customer_id, so_amount, status "
             "FROM read_parquet('s3://ragic/sales_orders/*.parquet') "
@@ -259,7 +263,8 @@ GROUP_D = [
         intent_type="aggregate",
         group="銷售管理",
         tables=["SALES_ORDER"],
-        generation_strategy="template",
+        generation_strategy="tool_calling",
+        query_type="aggregate",
         sql_template=(
             "SELECT customer_id, SUM(so_amount) AS total_sales "
             "FROM read_parquet('s3://ragic/sales_orders/*.parquet') "
@@ -279,7 +284,8 @@ GROUP_D = [
         intent_type="aggregate",
         group="銷售管理",
         tables=["SALES_ORDER"],
-        generation_strategy="template",
+        generation_strategy="tool_calling",
+        query_type="aggregate",
         sql_template=(
             "SELECT status, COUNT(*) AS so_count, SUM(so_amount) AS total_amount "
             "FROM read_parquet('s3://ragic/sales_orders/*.parquet') "
@@ -307,7 +313,7 @@ GROUP_E = [
         intent_type="filter",
         group="生產管理",
         tables=["WORK_ORDER"],
-        generation_strategy="template",
+        generation_strategy="tool_calling",
         sql_template=(
             "SELECT wo_id, wo_date, product_id, quantity, status "
             "FROM read_parquet('s3://ragic/work_orders/*.parquet') "
@@ -327,7 +333,8 @@ GROUP_E = [
         intent_type="aggregate",
         group="生產管理",
         tables=["WORK_ORDER"],
-        generation_strategy="template",
+        generation_strategy="tool_calling",
+        query_type="aggregate",
         sql_template=(
             "SELECT status, COUNT(*) AS wo_count, SUM(quantity) AS total_quantity "
             "FROM read_parquet('s3://ragic/work_orders/*.parquet') "
@@ -347,7 +354,8 @@ GROUP_E = [
         intent_type="aggregate",
         group="生產管理",
         tables=["WORK_ORDER"],
-        generation_strategy="template",
+        generation_strategy="tool_calling",
+        query_type="aggregate",
         sql_template=(
             "SELECT product_id, AVG(unit_cost) AS avg_cost "
             "FROM read_parquet('s3://ragic/work_orders/*.parquet') "
@@ -375,7 +383,7 @@ GROUP_F = [
         intent_type="filter",
         group="財務管理",
         tables=["INVOICE"],
-        generation_strategy="template",
+        generation_strategy="tool_calling",
         sql_template=(
             "SELECT inv_id, inv_date, vendor_id, inv_amount, status "
             "FROM read_parquet('s3://ragic/invoices/*.parquet') "
@@ -395,7 +403,8 @@ GROUP_F = [
         intent_type="aggregate",
         group="財務管理",
         tables=["INVOICE"],
-        generation_strategy="template",
+        generation_strategy="tool_calling",
+        query_type="aggregate",
         sql_template=(
             "SELECT status, COUNT(*) AS inv_count, SUM(inv_amount) AS total_amount "
             "FROM read_parquet('s3://ragic/invoices/*.parquet') "
@@ -415,7 +424,8 @@ GROUP_F = [
         intent_type="aggregate",
         group="財務管理",
         tables=["INVOICE"],
-        generation_strategy="template",
+        generation_strategy="tool_calling",
+        query_type="aggregate",
         sql_template=(
             "SELECT vendor_id, SUM(inv_amount) AS payable_amount "
             "FROM read_parquet('s3://ragic/invoices/*.parquet') "

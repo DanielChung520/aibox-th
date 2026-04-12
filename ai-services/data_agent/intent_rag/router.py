@@ -8,9 +8,9 @@ keeping separate Qdrant collections.
 ArangoDB source: unified `intent_catalog` collection, filtered by `agent_scope`.
 Qdrant target: per-scope collection (see SCOPE_QDRANT_MAP).
 
-# Last Update: 2026-04-10 23:31:10
+# Last Update: 2026-04-13 01:43:49
 # Author: Daniel Chung
-# Version: 3.1.0
+# Version: 3.2.0
 """
 
 import logging
@@ -237,7 +237,11 @@ async def embed_sync(
                 "payload": {
                     "intent_id": intent_id,
                     "agent_scope": scope,
+                    "account": str(intent.get("account", "")),
+                    "name": str(intent.get("name", "")),
                     "description": description,
+                    "status": str(intent.get("status", "enabled")),
+                    "priority": intent.get("priority", 0),
                     "intent_type": str(intent.get("intent_type", "")),
                     "group": str(intent.get("group", "")),
                     "tables": intent.get("tables", []),
@@ -246,15 +250,20 @@ async def embed_sync(
                     "table_key": str(intent.get("table_key", "")),
                     "action": str(intent.get("action", "")),
                     "generation_strategy": str(
-                        intent.get("generation_strategy", "template")
+                        intent.get("generation_strategy", "tool_calling")
                     ),
+                    "query_type": str(
+                        intent.get("query_type", "simple_filter")
+                    ),
+                    "tool_schema": intent.get("tool_schema"),
+                    "involved_tables": intent.get("involved_tables", []),
+                    "join_keys": intent.get("join_keys", []),
                     "sql_template": str(intent.get("sql_template", "")),
                     "core_fields": intent.get("core_fields", []),
                     "nl_examples": nl_examples,
                     "nl_patterns": intent.get("nl_patterns", []),
                     "example_sqls": intent.get("example_sqls", []),
-                    "tool_name": str(intent.get("tool_name", "")),
-                    "name": str(intent.get("name", "")),
+                    "filter_template": intent.get("filter_template"),
                 },
             }
             points.append(point)

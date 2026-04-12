@@ -2,9 +2,9 @@
 @file        intent_store.py
 @description Qdrant-backed vector store for data query intents.
              Supports upsert, search (by vector similarity), list, and delete.
-@lastUpdate  2026-04-12 23:23:55
+@lastUpdate  2026-04-13 01:43:49
 @author      Daniel Chung
-@version     1.1.0
+@version     1.2.0
 """
 
 import hashlib
@@ -126,15 +126,26 @@ class IntentVectorStore:
 
             payload: dict[str, object] = {
                 "account": intent.account,
+                "agent_scope": intent.agent_scope,
                 "intent_id": intent.intent_id,
+                "name": intent.name,
                 "nl_patterns": intent.nl_patterns,
+                "nl_examples": intent.nl_examples,
                 "description": intent.description,
                 "action": intent.action,
                 "table_key": intent.table_key,
                 "table_id": intent.table_id,
                 "sheet_key": intent.sheet_key,
+                "tables": intent.tables,
+                "group": intent.group,
+                "core_fields": intent.core_fields,
                 "filter_template": filter_payload,
                 "api_template": intent.api_template,
+                "query_type": intent.query_type,
+                "tool_schema": intent.tool_schema,
+                "involved_tables": intent.involved_tables,
+                "join_keys": [jk.model_dump() for jk in intent.join_keys],
+                "generation_strategy": intent.generation_strategy,
             }
 
             points.append({
@@ -260,7 +271,7 @@ class IntentVectorStore:
 
     @staticmethod
     def payload_to_intent(payload: dict[str, object]) -> RagicIntent:
-        from data_agent.ragic.models import RagicFilterTemplate, RagicOperator
+        from data_agent.ragic.models import JoinKeyMapping, RagicFilterTemplate, RagicOperator
 
         filter_raw = payload.get("filter_template")
         filter_tpl: RagicFilterTemplate | None = None
@@ -277,19 +288,57 @@ class IntentVectorStore:
             )
 
         nl_raw = payload.get("nl_patterns", [])
-        nl_patterns: list[str] = []
-        if isinstance(nl_raw, list):
-            nl_patterns = [str(p) for p in nl_raw]
+        nl_patterns: list[str] = [str(p) for p in nl_raw] if isinstance(nl_raw, list) else []
+
+        nl_ex_raw = payload.get("nl_examples", [])
+        nl_examples: list[str] = [str(p) for p in nl_ex_raw] if isinstance(nl_ex_raw, list) else []
+
+        tables_raw = payload.get("tables", [])
+        tables: list[str] = [str(t) for t in tables_raw] if isinstance(tables_raw, list) else []
+
+        core_raw = payload.get("core_fields", [])
+        core_fields: list[str] = [str(f) for f in core_raw] if isinstance(core_raw, list) else []
+
+        involved_raw = payload.get("involved_tables", [])
+        involved: list[str] = [str(t) for t in involved_raw] if isinstance(involved_raw, list) else []
+
+        join_keys_raw = payload.get("join_keys", [])
+        join_keys: list[JoinKeyMapping] = []
+        if isinstance(join_keys_raw, list):
+            for jk in join_keys_raw:
+                if isinstance(jk, dict):
+                    join_keys.append(JoinKeyMapping(
+                        source_table=str(jk.get("source_table", "")),
+                        source_field=str(jk.get("source_field", "")),
+                        target_table=str(jk.get("target_table", "")),
+                        target_field=str(jk.get("target_field", "")),
+                    ))
+
+        tool_schema_raw = payload.get("tool_schema")
+        tool_schema: dict[str, object] | None = (
+            dict(tool_schema_raw) if isinstance(tool_schema_raw, dict) else None
+        )
 
         return RagicIntent(
-            account=str(payload.get("account", "")),
             intent_id=str(payload.get("intent_id", "")),
+            agent_scope=str(payload.get("agent_scope", "data_agent")),
+            account=str(payload.get("account", "")),
+            name=str(payload.get("name", "")),
             nl_patterns=nl_patterns,
+            nl_examples=nl_examples,
             description=str(payload.get("description", "")),
             action=str(payload.get("action", "list")),
             table_key=str(payload.get("table_key", "")),
             table_id=str(payload.get("table_id", "")),
             sheet_key=str(payload.get("sheet_key", "")),
+            tables=tables,
+            group=str(payload.get("group", "")),
+            core_fields=core_fields,
             filter_template=filter_tpl,
             api_template=str(payload.get("api_template", "")),
+            query_type=str(payload.get("query_type", "simple_filter")),
+            tool_schema=tool_schema,
+            involved_tables=involved,
+            join_keys=join_keys,
+            generation_strategy=str(payload.get("generation_strategy", "")),
         )

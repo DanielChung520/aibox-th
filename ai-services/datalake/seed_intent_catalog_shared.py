@@ -3,9 +3,9 @@
 @file        seed_intent_catalog_shared.py
 @description Shared utilities for intent catalog seeding: constants, helper functions,
              and document builders used by SAP and Ragic intent modules.
-@lastUpdate  2026-03-29 02:42:47
+@lastUpdate  2026-04-13 01:54:04
 @author      Daniel Chung
-@version     1.0.0
+@version     1.1.0
 """
 
 import json
@@ -26,8 +26,7 @@ ORCH = "orchestrator"
 # ---------------------------------------------------------------------------
 
 
-def curl_post_doc(docs: list) -> list:
-    """Bulk upsert via ArangoDB document API (overwriteMode=replace)."""
+def curl_post_doc(docs: list[dict[str, object]]) -> list[dict[str, object]]:
     payload = json.dumps(docs)
     r = subprocess.run(
         [
@@ -45,11 +44,13 @@ def curl_post_doc(docs: list) -> list:
         ],
         capture_output=True,
         text=True,
+        check=False,
     )
-    return json.loads(r.stdout)
+    result: list[dict[str, object]] = json.loads(r.stdout)
+    return result
 
 
-def insert_batch(docs: list, label: str) -> None:
+def insert_batch(docs: list[dict[str, object]], label: str) -> None:
     result = curl_post_doc(docs)
     errors = 0
     if isinstance(result, list):
@@ -71,15 +72,23 @@ def make_doc(
     description: str,
     intent_type: str,
     group: str,
-    tables: list,
+    tables: list[str],
     generation_strategy: str,
     sql_template: str,
-    core_fields: list,
-    nl_examples: list,
-    example_sqls: list | None = None,
+    core_fields: list[str],
+    nl_examples: list[str],
+    example_sqls: list[str] | None = None,
     tool_name: str = "",
-) -> dict:
-    return {
+    query_type: str = "simple_filter",
+    tool_schema: dict[str, object] | None = None,
+    involved_tables: list[str] | None = None,
+    join_keys: list[dict[str, str]] | None = None,
+    expected_output: dict[str, object] | None = None,
+    difficulty_level: str = "",
+    golden_sql: str = "",
+    priority: int = 0,
+) -> dict[str, object]:
+    doc: dict[str, object] = {
         "_key": intent_id,
         "intent_id": intent_id,
         "agent_scope": agent_scope,
@@ -94,11 +103,24 @@ def make_doc(
         "nl_examples": nl_examples,
         "example_sqls": example_sqls or [],
         "tool_name": tool_name,
+        "query_type": query_type,
+        "involved_tables": involved_tables or [],
+        "join_keys": join_keys or [],
+        "priority": priority,
         "status": "enabled",
         "created_at": TS,
         "updated_at": TS,
         "updated_by": "system",
     }
+    if tool_schema:
+        doc["tool_schema"] = tool_schema
+    if expected_output:
+        doc["expected_output"] = expected_output
+    if difficulty_level:
+        doc["difficulty_level"] = difficulty_level
+    if golden_sql:
+        doc["golden_sql"] = golden_sql
+    return doc
 
 
 def make_orch_doc(
@@ -114,7 +136,7 @@ def make_orch_doc(
     confidence_threshold: float = 0.7,
     priority: int = 0,
     response_strategy: str = "",  # "direct_llm" | "handoff_bpa" | "confirm_then_execute" | "clarify_first"
-) -> dict:
+) -> dict[str, object]:
     """Build an orchestrator intent document (BPA routing model v2).
 
     response_strategy 語義：
@@ -123,7 +145,7 @@ def make_orch_doc(
       confirm_then_execute - 展示計劃給用戶確認後再執行（寫入/操作類）
       clarify_first        - 先反問用戶釐清意圖（信心度低、意圖模糊時）
     """
-    doc: dict = {
+    doc: dict[str, object] = {
         "_key": intent_id,
         "intent_id": intent_id,
         "agent_scope": ORCH,
