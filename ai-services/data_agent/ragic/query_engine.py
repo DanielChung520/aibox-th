@@ -1,15 +1,18 @@
 """
 @file        query_engine.py
 @description Ragic query execution engine — auto-pagination, field-name
-             resolution via Schema, and result formatting.
-@lastUpdate  2026-04-11 13:17:39
+             resolution via ArangoDB da_field_info_ragic, and result formatting.
+@lastUpdate  2026-04-12 22:39:13
 @author      Daniel Chung
-@version     1.0.0
+@version     1.1.0
 """
 
 import logging
 import math
+import os
 import time
+
+import httpx
 
 from data_agent.ragic.client import RagicAPIClient
 from data_agent.ragic.models import (
@@ -17,19 +20,19 @@ from data_agent.ragic.models import (
     QueryEngineResult,
     RagicQueryParams,
     RagicRecord,
-    RagicTableSchema,
 )
-from data_agent.ragic.schema_store import RagicSchemaStore
 
 logger = logging.getLogger(__name__)
 
+ARANGO_URL = os.getenv("ARANGO_URL", "http://localhost:8529")
+ARANGO_DB = os.getenv("ARANGO_DATABASE", "abc_desktop")
+ARANGO_USER = os.getenv("ARANGO_USER", "root")
+ARANGO_PASSWORD = os.getenv("ARANGO_PASSWORD", "abc_desktop_2026")
+
 
 class RagicQueryEngine:
-    def __init__(
-        self,
-        schema_store: RagicSchemaStore | None = None,
-    ) -> None:
-        self._schemas = schema_store or RagicSchemaStore()
+    def __init__(self) -> None:
+        pass
 
     async def execute(
         self,
@@ -87,31 +90,33 @@ class RagicQueryEngine:
             return {}
 
         try:
-            hits = await self._schemas.search(
-                query=table_key,
-                account=account,
-                top_k=1,
-                score_threshold=0.2,
+            aql = (
+                "FOR t IN da_table_info_ragic "
+                'FILTER CONCAT(t.tab, "/", t.sheet_number) == @table_key '
+                "FOR f IN da_field_info_ragic "
+                "FILTER f.table_id == t._key "
+                "RETURN {field_id: f.field_id, field_name: f.field_name}"
             )
-            if not hits:
-                return {}
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                resp = await client.post(
+                    f"{ARANGO_URL}/_db/{ARANGO_DB}/_api/cursor",
+                    json={"query": aql, "bindVars": {"table_key": table_key}},
+                    auth=(ARANGO_USER, ARANGO_PASSWORD),
+                )
+                resp.raise_for_status()
 
-            payload = hits[0].get("payload", {})
-            if not isinstance(payload, dict):
-                return {}
+            labels: dict[str, str] = {}
+            for row in resp.json().get("result", []):
+                fid = str(row.get("field_id", ""))
+                fname = str(row.get("field_name", ""))
+                if fid and fname:
+                    labels[fid] = fname
 
-            schema = RagicSchemaStore.payload_to_schema(payload)
-            return self._extract_field_labels(schema)
+            logger.debug("Loaded %d field labels for %s", len(labels), table_key)
+            return labels
         except Exception as exc:
             logger.debug("Failed to load field labels for %s: %s", table_key, exc)
             return {}
-
-    @staticmethod
-    def _extract_field_labels(schema: RagicTableSchema) -> dict[str, str]:
-        labels: dict[str, str] = {}
-        for field_id, field_schema in schema.fields.items():
-            labels[field_id] = field_schema.name
-        return labels
 
     @staticmethod
     def _format_records(

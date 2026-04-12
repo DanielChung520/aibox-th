@@ -18,7 +18,7 @@ from datetime import date
 
 import httpx
 
-from data_agent.ragic.intent_store import RagicIntentStore
+from data_agent.ragic.intent_store import IntentVectorStore
 from data_agent.ragic.models import (
     MatchedIntentInfo,
     NLQueryOptions,
@@ -48,10 +48,10 @@ async def _get_small_model() -> str:
 class RagicNLParser:
     def __init__(
         self,
-        intent_store: RagicIntentStore | None = None,
+        intent_store: IntentVectorStore | None = None,
         schema_store: RagicSchemaStore | None = None,
     ) -> None:
-        self._intents = intent_store or RagicIntentStore()
+        self._intents = intent_store or IntentVectorStore()
         self._schemas = schema_store or RagicSchemaStore()
 
     async def parse(
@@ -66,7 +66,6 @@ class RagicNLParser:
 
         intent_hits = await self._intents.search(
             query=query,
-            account=account,
             top_k=3,
             score_threshold=0.3,
         )
@@ -78,7 +77,7 @@ class RagicNLParser:
             best = intent_hits[0]
             payload = best.get("payload", {})
             if isinstance(payload, dict):
-                matched_intent = RagicIntentStore.payload_to_intent(payload)
+                matched_intent = IntentVectorStore.payload_to_intent(payload)
                 raw_score = best.get("score", 0.0)
                 match_score = float(raw_score) if isinstance(raw_score, (int, float)) else 0.0
 
@@ -136,7 +135,7 @@ class RagicNLParser:
         self, query: str, account: str | None
     ) -> tuple[bool, list[str]]:
         hits = await self._intents.search(
-            query=query, account=account, top_k=5, score_threshold=0.3
+            query=query, top_k=5, score_threshold=0.3
         )
         if len(hits) < 2:
             return False, []
