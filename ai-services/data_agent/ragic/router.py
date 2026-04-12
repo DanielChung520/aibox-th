@@ -1,9 +1,9 @@
 """
 @file        router.py
 @description FastAPI routes for RagicDataAgent — query + schema + intent + NL endpoints.
-@lastUpdate  2026-04-12 08:50:59
+@lastUpdate  2026-04-12 23:43:06
 @author      Daniel Chung
-@version     1.7.0
+@version     1.8.0
 """
 
 import json
@@ -488,7 +488,6 @@ async def intent_count() -> IntentCountResponse:
 
 _nl_parser = RagicNLParser(
     intent_store=_intent_store,
-    schema_store=_schema_store,
 )
 
 _query_engine = RagicQueryEngine()
@@ -579,6 +578,27 @@ async def nl_query(request: NLQueryRequest) -> Union[NLQueryResponse, Response]:
             confidence=confidence,
             action=parsed.intent_matched.action,
             table_key=parsed.intent_matched.table_key,
+        )
+
+    if parsed.date_clarification_needed:
+        return NLQueryResponse(
+            code=6,
+            status="clarification_needed",
+            clarification=NLClarification(
+                message="查詢包含日期描述但未提供具體日期範圍，請提供明確的起迄日期",
+                suggestions=[
+                    "請提供具體日期範圍，例如：2026/03/01 ~ 2026/03/31",
+                    "查詢 2026年3月 的進貨單",
+                    "查詢 2026/03/01 到 2026/03/31 的進貨單",
+                ],
+            ),
+            intent=intent_block,
+            metadata=NLQueryMetadata(
+                connection=account,
+                table_key=parsed.table_key,
+                query=request.query,
+                translated_params=parsed.translated_params,
+            ),
         )
 
     if confidence == "low":
