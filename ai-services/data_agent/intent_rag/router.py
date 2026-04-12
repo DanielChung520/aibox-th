@@ -217,12 +217,14 @@ async def embed_sync(
             intent_id = str(intent.get("intent_id", intent.get("_key", "")))
             description = str(intent.get("description", ""))
             nl_examples = intent.get("nl_examples", [])
+            nl_patterns = intent.get("nl_patterns", [])
 
             embed_parts = [description]
-            if isinstance(nl_examples, list):
-                for ex in nl_examples:
-                    if isinstance(ex, str):
-                        embed_parts.append(ex)
+            for source in (nl_examples, nl_patterns):
+                if isinstance(source, list):
+                    for ex in source:
+                        if isinstance(ex, str) and ex not in embed_parts:
+                            embed_parts.append(ex)
             embed_text = " ".join(embed_parts)
 
             embedding = await get_embedding(embed_text)

@@ -224,7 +224,7 @@ class RagicArangoWriter:
                 "_key": intent.intent_id,
                 "intent_id": intent.intent_id,
                 "account": intent.account,
-                "scope": "data_agent",
+                "agent_scope": "data_agent",
                 "description": intent.description,
                 "action": intent.action,
                 "table_key": intent.table_key,
