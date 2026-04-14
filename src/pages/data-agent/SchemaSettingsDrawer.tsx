@@ -207,7 +207,7 @@ export default function SchemaSettingsDrawer({ open, onClose }: SchemaSettingsDr
       <Spin spinning={loading}>
         <Form form={form} layout="vertical" initialValues={DEFAULTS}>
           {/* ─── Embedding 設置 ─── */}
-          <Divider orientation="left" plain>
+          <Divider titlePlacement="left" plain>
             <Space>
               <SettingOutlined />
               <Text strong>Embedding 設置</Text>
@@ -240,7 +240,7 @@ export default function SchemaSettingsDrawer({ open, onClose }: SchemaSettingsDr
           </Form.Item>
 
           {/* ─── LLM 設置 ─── */}
-          <Divider orientation="left" plain>
+          <Divider titlePlacement="left" plain>
             <Space>
               <RobotOutlined />
               <Text strong>LLM 設置</Text>
@@ -266,7 +266,7 @@ export default function SchemaSettingsDrawer({ open, onClose }: SchemaSettingsDr
           </Form.Item>
 
           {/* ─── 查詢參數 ─── */}
-          <Divider orientation="left" plain>
+          <Divider titlePlacement="left" plain>
             <Space>
               <AimOutlined />
               <Text strong>查詢參數</Text>

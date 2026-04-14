@@ -214,20 +214,18 @@ def parse_llm_response(
 
 
 async def load_schema_from_arango(table_key: str) -> str:
-    """Load table field schema from ArangoDB via AQL JOIN.
+    """Load table field schema from ArangoDB da_tables.
 
     Args:
-        table_key: Table identifier (e.g. "configuration-file/10").
+        table_key: Table identifier (e.g. "RAGICPURCHASING_1").
 
     Returns:
         Multi-line string of "  field_id: field_name" entries, or empty string on error.
     """
     aql = (
-        "FOR t IN da_table_info_ragic "
-        'FILTER CONCAT(t.tab, "/", t.sheet_number) == @table_key '
-        "FOR f IN da_field_info_ragic "
-        "FILTER f.table_id == t._key "
-        "RETURN {field_id: f.field_id, field_name: f.field_name}"
+        "FOR d IN da_tables "
+        "FILTER d._key == @table_key "
+        "RETURN d.fields"
     )
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
@@ -243,8 +241,27 @@ async def load_schema_from_arango(table_key: str) -> str:
 
     parts: list[str] = []
     for row in resp.json().get("result", []):
-        fid = str(row.get("field_id", ""))
-        fname = str(row.get("field_name", ""))
-        if fid and fname:
-            parts.append(f"  {fid}: {fname}")
+        if isinstance(row, dict):
+            for fid, fdata in row.items():
+                if isinstance(fdata, dict):
+                    fname = fdata.get("name", "")
+                    if fname and fid:
+                        parts.append(f"  {fid}: {fname}")
     return "\n".join(parts)
+
+
+async def load_schemas_for_tables(table_keys: list[str]) -> str:
+    """Load schemas for multiple tables for Phase 2 LLM Schema Injection.
+
+    Args:
+        table_keys: List of table identifiers (max 5).
+
+    Returns:
+        Multi-section schema string for prompt context.
+    """
+    schemas: list[str] = []
+    for tk in table_keys[:5]:
+        schema = await load_schema_from_arango(tk)
+        if schema:
+            schemas.append(f"### {tk}\n{schema}")
+    return "\n\n".join(schemas)

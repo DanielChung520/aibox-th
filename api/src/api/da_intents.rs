@@ -82,9 +82,14 @@ async fn list_catalog(
         bind_entries.push(("generation_strategy".to_string(), serde_json::json!(strategy)));
     }
 
+    if let Some(table_key) = params.get("table_key").filter(|v| !v.trim().is_empty()) {
+        filters.push("d.table_key == @table_key".to_string());
+        bind_entries.push(("table_key".to_string(), serde_json::json!(table_key)));
+    }
+
     if let Some(search) = params.get("search").filter(|v| !v.trim().is_empty()) {
         filters.push(
-            "(LIKE(d.description, CONCAT('%', @search, '%'), true) || LIKE(d.intent_id, CONCAT('%', @search, '%'), true))"
+            "(LIKE(d.description, CONCAT('%', @search, '%'), true) || LIKE(d.intent_id, CONCAT('%', @search, '%'), true) || LIKE(d.name, CONCAT('%', @search, '%'), true))"
                 .to_string(),
         );
         bind_entries.push(("search".to_string(), serde_json::json!(search)));
@@ -318,7 +323,7 @@ async fn feedback_intent(
 
 /// Proxy POST /api/v1/da/intents/sync-qdrant → data_agent:8003/intent-rag/embed-sync
 async fn proxy_sync_qdrant(Json(payload): Json<Value>) -> Result<impl IntoResponse, StatusCode> {
-    let url = format!("{}/intent-rag/embed-sync", CONFIG.ai_services.data_agent_url);
+    let url = format!("{}/intent-rag/data_agent/embed-sync", CONFIG.ai_services.data_agent_url);
 
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(120))

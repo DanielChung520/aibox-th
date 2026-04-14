@@ -1,10 +1,10 @@
 """
 @file        query_engine.py
 @description Ragic query execution engine — auto-pagination, field-name
-             resolution via ArangoDB da_field_info_ragic, and result formatting.
-@lastUpdate  2026-04-12 22:39:13
+             resolution via ArangoDB da_tables, and result formatting.
+@lastUpdate  2026-04-13
 @author      Daniel Chung
-@version     1.1.0
+@version     2.0.0
 """
 
 import logging
@@ -91,11 +91,9 @@ class RagicQueryEngine:
 
         try:
             aql = (
-                "FOR t IN da_table_info_ragic "
-                'FILTER CONCAT(t.tab, "/", t.sheet_number) == @table_key '
-                "FOR f IN da_field_info_ragic "
-                "FILTER f.table_id == t._key "
-                "RETURN {field_id: f.field_id, field_name: f.field_name}"
+                "FOR d IN da_tables "
+                "FILTER d._key == @table_key "
+                "RETURN d.fields"
             )
             async with httpx.AsyncClient(timeout=15.0) as client:
                 resp = await client.post(
@@ -106,11 +104,15 @@ class RagicQueryEngine:
                 resp.raise_for_status()
 
             labels: dict[str, str] = {}
-            for row in resp.json().get("result", []):
-                fid = str(row.get("field_id", ""))
-                fname = str(row.get("field_name", ""))
-                if fid and fname:
-                    labels[fid] = fname
+            result = resp.json().get("result", [])
+            if result and isinstance(result[0], dict):
+                fields = result[0]
+                if isinstance(fields, dict):
+                    for fid, fdata in fields.items():
+                        if isinstance(fdata, dict):
+                            fname = fdata.get("name", "")
+                            if fname and fid:
+                                labels[fid] = fname
 
             logger.debug("Loaded %d field labels for %s", len(labels), table_key)
             return labels

@@ -8,9 +8,9 @@ keeping separate Qdrant collections.
 ArangoDB source: unified `intent_catalog` collection, filtered by `agent_scope`.
 Qdrant target: per-scope collection (see SCOPE_QDRANT_MAP).
 
-# Last Update: 2026-04-13 01:43:49
+# Last Update: 2026-04-13 06:08:56
 # Author: Daniel Chung
-# Version: 3.2.0
+# Version: 3.3.0
 """
 
 import logging
@@ -36,7 +36,7 @@ ARANGO_PASSWORD = os.getenv("ARANGO_PASSWORD", "abc_desktop_2026")
 MATCH_THRESHOLD_DEFAULT = float(os.getenv("MATCH_THRESHOLD", "0.45"))
 
 SCOPE_QDRANT_MAP: dict[str, str] = {
-    "data_agent": "data_agent_intents",
+    "data_agent": "da_intents",
     "orchestrator": "orchestrator_intents",
 }
 
@@ -186,11 +186,31 @@ async def list_ollama_models(
 async def embed_sync(
     scope: str = PathParam(..., description="Agent scope"),
 ) -> EmbedSyncResponse:
-    """Sync intents from ArangoDB intent_catalog to Qdrant for given scope."""
+    """Sync intents from ArangoDB to Qdrant for given scope.
+
+    data_agent reads from da_intents collection.
+    orchestrator reads from intent_catalog.
+    """
     qdrant_collection = _resolve_qdrant_collection(scope)
 
     try:
-        intents = await fetch_intents_from_arango(scope)
+        # Determine source collection based on scope
+        if scope == "data_agent":
+            aql = "FOR d IN da_intents RETURN d"
+        else:
+            aql = f"FOR d IN intent_catalog FILTER d.agent_scope == '{scope}' RETURN d"
+
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                f"{ARANGO_URL}/_db/{ARANGO_DB}/_api/cursor",
+                json={"query": aql},
+                auth=(ARANGO_USER, ARANGO_PASSWORD),
+            )
+            if response.status_code in (200, 201):
+                intents = response.json().get("result", [])
+            else:
+                intents = []
+
         if not intents:
             return EmbedSyncResponse(
                 synced_count=0,
@@ -327,9 +347,14 @@ async def match_intent(
             if score < match_threshold:
                 continue
             payload = r.get("payload", {})
+            intent_id = str(
+                payload.get("intent_id")
+                or payload.get("expression_key", "")
+                or payload.get("_key", "")
+            )
             matches.append(
                 IntentMatchResult(
-                    intent_id=str(payload.get("intent_id", "")),
+                    intent_id=intent_id,
                     score=score,
                     intent_data=payload,
                 )

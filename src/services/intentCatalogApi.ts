@@ -1,9 +1,9 @@
 /**
  * @file        Unified Intent Catalog API 服務層
  * @description 統一意圖目錄 CRUD 接口，以 agent_scope 區分 orchestrator / data_agent
- * @lastUpdate  2026-03-29 02:42:47
+ * @lastUpdate  2026-04-13 03:37:18
  * @author      Daniel Chung
- * @version     1.3.0
+ * @version     1.4.0
  */
 
 import api from './api';
@@ -47,6 +47,16 @@ export interface IntentCatalogEntry {
   table_key?: string;
   action?: string;
   nl_patterns?: string[];
+
+  // ── B+C 混合架構擴充（兩階段意圖路由） ──
+  query_type?: 'simple_filter' | 'aggregate' | 'cross_table' | 'time_series';
+  tool_schema?: Record<string, unknown>;
+  involved_tables?: string[];
+  join_keys?: Record<string, unknown>[];
+  expected_output?: Record<string, unknown>;
+  difficulty_level?: 'easy' | 'medium' | 'hard';
+  golden_sql?: string;
+  test_cases?: Record<string, unknown>[];
 }
 
 export interface IntentCatalogListResponse {
@@ -70,6 +80,7 @@ export interface IntentCatalogListParams {
   group?: string;
   generation_strategy?: string;
   response_strategy?: string;
+  query_type?: string;
 }
 
 // ==================== API ====================

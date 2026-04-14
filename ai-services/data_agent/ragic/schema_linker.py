@@ -2,11 +2,10 @@
 @file        schema_linker.py
 @description Links a matched intent to its table's field schema from ArangoDB,
              then builds a JSON Schema enum constraint for tool-calling.
-             Flow: intent.table_key → da_table_info_ragic → da_field_info_ragic
-             → LinkedSchema (tool_schema + field_label_map).
-@lastUpdate  2026-04-13 02:14:43
+             Flow: intent.table_key → da_tables.fields → LinkedSchema.
+@lastUpdate  2026-04-13
 @author      Daniel Chung
-@version     1.0.0
+@version     2.0.0
 """
 
 import logging
@@ -58,24 +57,18 @@ class LinkedSchema:
 async def load_fields_from_arango(
     table_key: str,
 ) -> list[dict[str, str]]:
-    """Load field definitions from ArangoDB for a given table_key.
-
-    Uses the same JOIN pattern as query_engine._load_field_labels:
-    da_table_info_ragic JOIN da_field_info_ragic on table_id == t._key.
+    """Load field definitions from ArangoDB da_tables for a given table_key.
 
     Args:
-        table_key: e.g. "configuration-file/10" (tab/sheet_number).
+        table_key: Table identifier (e.g. "RAGICPURCHASING_1").
 
     Returns:
         List of dicts with field_id, field_name, field_type keys.
     """
     aql = (
-        "FOR t IN da_table_info_ragic "
-        'FILTER CONCAT(t.tab, "/", t.sheet_number) == @table_key '
-        "FOR f IN da_field_info_ragic "
-        "FILTER f.table_id == t._key "
-        "RETURN {field_id: f.field_id, field_name: f.field_name, "
-        "field_type: TO_STRING(f.field_type)}"
+        "FOR d IN da_tables "
+        "FILTER d._key == @table_key "
+        "RETURN d.fields"
     )
     try:
         async with httpx.AsyncClient(timeout=10.0) as http:
@@ -90,15 +83,32 @@ async def load_fields_from_arango(
         return []
 
     rows: list[dict[str, str]] = []
-    for row in resp.json().get("result", []):
-        fid = str(row.get("field_id", ""))
-        fname = str(row.get("field_name", ""))
-        if fid and fname:
-            rows.append({
-                "field_id": fid,
-                "field_name": fname,
-                "field_type": str(row.get("field_type", "text")),
-            })
+    result = resp.json().get("result", [])
+    if result:
+        raw_fields = result[0]
+        if isinstance(raw_fields, list):
+            for f in raw_fields:
+                if isinstance(f, dict):
+                    fid = str(f.get("field_id", ""))
+                    fname = f.get("name", "")
+                    ftype = f.get("type", "text")
+                    if fname and fid:
+                        rows.append({
+                            "field_id": fid,
+                            "field_name": fname,
+                            "field_type": str(ftype),
+                        })
+        elif isinstance(raw_fields, dict):
+            for fid, fdata in raw_fields.items():
+                if isinstance(fdata, dict):
+                    fname = fdata.get("name", "")
+                    ftype = fdata.get("type", "text")
+                    if fname and fid:
+                        rows.append({
+                            "field_id": fid,
+                            "field_name": fname,
+                            "field_type": str(ftype),
+                        })
     return rows
 
 
@@ -131,6 +141,11 @@ async def link_intent_to_schema(table_key: str) -> LinkedSchema:
             success=False,
             error_message=f"無法從 ArangoDB 載入欄位資訊：{table_key}",
         )
+
+    MAX_SCHEMA_FIELDS = 30
+    if len(fields) > MAX_SCHEMA_FIELDS:
+        logger.info("Limiting %s from %d to %d fields for tool-calling", table_key, len(fields), MAX_SCHEMA_FIELDS)
+        fields = fields[:MAX_SCHEMA_FIELDS]
 
     field_ids = [f["field_id"] for f in fields]
     field_label_map = {f["field_id"]: f["field_name"] for f in fields}

@@ -5,9 +5,9 @@ Defines all data models for the NL→SQL pipeline:
 PipelineConfig, PipelineResult, IntentMatch, QueryPlan,
 SchemaContext, SQLResult, ValidationResult.
 
-# Last Update: 2026-03-24 19:27:14
+# Last Update: 2026-04-13 06:08:56
 # Author: Daniel Chung
-# Version: 1.2.0
+# Version: 1.3.0
 """
 
 from enum import Enum
@@ -32,7 +32,7 @@ class PipelineConfig(BaseModel):
     large_model: str = Field(default="qwen3-coder:30b")
     embedding_model: str = Field(default="bge-m3:latest")
     qdrant_url: str = Field(default="http://localhost:6333")
-    qdrant_collection: str = Field(default="data_agent_intents")
+    qdrant_collection: str = Field(default="da_intents")
     arango_url: str = Field(default="http://localhost:8529")
     arango_db: str = Field(default="abc_desktop")
     arango_user: str = Field(default="root")

@@ -1,9 +1,9 @@
 """
 @file        router.py
 @description FastAPI routes for RagicDataAgent — query + schema + intent + NL endpoints.
-@lastUpdate  2026-04-13 03:08:43
+@lastUpdate  2026-04-13 06:16:12
 @author      Daniel Chung
-@version     2.1.0
+@version     2.2.0
 """
 
 from __future__ import annotations
@@ -62,9 +62,12 @@ from data_agent.ragic.nl_parser import ParseResult, RagicNLParser
 from data_agent.ragic.pandas_engine import fetch_and_aggregate
 from data_agent.ragic.query_engine import RagicQueryEngine
 from data_agent.ragic.query_router import RouteDecision, route_query_with_text
+from data_agent.ragic.query_type_inferrer import infer_query_type
 from data_agent.ragic.schema_linker import load_fields_from_arango
 from data_agent.ragic.schema_store import RagicSchemaStore
 from data_agent.ragic.schema_sync import RagicSchemaSync
+
+import httpx as _httpx
 
 logger = logging.getLogger(__name__)
 
@@ -73,6 +76,44 @@ router = APIRouter()
 _DEFAULT_ACCOUNT = os.getenv("RAGIC_DEFAULT_ACCOUNT", "2025shianyong")
 _DEFAULT_SERVER = os.getenv("RAGIC_DEFAULT_SERVER", "ap15")
 _DEFAULT_API_KEY = os.getenv("RAGIC_API_KEY", "")
+
+_ARANGO_URL = os.getenv("ARANGO_URL", "http://localhost:8529")
+_ARANGO_DB = os.getenv("ARANGO_DATABASE", "abc_desktop")
+_ARANGO_USER = os.getenv("ARANGO_USER", "root")
+_ARANGO_PASSWORD = os.getenv("ARANGO_PASSWORD", "abc_desktop_2026")
+
+
+async def _resolve_da_table_key(table_key: str) -> tuple[str, int] | None:
+    """Resolve a da_tables _key (e.g. 'ERP_13') to legacy (tab_path, sheet_number).
+
+    Looks up da_tables.source_meta.tab and source_meta.sheet_number in ArangoDB.
+    Returns None if the table is not found or source_meta is missing.
+    """
+    aql = (
+        "FOR d IN da_tables FILTER d._key == @key "
+        "RETURN { tab: d.source_meta.tab, sheet_number: d.source_meta.sheet_number }"
+    )
+    try:
+        async with _httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(
+                f"{_ARANGO_URL}/_db/{_ARANGO_DB}/_api/cursor",
+                json={"query": aql, "bindVars": {"key": table_key}},
+                auth=(_ARANGO_USER, _ARANGO_PASSWORD),
+            )
+            if resp.status_code not in (200, 201):
+                return None
+            results: list[dict[str, object]] = resp.json().get("result", [])
+            if not results:
+                return None
+            row = results[0]
+            tab = row.get("tab")
+            sheet_raw = row.get("sheet_number")
+            if not tab or sheet_raw is None:
+                return None
+            return str(tab), int(sheet_raw)
+    except (ValueError, TypeError, _httpx.HTTPError) as exc:
+        logger.warning("Failed to resolve da_table_key %s: %s", table_key, exc)
+        return None
 
 _config_loader = RagicConfigLoader()
 
@@ -745,32 +786,40 @@ async def nl_query(request: NLQueryRequest) -> Union[NLQueryResponse, Response]:
         )
 
     parts = parsed.table_key.rsplit("/", 1)
-    if len(parts) != 2:
-        return NLQueryResponse(
-            code=4,
-            status="error",
-            post_error=NLPostError(
-                error_code=4,
-                raw_error=f"table_key format invalid: {parsed.table_key}",
-                message=f"table_key 格式錯誤，應為 'tab_path/sheet_index'：{parsed.table_key}",
-            ),
-            intent=intent_block,
-        )
+    if len(parts) == 2:
+        tab_path = parts[0]
+        try:
+            sheet_index = int(parts[1])
+        except ValueError:
+            return NLQueryResponse(
+                code=4,
+                status="error",
+                post_error=NLPostError(
+                    error_code=4,
+                    raw_error=f"sheet_index not a number: {parts[1]}",
+                    message=f"sheet_index 不是數字：{parts[1]}",
+                ),
+                intent=intent_block,
+            )
+    else:
+        resolved = await _resolve_da_table_key(parsed.table_key)
+        if resolved is None:
+            return NLQueryResponse(
+                code=4,
+                status="error",
+                post_error=NLPostError(
+                    error_code=4,
+                    raw_error=f"table_key not found in da_tables: {parsed.table_key}",
+                    message=f"找不到表格 '{parsed.table_key}' 的來源資訊",
+                ),
+                intent=intent_block,
+            )
+        tab_path, sheet_index = resolved
 
-    tab_path = parts[0]
-    try:
-        sheet_index = int(parts[1])
-    except ValueError:
-        return NLQueryResponse(
-            code=4,
-            status="error",
-            post_error=NLPostError(
-                error_code=4,
-                raw_error=f"sheet_index not a number: {parts[1]}",
-                message=f"sheet_index 不是數字：{parts[1]}",
-            ),
-            intent=intent_block,
-        )
+    parsed.query_type = await infer_query_type(
+        query=stripped,
+        table_key=parsed.table_key,
+    )
 
     route_decision = await route_query_with_text(parsed, stripped)
     routed_params = route_decision.translated_params

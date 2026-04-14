@@ -34,6 +34,8 @@ pub mod da;
 pub mod da_intents;
 pub mod backup;
 pub mod da_query;
+pub mod da_tables;
+pub mod da_expressions;
 pub mod knowledge;
 pub mod ontology;
 pub mod themes;
@@ -164,6 +166,8 @@ pub fn create_router() -> Router {
         .merge(health::create_health_router())
         .merge(da::create_da_router())
         .merge(da_intents::create_da_intents_router())
+        .merge(da_tables::create_da_tables_router())
+        .merge(da_expressions::create_da_expressions_router())
         .merge(backup::create_backup_router())
         .merge(da_query::create_da_query_router())
         .merge(web_search::create_web_search_router())
@@ -642,10 +646,14 @@ async fn delete_role(Path(key): Path<String>) -> Result<impl IntoResponse, Statu
 
 async fn list_params() -> Result<impl IntoResponse, StatusCode> {
     let db = get_db();
-    let params: Vec<SystemParam> = db
+    let raw: Vec<serde_json::Value> = db
         .aql_str("FOR p IN system_params RETURN p")
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let params: Vec<SystemParam> = raw
+        .into_iter()
+        .filter_map(|v| serde_json::from_value(v).ok())
+        .collect();
     Ok(Json(ApiResponse::success(params)))
 }
 
@@ -668,17 +676,46 @@ async fn update_param(Path(key): Path<String>, Json(payload): Json<UpdateParamRe
     let col = db.collection("system_params").await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let new_value = payload.param_value.or(payload.value).ok_or(StatusCode::BAD_REQUEST)?;
+    let now = chrono::Utc::now().to_rfc3339();
 
-    col.update_document(
-        &key,
-        serde_json::json!({
-            "param_value": new_value,
-            "updated_at": chrono::Utc::now().to_rfc3339(),
-        }),
-        Default::default(),
-    )
-    .await
-    .map_err(|_| StatusCode::NOT_FOUND)?;
+    let existing: Vec<SystemParam> = db
+        .aql_bind_vars(
+            "FOR p IN system_params FILTER p._key == @key LIMIT 1 RETURN p",
+            [("key", serde_json::json!(key))].into(),
+        )
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    if existing.is_empty() {
+        col.create_document(
+            SystemParam {
+                _key: Some(key.clone()),
+                param_key: key.clone(),
+                param_value: new_value.clone(),
+                param_type: "string".to_string(),
+                require_restart: false,
+                category: "data_agent".to_string(),
+                updated_at: now,
+            },
+            Default::default(),
+        )
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to create param {}: {}", key, e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+    } else {
+        col.update_document(
+            &key,
+            serde_json::json!({
+                "param_value": new_value,
+                "updated_at": now,
+            }),
+            Default::default(),
+        )
+        .await
+        .map_err(|_| StatusCode::NOT_FOUND)?;
+    }
 
     let mut params: Vec<SystemParam> = db
         .aql_bind_vars(

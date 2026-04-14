@@ -1,10 +1,10 @@
 """
 @file        intent_store.py
 @description Qdrant-backed vector store for data query intents.
-             Supports upsert, search (by vector similarity), list, and delete.
-@lastUpdate  2026-04-13 01:43:49
+             Uses da_intents collection (3-layer: perception + strategy + learning).
+@lastUpdate  2026-04-13
 @author      Daniel Chung
-@version     1.2.0
+@version     2.0.0
 """
 
 import hashlib
@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-COLLECTION_NAME = "data_agent_intents"
+COLLECTION_NAME = "da_intents"
 
 
 async def _get_embedding_model() -> str:
@@ -271,7 +271,29 @@ class IntentVectorStore:
 
     @staticmethod
     def payload_to_intent(payload: dict[str, object]) -> RagicIntent:
+        """Convert Qdrant payload to RagicIntent.
+
+        Supports both new da_expressions payload (expression_key, aliases)
+        and legacy data_agent_intents payload (intent_id, nl_patterns).
+        """
         from data_agent.ragic.models import JoinKeyMapping, RagicFilterTemplate, RagicOperator
+
+        intent_id = str(
+            payload.get("intent_id")
+            or payload.get("expression_key", "")
+        )
+
+        aliases_raw = payload.get("aliases", [])
+        nl_raw = payload.get("nl_patterns", [])
+        source = aliases_raw if isinstance(aliases_raw, list) and aliases_raw else nl_raw
+        nl_patterns: list[str] = (
+            [str(p) for p in source] if isinstance(source, list) else []
+        )
+
+        nl_ex_raw = payload.get("nl_examples", [])
+        nl_examples: list[str] = (
+            [str(p) for p in nl_ex_raw] if isinstance(nl_ex_raw, list) else []
+        )
 
         filter_raw = payload.get("filter_template")
         filter_tpl: RagicFilterTemplate | None = None
@@ -287,20 +309,18 @@ class IntentVectorStore:
                 value=str(filter_raw.get("value", "")),
             )
 
-        nl_raw = payload.get("nl_patterns", [])
-        nl_patterns: list[str] = [str(p) for p in nl_raw] if isinstance(nl_raw, list) else []
-
-        nl_ex_raw = payload.get("nl_examples", [])
-        nl_examples: list[str] = [str(p) for p in nl_ex_raw] if isinstance(nl_ex_raw, list) else []
-
         tables_raw = payload.get("tables", [])
-        tables: list[str] = [str(t) for t in tables_raw] if isinstance(tables_raw, list) else []
-
+        tables: list[str] = (
+            [str(t) for t in tables_raw] if isinstance(tables_raw, list) else []
+        )
         core_raw = payload.get("core_fields", [])
-        core_fields: list[str] = [str(f) for f in core_raw] if isinstance(core_raw, list) else []
-
+        core_fields: list[str] = (
+            [str(f) for f in core_raw] if isinstance(core_raw, list) else []
+        )
         involved_raw = payload.get("involved_tables", [])
-        involved: list[str] = [str(t) for t in involved_raw] if isinstance(involved_raw, list) else []
+        involved: list[str] = (
+            [str(t) for t in involved_raw] if isinstance(involved_raw, list) else []
+        )
 
         join_keys_raw = payload.get("join_keys", [])
         join_keys: list[JoinKeyMapping] = []
@@ -320,7 +340,7 @@ class IntentVectorStore:
         )
 
         return RagicIntent(
-            intent_id=str(payload.get("intent_id", "")),
+            intent_id=intent_id,
             agent_scope=str(payload.get("agent_scope", "data_agent")),
             account=str(payload.get("account", "")),
             name=str(payload.get("name", "")),

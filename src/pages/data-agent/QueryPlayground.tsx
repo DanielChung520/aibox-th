@@ -2,9 +2,9 @@
  * @file        Data Agent Query Playground
  * @description NL→Ragic 自然語言查詢工作台，支援意圖匹配與 Ragic API 查詢
  *              兼容舊版（NLQueryData）與新版（五區塊 NLQueryResponse）API 回應格式
- * @lastUpdate  2026-04-12 09:52:47
+ * @lastUpdate  2026-04-13 03:37:18
  * @author      Daniel Chung
- * @version     1.2.0
+ * @version     1.3.0
  */
 
 import { useState, useCallback } from 'react';
@@ -410,6 +410,13 @@ export default function QueryPlayground() {
                   <Descriptions.Item label="表單鍵值">{meta?.table_key || '-'}</Descriptions.Item>
                   <Descriptions.Item label="輸出格式">{meta?.output_format || '-'}</Descriptions.Item>
                   <Descriptions.Item label="原始查詢">{meta?.query || '-'}</Descriptions.Item>
+                  <Descriptions.Item label="執行路徑">
+                    {meta?.path_used ? (
+                      <Tag color={meta.path_used === 'path_a' ? 'blue' : meta.path_used === 'path_b' ? 'purple' : 'default'}>
+                        {meta.path_used === 'path_a' ? 'Path A (Tool-Calling)' : meta.path_used === 'path_b' ? 'Path B (Pandas 聚合)' : meta.path_used}
+                      </Tag>
+                    ) : '-'}
+                  </Descriptions.Item>
                 </Descriptions>
                 {rs?.field_labels && Object.keys(rs.field_labels).length > 0 && (
                   <Collapse

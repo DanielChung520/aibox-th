@@ -21,7 +21,16 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from data_agent.query.nl2sql import run_nl2sql_pipeline
-from data_agent.query.nl2sql.models import PipelineConfig
+from data_agent.query.nl2sql.models import (
+    GenerationStrategy,
+    IntentMatch,
+    PipelineConfig,
+    QueryPlan,
+    QueryPlanFilter,
+    QueryPlanOrderBy,
+)
+from data_agent.query.nl2sql.plan_generator import generate_query_plan
+from data_agent.query.nl2sql.schema_retriever import retrieve_schema
 
 router = APIRouter()
 
@@ -65,6 +74,12 @@ class ExplainRequest(BaseModel):
 
 class NL2SqlRequest(BaseModel):
     natural_language: str
+
+
+class QueryPlanRequest(BaseModel):
+    natural_language: str
+    table_key: Optional[str] = None
+    top_k: int = 3
 
 
 async def generate_aql(natural_language: str) -> str:
@@ -322,6 +337,338 @@ def _query_parquet_preview(
 
     conn.close()
     return total, rows
+
+
+# ---------------------------------------------------------------------------
+# Intent Plan Endpoint - three-layer routing (rule-based / small / large LLM)
+# ---------------------------------------------------------------------------
+
+QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
+QDRANT_COLLECTION = "da_intents"
+MATCH_THRESHOLD = float(os.getenv("MATCH_THRESHOLD", "0.45"))
+
+
+async def _get_embedding(text: str) -> list[float]:
+    model = os.getenv("OLLAMA_EMBEDDING_MODEL", "qwen3-embedding:latest")
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        resp = await client.post(
+            f"{OLLAMA_BASE_URL}/api/embed",
+            json={"model": model, "input": text},
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        embeddings = data.get("embeddings", [])
+        if embeddings:
+            return list(embeddings[0])
+        return []
+
+
+async def _search_da_intents(
+    query: str, table_key: str | None, top_k: int,
+) -> dict[str, object] | None:
+    embedding = await _get_embedding(query)
+    if not embedding:
+        return None
+
+    search_payload: dict[str, object] = {
+        "vector": embedding,
+        "limit": top_k,
+        "with_payload": True,
+    }
+    if table_key:
+        search_payload["filter"] = {
+            "must": [{"key": "table_key", "match": {"value": table_key}}]
+        }
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        resp = await client.post(
+            f"{QDRANT_URL}/collections/{QDRANT_COLLECTION}/points/search",
+            json=search_payload,
+        )
+        resp.raise_for_status()
+        results = resp.json().get("result", [])
+
+    for r in results:
+        score = float(r.get("score", 0.0))
+        if score >= MATCH_THRESHOLD:
+            return {"payload": r.get("payload", {}), "score": score}
+    return None
+
+
+AGGREGATION_KEYWORDS = ["統計", "數量", "總計", "平均", "總和", "合計", "最大", "最小", "count", "sum", "avg", "max", "min", "排名", "前十", "top"]
+
+
+def _route_strategy(query_type: str, difficulty_level: str, nl_query: str = "") -> tuple[GenerationStrategy, str]:
+    if query_type == "simple_filter":
+        if nl_query and any(kw in nl_query.lower() for kw in [k.lower() for k in AGGREGATION_KEYWORDS]):
+            return GenerationStrategy.SMALL_LLM, "small LLM (nl含聚合關鍵字)"
+        return GenerationStrategy.TEMPLATE, "rule-based (tool_schema解析)"
+    if query_type == "aggregate":
+        if difficulty_level == "easy":
+            return GenerationStrategy.TEMPLATE, "rule-based (easy aggregate)"
+        if difficulty_level == "medium":
+            return GenerationStrategy.SMALL_LLM, "small LLM"
+        return GenerationStrategy.LARGE_LLM, "large LLM"
+    return GenerationStrategy.LARGE_LLM, "large LLM fallback"
+
+
+def _extract_filters_from_nl(
+    nl_query: str,
+    tool_schema: dict[str, object],
+    field_names: list[str],
+    field_id_to_name: dict[str, str],
+) -> list[QueryPlanFilter]:
+    field_enums: list[str] = []
+    props = tool_schema.get("properties", {})
+    filters_prop = props.get("filters", {})
+    if isinstance(filters_prop, dict):
+        items = filters_prop.get("items", {})
+        field_enum = items.get("properties", {}).get("field_id", {})
+        if isinstance(field_enum, dict):
+            field_enums = field_enum.get("enum", [])
+
+    query_lower = nl_query.lower()
+    filters: list[QueryPlanFilter] = []
+
+    for field_id in field_enums:
+        field_name = field_id_to_name.get(field_id, "").lower()
+        if not field_name or field_name not in query_lower:
+            continue
+
+        operator = "eq"
+        value = ""
+        raw_ops = [
+            ("gt", ["超過", "大於", "高於", "多於", "大于", "高于"]),
+            ("lt", ["低於", "小於", "少於", "低于", "少于"]),
+            ("like", ["包含", "含有", "內含", "含", "内含"]),
+        ]
+        for op, keywords in raw_ops:
+            if any(kw in query_lower for kw in keywords):
+                operator = op
+                break
+
+        parts = query_lower.split(field_name)
+        if len(parts) > 1:
+            after = parts[1].strip()
+            eq_kw = ["為", "是", "等於", "等于"]
+            for kw in eq_kw:
+                if after.startswith(kw):
+                    after = after[len(kw):].strip()
+                    break
+            stop_chars = ["，", ",", "。", ".", " ", "的", "有", "和", "與"]
+            for ch in stop_chars:
+                idx = after.find(ch)
+                if idx >= 0:
+                    value = after[:idx].strip()
+                    break
+            if not value and after:
+                value = after.strip()
+
+        filters.append(QueryPlanFilter(field=field_id, operator=operator, value=value))
+
+    return filters
+
+
+async def _fetch_field_names(table_key: str) -> dict[str, str]:
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        resp = await client.post(
+            f"{ARANGO_URL}/_db/{ARANGO_DB}/_api/cursor",
+            json={
+                "query": "FOR t IN da_tables FILTER t._key == @key LIMIT 1 RETURN t",
+                "bindVars": {"key": table_key},
+            },
+            auth=(ARANGO_USER, ARANGO_PASSWORD),
+        )
+        if resp.status_code in (200, 201):
+            result = resp.json().get("result", [])
+            if result:
+                fields = result[0].get("fields", [])
+                return {str(f.get("field_id", "")): str(f.get("name", "")) for f in fields if f.get("field_id")}
+    return {}
+
+
+def _truncate_tool_schema(tool_schema: dict, max_fields: int = 30) -> dict:
+    """Truncate tool_schema to limit number of fields for simpler queries."""
+    if not tool_schema:
+        return tool_schema
+    props = tool_schema.get("properties", {})
+    filters = props.get("filters", {})
+    items = filters.get("items", {})
+    items_props = items.get("properties", {})
+    field_enum = items_props.get("field_id", {}).get("enum", [])
+    if len(field_enum) > max_fields:
+        logger = logging.getLogger(__name__)
+        logger.info("Truncating tool_schema from %d to %d fields", len(field_enum), max_fields)
+        new_enum = list(field_enum[:max_fields])
+        new_items_props = dict(items_props)
+        new_items_props["field_id"] = dict(new_items_props.get("field_id", {}))
+        new_items_props["field_id"]["enum"] = new_enum
+        new_items = dict(items)
+        new_items["properties"] = new_items_props
+        new_filters = dict(filters)
+        new_filters["items"] = new_items
+        new_props = dict(props)
+        new_props["filters"] = new_filters
+        new_tool_schema = dict(tool_schema)
+        new_tool_schema["properties"] = new_props
+        return new_tool_schema
+    return tool_schema
+
+
+async def _build_rule_plan(
+    nl_query: str, intent_data: dict[str, object],
+) -> QueryPlan:
+    tool_schema = intent_data.get("tool_schema", {})
+    tool_schema = _truncate_tool_schema(tool_schema, max_fields=30)
+    table_key = str(intent_data.get("table_key", ""))
+    field_id_to_name = await _fetch_field_names(table_key)
+    field_names = list(field_id_to_name.values())
+    filters = _extract_filters_from_nl(nl_query, tool_schema, field_names, field_id_to_name)
+
+    return QueryPlan(
+        intent_type=str(intent_data.get("action", "query")),
+        primary_table=table_key,
+        tables=[table_key] if table_key else [],
+        filters=filters,
+        limit=100,
+    )
+
+
+async def _get_default_model() -> str:
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        try:
+            resp = await client.get(f"{OLLAMA_BASE_URL}/api/tags")
+            resp.raise_for_status()
+            models = resp.json().get("models", [])
+            if models:
+                return models[0].get("name", "gemma4:31b")
+        except Exception:
+            pass
+    return "gemma4:31b"
+
+
+async def _build_llm_plan(
+    nl_query: str, intent_data: dict[str, object],
+    strategy: GenerationStrategy,
+) -> QueryPlan:
+    from data_agent.query.nl2sql.models import SchemaContext, TableSchema, FieldSchema
+    table_key = str(intent_data.get("table_key", ""))
+
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        resp = await client.post(
+            f"{ARANGO_URL}/_db/{ARANGO_DB}/_api/cursor",
+            json={"query": "FOR t IN da_tables FILTER t._key == @key LIMIT 1 RETURN t",
+                  "bindVars": {"key": table_key}},
+            auth=(ARANGO_USER, ARANGO_PASSWORD),
+        )
+        if resp.status_code not in (200, 201):
+            return QueryPlan(primary_table=table_key, tables=[table_key] if table_key else [])
+        result = resp.json().get("result", [])
+        if not result:
+            return QueryPlan(primary_table=table_key, tables=[table_key] if table_key else [])
+        table_doc = result[0]
+
+    table_schemas = [TableSchema(
+        table_name=table_key,
+        description=str(table_doc.get("description", "")),
+        module=str(table_doc.get("domain", "")),
+    )]
+    field_schemas: list[FieldSchema] = []
+    for f in table_doc.get("fields", []):
+        if isinstance(f, dict):
+            field_schemas.append(FieldSchema(
+                table_name=table_key,
+                field_name=str(f.get("name", "")),
+                field_id=str(f.get("field_id", "")),
+                data_type=str(f.get("type", "text")),
+            ))
+
+    schema = SchemaContext(tables=table_schemas, fields=field_schemas, relations=[], join_graph={})
+
+    default_model = await _get_default_model()
+    intent_match = IntentMatch(
+        intent_id=str(intent_data.get("_key", "")),
+        score=0.0,
+        generation_strategy=strategy,
+        tables=[table_key] if table_key else [],
+        description=str(intent_data.get("description", "")),
+        intent_type=str(intent_data.get("action", "query")),
+    )
+
+    config = PipelineConfig(
+        ollama_base_url=OLLAMA_BASE_URL,
+        small_model=default_model,
+        large_model=default_model,
+        qdrant_collection=QDRANT_COLLECTION,
+    )
+    try:
+        import asyncio
+        async with asyncio.timeout(45.0):
+            plan = await generate_query_plan(nl_query, intent_match, schema, config)
+            return plan
+    except TimeoutError:
+        logger.warning("LLM plan generation timed out after 45s for intent %s", intent_data.get("_key", ""))
+        return QueryPlan(
+            primary_table=table_key,
+            tables=[table_key] if table_key else [],
+            intent_type=str(intent_data.get("action", "query")),
+            filters=[],
+            limit=100,
+        )
+    except Exception as e:
+        logger.warning("LLM plan generation failed: %s", str(e))
+        return QueryPlan(
+            primary_table=table_key,
+            tables=[table_key] if table_key else [],
+            intent_type=str(intent_data.get("action", "query")),
+            filters=[],
+            limit=100,
+        )
+
+
+@router.post("/plan")
+async def query_plan(request: QueryPlanRequest) -> dict[str, object]:
+    matched = await _search_da_intents(
+        request.natural_language, request.table_key, request.top_k,
+    )
+    if not matched:
+        return {
+            "success": False,
+            "query": request.natural_language,
+            "error": "No intent matched above threshold",
+            "strategy": "none",
+            "query_plan": None,
+        }
+
+    intent_data: dict[str, object] = matched["payload"]
+    score = matched["score"]
+    query_type = str(intent_data.get("query_type", "simple_filter"))
+    difficulty = str(intent_data.get("difficulty_level", "easy"))
+
+    strategy, strategy_desc = _route_strategy(query_type, difficulty, request.natural_language)
+
+    if strategy == GenerationStrategy.TEMPLATE:
+        query_plan = await _build_rule_plan(request.natural_language, intent_data)
+    else:
+        query_plan = await _build_llm_plan(
+            request.natural_language, intent_data, strategy,
+        )
+
+    return {
+        "success": True,
+        "query": request.natural_language,
+        "matched_intent": {
+            "intent_id": str(intent_data.get("_key", "")),
+            "name": str(intent_data.get("name", "")),
+            "table_key": str(intent_data.get("table_key", "")),
+            "query_type": query_type,
+            "difficulty_level": difficulty,
+            "score": round(score, 3),
+        },
+        "strategy": strategy_desc,
+        "generation_strategy": strategy.value,
+        "query_plan": query_plan.model_dump(),
+    }
 
 
 @router.get("/health")
