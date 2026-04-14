@@ -2,9 +2,9 @@
 # ============================================================================
 # @file        start.sh
 # @description ABC Desktop 服務管理腳本 — Rust API + Static + Python AI Services
-# @lastUpdate  2026-03-26 20:53:43
+# @lastUpdate  2026-04-14
 # @author      Daniel Chung
-# @version     2.3.0
+# @version     2.4.0
 # ============================================================================
 set -e
 
@@ -30,6 +30,7 @@ AI_SERVICES=(
   "knowledge_agent:8007:knowledge_agent.main:app"
   "memory_agent:8008:memory_agent.main:app"
   "backup_agent:8010:backup_agent.main:app"
+  "unified_agents:8011:unified_agents.main:app"
 )
 
 # ─── 共用函數 ────────────────────────────────────────────────────────────────
@@ -588,7 +589,11 @@ case "${1:-status}" in
     echo "  celery            Celery Worker (async task queue)"
     for entry in "${AI_SERVICES[@]}"; do
       IFS=':' read -r name port module <<< "$entry"
-      printf "  %-18s  Python AI service (port %s)\n" "$name" "$port"
+      if [ "$name" = "unified_agents" ]; then
+        printf "  %-18s  Unified entry (port %s) - replaces da/ka/memory/backup/mcp\n" "$name" "$port"
+      else
+        printf "  %-18s  Python AI service (port %s)\n" "$name" "$port"
+      fi
     done
     echo ""
     echo "Other Commands:"
