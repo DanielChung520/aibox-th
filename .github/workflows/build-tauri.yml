@@ -112,19 +112,19 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
         run: npx tauri build
 
-      - name: Upload .nsis.zip
+      - name: Upload .exe
         uses: actions/upload-artifact@v4
         with:
           name: tauri-Windows-x64-bundle
           if-no-files-found: error
-          path: src-tauri/target/release/bundle/nsis/*.nsis.zip
+          path: src-tauri/target/release/bundle/nsis/*.exe
 
-      - name: Upload .nsis.sig signature
+      - name: Upload .sig signature
         uses: actions/upload-artifact@v4
         with:
           name: tauri-Windows-x64-sig
           if-no-files-found: warning
-          path: src-tauri/target/release/bundle/nsis/*.nsis.zip.sig
+          path: src-tauri/target/release/bundle/nsis/*.exe.sig
 
   release:
     needs: [build-macos, build-windows]
@@ -167,12 +167,12 @@ jobs:
           # Find files
           MAC_ARM_TAR=$(ls artifacts/tauri-macOS-ARM-bundle/*.app.tar.gz 2>/dev/null | head -1)
           MAC_INTEL_TAR=$(ls artifacts/tauri-macOS-Intel-bundle/*.app.tar.gz 2>/dev/null | head -1)
-          WIN_NSIS_ZIP=$(ls artifacts/tauri-Windows-x64-bundle/*.nsis.zip 2>/dev/null | head -1)
+          WIN_EXE=$(ls artifacts/tauri-Windows-x64-bundle/*.exe 2>/dev/null | head -1)
 
           # Read signatures
           MAC_ARM_SIG=$(cat "artifacts/tauri-macOS-ARM-sig/$(basename $MAC_ARM_TAR).sig" 2>/dev/null || echo "")
           MAC_INTEL_SIG=$(cat "artifacts/tauri-macOS-Intel-sig/$(basename $MAC_INTEL_TAR).sig" 2>/dev/null || echo "")
-          WIN_NSIS_SIG=$(cat "artifacts/tauri-Windows-x64-sig/$(basename $WIN_NSIS_ZIP).sig" 2>/dev/null || echo "")
+          WIN_SIG=$(cat "artifacts/tauri-Windows-x64-sig/$(basename $WIN_EXE).sig" 2>/dev/null || echo "")
 
           # macOS ARM
           if [ -f "$MAC_ARM_TAR" ]; then
@@ -190,12 +190,12 @@ jobs:
             MAC_INTEL_URL="${REPO}/${MAC_INTEL_NAME}"
           fi
 
-          # Windows NSIS
-          if [ -f "$WIN_NSIS_ZIP" ]; then
-            WIN_NSIS_SIZE=$(stat -c%s "$WIN_NSIS_ZIP")
-            WIN_NSIS_SHA256=$(sha256sum "$WIN_NSIS_ZIP" | cut -d' ' -f1)
-            WIN_NSIS_NAME=$(basename "$WIN_NSIS_ZIP")
-            WIN_NSIS_URL="${REPO}/${WIN_NSIS_NAME}"
+          # Windows EXE
+          if [ -f "$WIN_EXE" ]; then
+            WIN_SIZE=$(stat -c%s "$WIN_EXE")
+            WIN_SHA256=$(sha256sum "$WIN_EXE" | cut -d' ' -f1)
+            WIN_NAME=$(basename "$WIN_EXE")
+            WIN_URL="${REPO}/${WIN_NAME}"
           fi
 
           # Build latest.json (Tauri 2.x format)
@@ -218,10 +218,10 @@ jobs:
                 "checksum": "${MAC_INTEL_SHA256}"
               },
               "windows-x86_64": {
-                "signature": "${WIN_NSIS_SIG}",
-                "url": "${WIN_NSIS_URL}",
-                "size": ${WIN_NSIS_SIZE:-0},
-                "checksum": "${WIN_NSIS_SHA256}"
+                "signature": "${WIN_SIG}",
+                "url": "${WIN_URL}",
+                "size": ${WIN_SIZE:-0},
+                "checksum": "${WIN_SHA256}"
               }
             }
           }
@@ -233,7 +233,7 @@ jobs:
       - name: Collect release files
         run: |
           mkdir -p release-files
-          find artifacts -type f \( -name "*.app.tar.gz" -o -name "*.nsis.zip" \) -exec cp {} release-files/ \; 2>/dev/null || true
+          find artifacts -type f \( -name "*.app.tar.gz" -o -name "*.exe" \) -exec cp {} release-files/ \; 2>/dev/null || true
           find artifacts -type f \( -name "*.sig" \) -exec cp {} release-files/ \; 2>/dev/null || true
           cp latest.json release-files/
           echo "=== Release files ==="
