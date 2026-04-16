@@ -1,7 +1,7 @@
 {
   "name": "abc-desktop",
   "private": true,
-  "version": "1.0.4",
+  "version": "1.0.7",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -22,6 +22,7 @@
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
+    "@duckdb/duckdb-wasm": "^1.33.1-dev45.0",
     "@tauri-apps/api": "^2.10.1",
     "@tauri-apps/plugin-dialog": "^2.7.0",
     "@tauri-apps/plugin-fs": "^2.5.0",
@@ -29,6 +30,7 @@
     "@tauri-apps/plugin-process": "^2",
     "@tauri-apps/plugin-updater": "^2",
     "antd": "^6.3.3",
+    "apache-arrow": "^21.1.0",
     "axios": "^1.13.6",
     "highlight.js": "^11.11.1",
     "mammoth": "^1.12.0",
