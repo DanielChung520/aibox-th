@@ -1,0 +1,631 @@
+{
+  "type": "major",
+  "name": "Edge_Enterprise_AI",
+  "version": "1.0.0",
+  "default_version": true,
+  "ontology_name": "Edge_Enterprise_AI_Major_Ontology",
+  "description": "Edge Enterprise AI（ABC Desktop）企業級 AI 管理系統本體論，定義跨平台桌面應用、AI 智能體集群、自然語言數據查詢系統、知識庫管理系統與 BPA 流程自動化的完整概念架構。本體論整合 Tauri 桌面殼、React 前端、Rust API Gateway、Python AI 智能體服務、ArangoDB 圖資料庫與 Qdrant 向量資料庫，適用於 RAG 輔助決策、AI 對話系統、NL→SQL 查詢優化、知識圖譜建構與企業流程自動化場景。",
+  "author": "Daniel Chung",
+  "last_modified": "2026-04-17 09:36:21",
+  "inherits_from": [
+    "5W1H_Base_Ontology_OWL",
+    "System_Development_Domain_Ontology",
+    "AI_Agent_Domain_Ontology"
+  ],
+  "tags": [
+    "Tauri",
+    "React",
+    "TypeScript",
+    "Ant_Design",
+    "Rust_Axum",
+    "Python_FastAPI",
+    "ArangoDB",
+    "Qdrant",
+    "RAG",
+    "NL_SQL",
+    "Knowledge_Graph",
+    "BPA",
+    "AI_Agent",
+    "Enterprise_AI",
+    "Desktop_Application"
+  ],
+  "use_cases": [
+    "AI 對話系統知識管理",
+    "NL→SQL 查詢意圖分析",
+    "知識庫 RAG 檢索優化",
+    "BPA 流程自動化配置",
+    "AI 輔助數據分析",
+    "企業知識圖譜建構",
+    "多智能體協作調度",
+    "系統配置與權限管理",
+    "即時態勢感知與監控"
+  ],
+
+  "entity_classes": [
+    {
+      "name": "Tauri_Desktop_Application",
+      "base_class": "Software_Application",
+      "description": "Tauri 2.x 跨平台桌面應用程式，封裝 Web 前端為原生桌面客戶端，支援 Windows/macOS/Linux，具備系統整合能力（視窗管理、系統托盤、檔案存取、對話框）與原生效能。"
+    },
+    {
+      "name": "React_Frontend",
+      "base_class": "Web_Application",
+      "description": "React 18 + TypeScript + Vite 前端應用，負責 UI 渲染、狀態管理與用戶交互，集成 Ant Design 6.x UI 組件庫，支援亮/暗主題切換與響應式佈局。"
+    },
+    {
+      "name": "Rust_API_Gateway",
+      "base_class": "API_Gateway",
+      "description": "Rust Axum 構建的 API Gateway（port 6500），作為所有前端請求的單一入口，負責路由分發、JWT 認證、中間件鏈（日誌、速率限制）、與下游 Python AI 服務的代理轉發。"
+    },
+    {
+      "name": "Frontend_Page",
+      "base_class": "UI_Component",
+      "description": "前端頁面元件，如 Login、MainLayout、UserManagement、RoleManagement、SystemParams、Welcome 等，代表應用的主要功能模組，每個頁面對應特定路由與業務功能。"
+    },
+    {
+      "name": "Ant_Design_Component",
+      "base_class": "UI_Component",
+      "description": "Ant Design UI 組件庫中的元件，如 Table、Form、Modal、Drawer、Tabs、Tree 等，用於構建企業級表單、數據表格、導航菜單與業務流程介面。"
+    },
+    {
+      "name": "Theme_Configuration",
+      "base_class": "Configuration",
+      "description": "主題配置，定義應用的視覺樣式，包含亮/暗主題切換、主題色、字體、間距與組件樣式參數，支援動態主題切換與主題模板管理。"
+    },
+    {
+      "name": "AuthStore",
+      "base_class": "State_Management",
+      "description": "自定義認證狀態管理器，使用者訂閱模式管理 JWT Token、當前用戶資訊與登入狀態，支援狀態訂閱與跨組件狀態同步。"
+    },
+    {
+      "name": "User_Account",
+      "base_class": "Actor",
+      "description": "使用者帳戶，儲存於 ArangoDB users 集合，包含 _key、username、name、role_keys、status、tier（訂閱層級）、created_at 等屬性，对应系统登录用户。"
+    },
+    {
+      "name": "Role",
+      "base_class": "Concept",
+      "description": "角色定義，儲存於 ArangoDB roles 集合，定義一組權限集合，如 admin、user、viewer 等，用於 RBAC 權限控制。"
+    },
+    {
+      "name": "Permission",
+      "base_class": "Concept",
+      "description": "權限定義，系統中的最小授權單元，對應特定 API 端點或功能模組的訪問權利。"
+    },
+    {
+      "name": "System_Parameter",
+      "base_class": "Configuration",
+      "description": "系統參數，儲存於 ArangoDB system_params 集合，定義系統級配置（如 AI 模型參數、API URL、速率限制），支援動態調整與分組管理（category）。"
+    },
+    {
+      "name": "Menu_Function",
+      "base_class": "Navigation_Element",
+      "description": "功能菜單項，儲存於 ArangoDB functions 集合，定義系統功能導航結構，包含 code、name、description、function_type（group/sub_function/tab）、parent_key、path、icon 與 sort_order。"
+    },
+    {
+      "name": "AI_Task_Service",
+      "base_class": "AI_Service",
+      "description": "AITask AI 任務編排服務（port 8001，Python FastAPI），負責 AI 對話的意圖識別、任務分解、調度協調與回應生成，整合多個專業 Agent 協作完成複雜任務。"
+    },
+    {
+      "name": "Data_Agent_Service",
+      "base_class": "AI_Service",
+      "description": "Data Agent 自然語言數據查詢服務（port 8003，Python FastAPI），整合意圖 RAG + NL→SQL 技術，將用戶自然語言查詢轉換為 ArangoDB AQL 或關係型 SQL 執行。"
+    },
+    {
+      "name": "Knowledge_Agent_Service",
+      "base_class": "AI_Service",
+      "description": "Knowledge Agent 知識庫 RAG 服務（port 8007，Python FastAPI），管理企業知識庫的向量化、語義檢索與混合檢索（Hybrid RAG），支援知識圖譜建構與動態知識更新。"
+    },
+    {
+      "name": "MCP_Tools_Service",
+      "base_class": "AI_Service",
+      "description": "MCP Tools 工具執行服務（port 8004，Python FastAPI），實現 Model Context Protocol 工具發現、調用註冊表與工具執行環境，支援外部工具的標準化接入。"
+    },
+    {
+      "name": "BPA_MM_Agent_Service",
+      "base_class": "AI_Service",
+      "description": "BPA MM Agent 物料管理流程自動化服務（port 8005，Python FastAPI），定義與執行企業物料管理業務流程，支援審批流、工作流編排與自動化任務調度。"
+    },
+    {
+      "name": "Memory_Agent_Service",
+      "base_class": "AI_Service",
+      "description": "Memory Agent AI 增強記憶服務（port 8008，Python FastAPI），管理對話歷史、上下文記憶與長期知識沉澱，支援多輪對話狀態維護與主動記憶召回。"
+    },
+    {
+      "name": "Backup_Agent_Service",
+      "base_class": "AI_Service",
+      "description": "Backup Agent 備份管理服務（port 8010，Python FastAPI），管理數據庫備份還原、增量備份、備份策略配置與災難復原流程。"
+    },
+    {
+      "name": "ArangoDB_Database",
+      "base_class": "Database",
+      "description": "ArangoDB 圖資料庫（port 8529），ABC Desktop 的主要數據存儲，支援文檔存儲、圖遍歷與 AQL 查詢語言，儲存用戶、角色、權限、系統參數、業務數據與圖譜關係。"
+    },
+    {
+      "name": "Qdrant_Vector_Database",
+      "base_class": "Vector_Database",
+      "description": "Qdrant 向量資料庫（port 6333），用於知識庫語義檢索的向量存儲與相似度搜索，支援稀疏/密集向量混合檢索、注意力權重調整與即時向量更新。"
+    },
+    {
+      "name": "Intent_Catalog",
+      "base_class": "Knowledge_Base",
+      "description": "意圖目錄，儲存 Data Agent 的意圖識別配置，包含意圖關鍵字、範例語句、SQL 模板、AQL 模板與所屬模組（NL Data Query、Top Intent 等）。"
+    },
+    {
+      "name": "DA_Table",
+      "base_class": "Data_Model",
+      "description": "DA Tables 數據代理表配置，定義 Data Agent 可查詢的數據表元數據，包含表名、欄位定義、關聯關係、許可角色與安全性標記。"
+    },
+    {
+      "name": "DA_Expression",
+      "base_class": "Query_Template",
+      "description": "DA Expressions 數據表達式模板，定義可複用的查詢片段、AQL/AQL 函數封裝與參數化查詢規則，支援動態查詢組合與安全性控制。"
+    },
+    {
+      "name": "DA_Intent",
+      "base_class": "Intent",
+      "description": "DA Intents 自然語言意圖識別配置，定義意圖名稱、描述、訓練語句、槽位提取規則與回應模板，用於 NL→SQL 意圖分類。"
+    },
+    {
+      "name": "Knowledge_Base",
+      "base_class": "Knowledge_Base",
+      "description": "知識庫實體，儲存於 ArangoDB，包含 kb_id、name、description、embed_model、vector_config、hybrid_config、status 與創建時間，用於 RAG 檢索的文檔集合管理。"
+    },
+    {
+      "name": "Knowledge_Document",
+      "base_class": "Document",
+      "description": "知識庫文檔，上傳至知識庫的原始文件（如 PDF、Word、Markdown），經過解析、分段、向量化後存入 Qdrant，支援全文檢索與語義搜索。"
+    },
+    {
+      "name": "Knowledge_Graph",
+      "base_class": "Graph",
+      "description": "知識圖譜，由知識庫文檔抽取的實體-關係-實體三元組構成，存入 ArangoDB 作為圖集合，支援複雜關係查詢與推理。"
+    },
+    {
+      "name": "Hybrid_RAG_Config",
+      "base_class": "Configuration",
+      "description": "混合檢索配置，定義稀疏向量（BM25）與密集向量（語義嵌入）的權重比例、檢索策略（rrf/weighted/dynamic）與閾值參數。"
+    },
+    {
+      "name": "Intent_Orchestrator",
+      "base_class": "Orchestrator",
+      "description": "意圖預測協調器，Top Intent 系統的核心，負責意圖分類、意圖鏈管理與意圖切換判斷，支援意圖繼承、多意圖並行與意圖演化學習。"
+    },
+    {
+      "name": "BPA_Workflow",
+      "base_class": "Workflow",
+      "description": "BPA 業務流程定義，如物料管理審批流程，定義流程節點、審批角色、條件分支、自動化任務與超時規則。"
+    },
+    {
+      "name": "BPA_Node",
+      "base_class": "Workflow_Node",
+      "description": "BPA 流程節點，代表流程中的步驟，如審批節點、自動化節點、條件節點、會簽節點，包含節點類型、配置、輸入/輸出定義。"
+    },
+    {
+      "name": "Chat_Session",
+      "base_class": "Conversation",
+      "description": "對話會話，AI 聊天室的核心會話單元，包含 session_id、user_key、created_at、updated_at、status（active/archived）與元數據。"
+    },
+    {
+      "name": "Chat_Message",
+      "base_class": "Message",
+      "description": "對話消息，會話中的單條消息，包含 message_id、session_id、role（user/assistant/system）、content、timestamp 與附件（file_ids）。"
+    },
+    {
+      "name": "SSE_Stream",
+      "base_class": "Data_Stream",
+      "description": "Server-Sent Events 串流，用於 AI 回應的流式傳輸，支援 text/event-stream 格式，包含增量回應、錯誤事件與完成信號。"
+    },
+    {
+      "name": "WebSocket_Connection",
+      "base_class": "Real_Time_Connection",
+      "description": "WebSocket 雙向通信連接，用於即時聊天、服務狀態監控與雙向數據推送，支援心跳檢測、自動重連與消息隊列。"
+    },
+    {
+      "name": "MCP_Tool_Definition",
+      "base_class": "Tool_Definition",
+      "description": "MCP 工具定義，外部工具的標準化描述，包含 tool_id、name、description、input_schema、output_schema、category 與 access_permission。"
+    },
+    {
+      "name": "MCP_Tool_Invocation",
+      "base_class": "Tool_Execution",
+      "description": "MCP 工具調用記錄，記錄工具執行的請求參數、執行結果、耗時與錯誤信息，用於工具效能監控與使用分析。"
+    },
+    {
+      "name": "Task_Session",
+      "base_class": "Task",
+      "description": "任務會話，追蹤複雜 AI 任務的完整生命週期，包含 task_id、user_key、intent、status（pending/running/completed/failed）、result 與執行歷史。"
+    },
+    {
+      "name": "Billing_Record",
+      "base_class": "Financial_Record",
+      "description": "計費記錄，追蹤 AI API 使用量與費用，包含 user_key、model、token_count、cost、billing_period 與 tier（訂閱層級）。"
+    },
+    {
+      "name": "API_Key",
+      "base_class": "Credential",
+      "description": "API Key，用戶的外部 API 訪問憑據，包含 key_id、user_key、permissions、rate_limit、created_at 與過期時間。"
+    },
+    {
+      "name": "System_Health_Status",
+      "base_class": "Status",
+      "description": "系統健康狀態，各服務組件的運行狀態快照，包含 service_name、status（healthy/degraded/down）、latency、error_rate 與 last_check。"
+    },
+    {
+      "name": "Action_Trail_Record",
+      "base_class": "Audit_Log",
+      "description": "操作軌跡記錄，系統用戶操作的審計日誌，包含 user_key、action、resource、timestamp、ip_address 與 result（success/failure）。"
+    },
+    {
+      "name": "Theme_Template",
+      "base_class": "Template",
+      "description": "主題模板，預定義的主題配置套件，包含 template_id、name、config（顏色/字體/間距）、is_default 與 created_at。"
+    },
+    {
+      "name": "DuckDB_WASM_Instance",
+      "base_class": "Database_Instance",
+      "description": "DuckDB WASM 瀏覽器內嵌數據庫實例，用於前端就地數據分析、CSV/Excel 處理與 SQL 查詢，支援 WebAssembly 跨平台執行。"
+    },
+    {
+      "name": "Ontology_Graph",
+      "base_class": "Graph",
+      "description": "本體論圖譜，系統概念關係的元數據圖結構，定義實體類別、屬性與關係，支援層級推理與知識管理。"
+    },
+    {
+      "name": "Lead_Record",
+      "base_class": "Business_Entity",
+      "description": "銷售線索記錄，CRM 功能的潛在客戶資料，包含 lead_id、name、company、contact、status、source 與分配業務員。"
+    },
+    {
+      "name": "File_Upload",
+      "base_class": "File",
+      "description": "檔案上傳記錄，系統中上傳的附件文件，包含 file_id、name、type、size、storage_path、uploaded_by、uploaded_at 與关联的 session_id 或 kb_id。"
+    },
+    {
+      "name": "Service_Registry",
+      "base_class": "Registry",
+      "description": "服務註冊表，動態記錄所有 AI 服務的狀態與端點，包含 service_name、url、port、status、health_check_url 與 weight（負載均衡權重）。"
+    },
+    {
+      "name": "Rate_Limit_Rule",
+      "base_class": "Rule",
+      "description": "速率限制規則，定義 API 請求頻率限制，包含 endpoint、method、max_requests、window_seconds 與 exceeded_action（reject/delay）。"
+    },
+    {
+      "name": "JWT_Token",
+      "base_class": "Credential",
+      "description": "JWT 訪問令牌，用戶認證後頒發的令牌，包含 user_key、roles、exp、iat 與簽名算法（HS256），用於 API 請求的身份驗證。"
+    }
+  ],
+
+  "object_properties": [
+    {
+      "name": "renders_page",
+      "description": "前端應用渲染特定頁面元件。",
+      "domain": ["React_Frontend"],
+      "range": ["Frontend_Page"]
+    },
+    {
+      "name": "uses_component",
+      "description": "頁面使用 Ant Design 組件構建 UI。",
+      "domain": ["Frontend_Page"],
+      "range": ["Ant_Design_Component"]
+    },
+    {
+      "name": "applies_theme",
+      "description": "前端應用套用主題配置。",
+      "domain": ["React_Frontend"],
+      "range": ["Theme_Configuration"]
+    },
+    {
+      "name": "manages_auth_state",
+      "description": "AuthStore 管理認證狀態。",
+      "domain": ["AuthStore"],
+      "range": ["User_Account", "JWT_Token"]
+    },
+    {
+      "name": "authenticates_via_jwt",
+      "description": "用戶通過 JWT 令牌認證。",
+      "domain": ["User_Account"],
+      "range": ["JWT_Token"]
+    },
+    {
+      "name": "authorizes_via_role",
+      "description": "用戶權限通過角色鑒權。",
+      "domain": ["User_Account"],
+      "range": ["Role", "Permission"]
+    },
+    {
+      "name": "has_permission",
+      "description": "角色擁有特定權限。",
+      "domain": ["Role"],
+      "range": ["Permission"]
+    },
+    {
+      "name": "belongs_to_menu",
+      "description": "功能屬於功能菜單結構。",
+      "domain": ["Menu_Function"],
+      "range": ["Menu_Function"]
+    },
+    {
+      "name": "configures_system",
+      "description": "系統參數配置系統行為。",
+      "domain": ["System_Parameter"],
+      "range": ["Rust_API_Gateway", "AI_Task_Service", "Data_Agent_Service"]
+    },
+    {
+      "name": "proxies_to_backend",
+      "description": "Rust API Gateway 代理請求至下游服務。",
+      "domain": ["Rust_API_Gateway"],
+      "range": ["AI_Task_Service", "Data_Agent_Service", "Knowledge_Agent_Service", "MCP_Tools_Service", "BPA_MM_Agent_Service", "Memory_Agent_Service", "Backup_Agent_Service"]
+    },
+    {
+      "name": "orchestrates_task",
+      "description": "AITask 服務編排 AI 任務。",
+      "domain": ["AI_Task_Service"],
+      "range": ["Data_Agent_Service", "Knowledge_Agent_Service", "MCP_Tools_Service", "Memory_Agent_Service"]
+    },
+    {
+      "name": "resolves_intent",
+      "description": "Data Agent 解析自然語言意圖。",
+      "domain": ["Data_Agent_Service"],
+      "range": ["DA_Intent", "Intent_Catalog"]
+    },
+    {
+      "name": "generates_query",
+      "description": "Data Agent 生成 SQL/AQL 查詢。",
+      "domain": ["Data_Agent_Service"],
+      "range": ["DA_Table", "DA_Expression"]
+    },
+    {
+      "name": "executes_query",
+      "description": "Data Agent 執行數據庫查詢。",
+      "domain": ["DA_Table", "DA_Expression"],
+      "range": ["ArangoDB_Database"]
+    },
+    {
+      "name": "manages_knowledge",
+      "description": "Knowledge Agent 管理知識庫。",
+      "domain": ["Knowledge_Agent_Service"],
+      "range": ["Knowledge_Base", "Knowledge_Document", "Knowledge_Graph"]
+    },
+    {
+      "name": "vectorizes_document",
+      "description": "知識文檔向量化存入向量資料庫。",
+      "domain": ["Knowledge_Document"],
+      "range": ["Qdrant_Vector_Database"]
+    },
+    {
+      "name": "extracts_entities",
+      "description": "從文檔抽取實體建構知識圖譜。",
+      "domain": ["Knowledge_Document"],
+      "range": ["Knowledge_Graph"]
+    },
+    {
+      "name": "hybrid_retrieves",
+      "description": "混合檢索結合稀疏與密集向量。",
+      "domain": ["Hybrid_RAG_Config"],
+      "range": ["Qdrant_Vector_Database", "ArangoDB_Database"]
+    },
+    {
+      "name": "orchestrates_intent",
+      "description": "意圖協調器管理意圖分類與切換。",
+      "domain": ["Intent_Orchestrator"],
+      "range": ["DA_Intent", "Intent_Catalog"]
+    },
+    {
+      "name": "executes_workflow",
+      "description": "BPA 引擎執行業務流程。",
+      "domain": ["BPA_MM_Agent_Service"],
+      "range": ["BPA_Workflow", "BPA_Node"]
+    },
+    {
+      "name": "contains_nodes",
+      "description": "流程包含多個流程節點。",
+      "domain": ["BPA_Workflow"],
+      "range": ["BPA_Node"]
+    },
+    {
+      "name": "creates_session",
+      "description": "AI 服務創建對話會話。",
+      "domain": ["AI_Task_Service", "Memory_Agent_Service"],
+      "range": ["Chat_Session"]
+    },
+    {
+      "name": "sends_message",
+      "description": "用戶或 AI 發送消息。",
+      "domain": ["Chat_Session"],
+      "range": ["Chat_Message"]
+    },
+    {
+      "name": "streams_via_sse",
+      "description": "AI 回應通過 SSE 流式傳輸。",
+      "domain": ["AI_Task_Service"],
+      "range": ["SSE_Stream"]
+    },
+    {
+      "name": "connects_via_websocket",
+      "description": "客戶端通過 WebSocket 連接。",
+      "domain": ["React_Frontend"],
+      "range": ["WebSocket_Connection"]
+    },
+    {
+      "name": "registers_tool",
+      "description": "MCP Tools 服務註冊工具定義。",
+      "domain": ["MCP_Tools_Service"],
+      "range": ["MCP_Tool_Definition"]
+    },
+    {
+      "name": "invokes_tool",
+      "description": "AI 智能體調用 MCP 工具。",
+      "domain": ["AI_Task_Service", "Data_Agent_Service"],
+      "range": ["MCP_Tool_Invocation"]
+    },
+    {
+      "name": "tracks_task",
+      "description": "系統追蹤任務會話狀態。",
+      "domain": ["Task_Session"],
+      "range": ["AI_Task_Service", "Data_Agent_Service", "Knowledge_Agent_Service"]
+    },
+    {
+      "name": "records_billing",
+      "description": "系統記錄 AI API 使用計費。",
+      "domain": ["Billing_Record"],
+      "range": ["User_Account", "API_Key"]
+    },
+    {
+      "name": "issues_api_key",
+      "description": "系統為用戶頒發 API Key。",
+      "domain": ["API_Key"],
+      "range": ["User_Account"]
+    },
+    {
+      "name": "monitors_health",
+      "description": "系統監控服務健康狀態。",
+      "domain": ["Rust_API_Gateway"],
+      "range": ["System_Health_Status", "Service_Registry"]
+    },
+    {
+      "name": "logs_action",
+      "description": "系統記錄用戶操作軌跡。",
+      "domain": ["Action_Trail_Record"],
+      "range": ["User_Account"]
+    },
+    {
+      "name": "stores_in_db",
+      "description": "數據持久化至 ArangoDB。",
+      "domain": ["User_Account", "Role", "System_Parameter", "Knowledge_Base", "Chat_Session", "Lead_Record", "BPA_Workflow", "Intent_Catalog", "DA_Table"],
+      "range": ["ArangoDB_Database"]
+    },
+    {
+      "name": "applies_template",
+      "description": "主題模板應用於前端。",
+      "domain": ["Theme_Template"],
+      "range": ["Theme_Configuration"]
+    },
+    {
+      "name": "executes_sql_wasm",
+      "description": "DuckDB WASM 在瀏覽器執行 SQL。",
+      "domain": ["DuckDB_WASM_Instance"],
+      "range": ["File_Upload"]
+    },
+    {
+      "name": "defines_ontology",
+      "description": "本體論圖譜定義系統概念關係。",
+      "domain": ["Ontology_Graph"],
+      "range": ["Entity_Class"]
+    },
+    {
+      "name": "uploads_file",
+      "description": "用戶上傳文件至系統。",
+      "domain": ["File_Upload"],
+      "range": ["User_Account", "Chat_Session", "Knowledge_Base"]
+    },
+    {
+      "name": "registers_service",
+      "description": "AI 服務向 Gateway 註冊自身。",
+      "domain": ["Service_Registry"],
+      "range": ["AI_Task_Service", "Data_Agent_Service", "Knowledge_Agent_Service", "MCP_Tools_Service", "BPA_MM_Agent_Service", "Memory_Agent_Service", "Backup_Agent_Service"]
+    },
+    {
+      "name": "enforces_rate_limit",
+      "description": "中介層強制執行速率限制。",
+      "domain": ["Rate_Limit_Rule"],
+      "range": ["Rust_API_Gateway"]
+    },
+    {
+      "name": "manages_lead",
+      "description": "系統管理銷售線索。",
+      "domain": ["Lead_Record"],
+      "range": ["User_Account"]
+    }
+  ],
+
+  "metadata": {
+    "domain": "Enterprise_AI_Application",
+    "major_owner": "KA-Agent",
+    "data_classification": "INTERNAL",
+    "ontological_level": "MAJOR",
+    "intended_usage": [
+      "RAG 輔助企業決策",
+      "NL→SQL 查詢意圖分析",
+      "知識庫語義檢索優化",
+      "BPA 流程配置管理",
+      "AI 對話系統調優",
+      "多智能體協作調度",
+      "系統權限與配置管理",
+      "操作軌跡審計分析",
+      "訂閱計費與用量監控"
+    ],
+    "linked_ai_needs": [
+      "AI 輔助對話（Chat Session + Message → RAG 問答）",
+      "AI 輔助數據查詢（DA Intent + DA Table → NL→SQL 生成）",
+      "AI 輔助知識管理（Knowledge Base + Graph → 語義檢索）",
+      "AI 輔助流程自動化（BPA Workflow + Node → 流程建議）",
+      "AI 輔助意圖識別（Intent Catalog + Orchestrator → 意圖預測）",
+      "AI 輔助系統監控（Service Registry + Health Status → 異常診斷）",
+      "AI 輔助計費分析（Billing Record + API Key → 成本優化）"
+    ],
+    "framework_references": [
+      "Tauri 2.x (Cross-Platform Desktop)",
+      "React 18 + TypeScript (Frontend Framework)",
+      "Ant Design 6.x (UI Component Library)",
+      "Rust Axum (API Gateway)",
+      "Python FastAPI (AI Microservices)",
+      "ArangoDB (Graph Document Database)",
+      "Qdrant (Vector Database)",
+      "JWT (Authentication Standard)",
+      "SSE + WebSocket (Real-Time Communication)",
+      "Model Context Protocol (Tool Integration)"
+    ],
+    "architecture_layers": [
+      "Presentation Layer（Tauri Shell + React Frontend）",
+      "API Gateway Layer（Rust Axum + Middleware）",
+      "AI Service Layer（Python FastAPI Microservices）",
+      "Data Storage Layer（ArangoDB + Qdrant）",
+      "External Integration Layer（MCP Tools + External APIs）"
+    ],
+    "service_endpoints": [
+      "API Gateway: http://localhost:6500",
+      "AITask Service: http://localhost:8001",
+      "Data Agent Service: http://localhost:8003",
+      "MCP Tools Service: http://localhost:8004",
+      "BPA MM Agent Service: http://localhost:8005",
+      "Knowledge Agent Service: http://localhost:8007",
+      "Memory Agent Service: http://localhost:8008",
+      "Backup Agent Service: http://localhost:8010",
+      "ArangoDB: http://localhost:8529",
+      "Qdrant: http://localhost:6333"
+    ],
+    "frontend_pages": [
+      "Login（登入頁）",
+      "Welcome（歡迎頁）",
+      "MainLayout（主佈局）",
+      "UserManagement（用戶管理）",
+      "RoleManagement（角色管理）",
+      "FunctionManagement（功能管理）",
+      "SystemParams（系統參數）",
+      "ThemeTemplateManagement（主題模板）",
+      "BrowseAgent（瀏覽代理）",
+      "BrowseTools（瀏覽工具）",
+      "IntentCatalog（意圖目錄）",
+      "DataAgentTables（數據表配置）",
+      "TaskSessionChat（任務對話）",
+      "TaskSessionHistory（任務歷史）",
+      "TaskSessionScheduled（排程任務）",
+      "FloatingAssistantSettings（浮動助手設置）",
+      "KnowledgeBaseManagement（知識庫管理）",
+      "DatabaseBackupPanel（備份管理）"
+    ],
+    "ai_service_capabilities": [
+      "AITask：意圖識別、任務分解、多 Agent 協調對話",
+      "Data Agent：NL→SQL 查詢、意圖 RAG、數據表達式模板",
+      "Knowledge Agent：文檔向量化、混合檢索、知識圖譜抽取",
+      "MCP Tools：外部工具發現、調用、執行環境",
+      "BPA MM Agent：物料管理審批流、業務流程自動化",
+      "Memory Agent：對話記憶、多輪上下文、長期知識沉澱",
+      "Backup Agent：數據庫備份還原、增量備份策略"
+    ]
+  }
+}
