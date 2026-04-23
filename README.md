@@ -249,10 +249,10 @@ curl -sL https://raw.githubusercontent.com/your-repo/main/install.sh | bash
 | Knowledge Agent | 8007 | — | Python FastAPI (知識庫 RAG) |
 | Frontend (dev) | 1420 | — | Vite dev server |
 | Frontend (preview) | 6000 | — | Vite preview |
-| ArangoDB | 8529 | :8529 | 数据库 |
-| Qdrant | 6333 | :6333/dashboard | 向量數據庫 |
-| MinIO (S3) | 8334 | :8334/minio | 資料湖儲存 |
-| SeaweedFS | 9334 | :9334 | 檔案備份儲存 |
+| ArangoDB | 8529 | :8529 | 資料庫 |
+| Qdrant | 6333 | :6333/dashboard | 向量檢索 |
+| SeaweedFS Filer | 8888 | :8888 | 統一檔案備份儲存 |
+| SeaweedFS Master | 9333 | :9333 | SeaweedFS 叢集協調 |
 | Ollama | 11434 | — | LLM |
 | LM Studio | 1234 | — | LLM |
 
@@ -312,7 +312,7 @@ BILLING_PRICE_PER_1K_TOKENS=0.001
 # Server
 # ===================
 PORT=6500
-HOST=0.0.0.0
+HOST=127.0.0.1
 ```
 
 ## 默认账户

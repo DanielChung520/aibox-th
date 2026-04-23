@@ -3,7 +3,7 @@
 ---
 lastUpdate: 2026-04-14
 author: AI Agent (根據代碼調查與 Oracle 架構分析)
-version: 1.0.0
+version: 1.1.0
 ---
 
 ## 目錄
@@ -13,7 +13,11 @@ version: 1.0.0
 3. [現有程式碼地圖](#3-現有程式碼地圖)
 4. [缺口分析](#4-缺口分析)
 5. [與現有程式碼的整合點](#5-與現有程式碼的整合點)
-6. [安全性分析](#6-安全性分析)
+6. [安全性分析與 Security Agent](#6-安全性分析與-security-agent)
+   - [6.1 當前安全狀態](#61-當前安全狀態)
+   - [6.2 攻擊面分析](#62-攻擊面分析)
+   - [6.3 必須修復的安全問題](#63-必須修復的安全問題)
+   - [6.4 Security Agent（安全代理）](#64-security-agent安全代理)
 7. [Phase 實作規劃](#7-phase-實作規劃)
 8. [風險與對策](#8-風險與對策)
 9. [附錄：關鍵程式碼位置索引](#9-附錄關鍵程式碼位置索引)
@@ -200,6 +204,21 @@ ai-services/
 │   ├── app.py                        # Celery 設定
 │   └── tasks.py                      # 非同步任務
 │
+├── security_agent/                    # Security Agent (新增)
+│   ├── main.py                       # FastAPI 入口
+│   ├── config.py                     # 設定檔
+│   ├── auth/
+│   │   ├── token_verifier.py         # JWT 驗證
+│   │   └── user_resolver.py          # 用戶身份解析
+│   ├── permission/
+│   │   ├── rbac_checker.py           # RBAC 權限檢查
+│   │   └── resource_guard.py          # 資源保護
+│   ├── audit/
+│   │   ├── logger.py                 # 審計日誌寫入
+│   │   ├── report_generator.py        # 審計報告生成
+│   │   └── anomaly_detector.py        # 異常行為偵測
+│   └── models.py                     # Pydantic 模型
+│
 ├── memory_agent/                     # 記憶服務
 │   ├── main.py
 │   └── core/
@@ -257,6 +276,9 @@ api/src/                              # Rust API Gateway
 | Permission Check | ⚠️ | `api/src/api/mod.rs` | 只有 listing filter |
 | Tool Registry | ✅ | `aitask/tools/registry.py` | 靜態註冊 |
 | Dynamic Tool Catalog | ❌ | - | 不存在 |
+| **Security Agent** | ❌ | - | **不存在，需新增** |
+| Audit Logging | ❌ | - | **不存在，需新增** |
+| Anomaly Detection | ❌ | - | **不存在，需新增** |
 
 ---
 
@@ -535,7 +557,7 @@ struct CompletionCriterion {
 
 ---
 
-## 6. 安全性分析
+## 6. 安全性分析與 Security Agent
 
 ### 6.1 當前安全狀態
 
@@ -651,16 +673,517 @@ async def execute_workflow(
 
 ---
 
+### 6.4 Security Agent（安全代理）
+
+#### 6.4.1 設計理念
+
+> **「安全是第一天就該建設的，不是事後補丁。」**
+>
+> Security Agent 作為一個專門的小模型 Agent，負責所有身份驗證、權限檢查、審計記錄與異常偵測工作。
+
+**核心職責**：
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Security Agent                            │
+│                  (專用小模型: qwen2.5:1.5b)                   │
+├─────────────────────────────────────────────────────────────┤
+│  1. 身份驗證 (Authentication)                              │
+│     - 驗證 JWT token 有效性                                 │
+│     - 解析用戶身份與角色                                   │
+│     - 防止 Token 偽造/過期                                │
+│                                                             │
+│  2. 權限檢查 (Authorization)                                │
+│     - 查詢 user → roles → permissions                     │
+│     - 檢查 tool/workflow 是否有權限執行                    │
+│     - 資源訪問控制 (data, API, workflow)                    │
+│                                                             │
+│  3. 審計日誌 (Audit Logging)                               │
+│     - 記錄所有執行嘗試 (成功/失敗)                         │
+│     - 記錄時間、用戶、資源、動作、結果                      │
+│     - 即時寫入 ArangoDB audit_logs                         │
+│                                                             │
+│  4. 異常偵測 (Anomaly Detection)                           │
+│     - 速率限制 (rate limit)                                │
+│     - 異常時間訪問                                         │
+│     - 大量失敗嘗試                                         │
+│     - 跨帳戶異常訪問                                        │
+│                                                             │
+│  5. 審計報告 (Audit Reporting)                             │
+│     - 產出結構化審計報告                                   │
+│     - 異常行為分析                                         │
+│     - 合規性報表                                           │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**為什麼要用專用小模型？**
+
+| 考量 | 大模型 (GPT-4/Claude) | 專用小模型 (qwen2.5:1.5b) |
+|------|----------------------|---------------------------|
+| 延遲 | 高 (2-5秒) | 低 (<100ms) |
+| 成本 | 高 (每次 $0.01+) | 低 (接近零) |
+| 能力 | 過度複雜 | 剛好够用 (簡單 yes/no) |
+| 穩定性 | 可能有創意性輸出 | 確定性輸出 |
+
+#### 6.4.2 架構設計
+
+**目錄結構**：
+
+```
+ai-services/
+└── security_agent/                    # 新增
+    ├── main.py                        # FastAPI 入口
+    ├── config.py                      # 設定檔
+    ├── auth/
+    │   ├── token_verifier.py         # JWT 驗證
+    │   └── user_resolver.py          # 用戶身份解析
+    ├── permission/
+    │   ├── rbac_checker.py          # RBAC 權限檢查
+    │   └── resource_guard.py         # 資源保護
+    ├── audit/
+    │   ├── logger.py                 # 審計日誌寫入
+    │   ├── report_generator.py       # 審計報告生成
+    │   └── anomaly_detector.py       # 異常行為偵測
+    └── models.py                     # Pydantic 模型
+```
+
+**與現有架構的整合**：
+
+```
+┌────────────────────────────────────────────────────────────────────┐
+│                        請求流程                                      │
+├────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│   User Request                                                      │
+│        │                                                           │
+│        ▼                                                           │
+│   ┌─────────────────┐                                              │
+│   │  API Gateway    │ ─── JWT 初步驗證                             │
+│   │  (Rust)         │                                              │
+│   └────────┬────────┘                                              │
+│            │                                                        │
+│            ▼                                                        │
+│   ┌─────────────────────────────────────────────────────────────┐  │
+│   │              Security Agent Check                            │  │
+│   │  ┌─────────────────────────────────────────────────────┐   │  │
+│   │  │  1. Token Verification (驗證 JWT)                    │   │  │
+│   │  │  2. RBAC Permission Check (權限檢查)                 │   │  │
+│   │  │  3. Anomaly Detection (異常偵測)                     │   │  │
+│   │  │  4. Audit Log (寫入審計日誌)                        │   │  │
+│   │  └─────────────────────────────────────────────────────┘   │  │
+│   │                        │                                    │  │
+│   │         ┌────────────┴────────────┐                        │  │
+│   │         ▼                         ▼                        │  │
+│   │    [Allowed]                [Denied]                        │  │
+│   │         │                         │                        │  │
+│   │         ▼                         ▼                        │  │
+│   │   下游服務執行              Return 403                    │  │
+│   │         │                   + Audit Log                   │  │
+│   │         ▼                                                  │  │
+│   │   [Success/Failure]                                        │  │
+│   │         │                                                  │  │
+│   │         ▼                                                  │  │
+│   │   Audit Log (成功/失敗)                                    │  │
+│   └─────────────────────────────────────────────────────────────┘  │
+│                                                                     │
+└────────────────────────────────────────────────────────────────────┘
+```
+
+#### 6.4.3 API 設計
+
+**Endpoints**:
+
+| 方法 | 端點 | 說明 |
+|------|------|------|
+| POST | `/security/check` | 權限檢查 |
+| POST | `/security/log` | 寫入審計日誌 |
+| POST | `/security/log/denial` | 寫入拒絕日誌 |
+| GET | `/security/logs` | 查詢審計日誌 |
+| GET | `/security/reports` | 獲取審計報告 |
+| POST | `/security/reports/generate` | 生成報告 |
+| GET | `/security/anomalies` | 查詢異常事件 |
+| GET | `/health` | 健康檢查 |
+
+**Request/Response 範例**：
+
+```python
+# Request: 權限檢查
+class SecurityCheckRequest(BaseModel):
+    user_token: str                    # Bearer token
+    action: str                       # "execute_tool" | "execute_workflow" | "access_data"
+    resource: str                     # tool_name | workflow_id | data_resource
+    params: Optional[dict]            # 額外參數
+    ip_address: Optional[str]         # 用戶 IP
+    session_key: Optional[str]        # session 關聯
+
+# Response: 權限檢查結果
+class SecurityCheckResponse(BaseModel):
+    allowed: bool                     # 是否允許
+    denied_reason: Optional[str]      # 如果 denied， reason
+    user_key: str                    # 用戶 key
+    user_role: str                   # 用戶角色
+    permissions: list[str]           # 用戶擁有的權限
+    checked_at: datetime              # 檢查時間
+    risk_score: float                # 風險分數 (0-1)
+    anomalies: list[dict]            # 偵測到的異常
+
+# Request: 審計日誌
+class AuditLogRequest(BaseModel):
+    user_key: str
+    user_role: str
+    action: str                      # "execute_tool" | "execute_workflow" | "access_data"
+    resource: str
+    resource_params: Optional[dict]
+    decision: str                    # "allowed" | "denied"
+    denied_reason: Optional[str]
+    ip_address: Optional[str]
+    user_agent: Optional[str]
+    execution_result: Optional[str]  # "success" | "failure" | None
+    error_message: Optional[str]
+    session_key: Optional[str]
+    run_id: Optional[str]
+    tokens_used: Optional[int]
+```
+
+#### 6.4.4 異常偵測規則
+
+```python
+# 異常偵測規則定義
+ANOMALY_RULES = [
+    # 1. 速率限制
+    {
+        "type": "rate_limit",
+        "name": "請求頻率過高",
+        "threshold": 100,            # 100 次
+        "window": 60,                 # 60 秒內
+        "action": "flag",            # "flag" | "deny" | "block"
+    },
+    
+    # 2. 異常時間
+    {
+        "type": "unusual_hours",
+        "name": "異常工作時間",
+        "allowed_hours": list(range(7, 22)),  # 7:00 - 22:00
+        "action": "flag",
+    },
+    
+    # 3. 大量訪問
+    {
+        "type": "bulk_access",
+        "name": "短時間大量資源訪問",
+        "threshold": 50,             # 50 次
+        "window": 300,              # 5 分鐘內
+        "action": "flag",
+    },
+    
+    # 4. 連續失敗
+    {
+        "type": "failed_attempts",
+        "name": "連續認證失敗",
+        "threshold": 5,              # 5 次
+        "window": 600,              # 10 分鐘內
+        "action": "deny",           # 鎖定帳戶
+    },
+    
+    # 5. 跨帳戶訪問
+    {
+        "type": "cross_account_access",
+        "name": "跨帳戶異常訪問",
+        "enabled": True,
+        "threshold": 3,              # 跨 3 個帳戶
+        "window": 3600,             # 1 小時內
+        "action": "flag",
+    },
+    
+    # 6. 權限提升偵測
+    {
+        "type": "privilege_escalation",
+        "name": "權限提升嘗試",
+        "enabled": True,
+        "suspicious_actions": ["admin_access", "role_change", "permission_grant"],
+        "action": "deny",
+    },
+]
+```
+
+#### 6.4.5 審計報告類型
+
+| 報告類型 | 觸發條件 | 內容 |
+|---------|---------|------|
+| **即時報告** | 每次 denial | 誰、被拒絕原因、嘗試的資源、時間 |
+| **每日報告** | 每天凌晨 | 總結統計、熱門動作、異常統計、用戶排名 |
+| **每週報告** | 每週一 | 趨勢分析、異常用戶、權限變化、異常模式 |
+| **異常報告** | 偵測到異常時 | 異常詳情、受影響資源、攻擊者指紋、建議 |
+
+**報告 Schema**：
+
+```python
+class AuditReport(BaseModel):
+    _key: Optional[str]
+    report_type: str                 # "realtime" | "daily" | "weekly" | "anomaly"
+    period_start: datetime
+    period_end: datetime
+    summary: ReportSummary
+    anomalies: list[AnomalyRecord]
+    generated_by: str                 # "system" | "user_request"
+    generated_at: datetime
+    status: str                      # "draft" | "published" | "archived"
+
+class ReportSummary(BaseModel):
+    total_requests: int
+    allowed: int
+    denied: int
+    by_user: dict[str, int]          # user_key -> count
+    by_action: dict[str, int]        # action -> count
+    by_resource: dict[str, int]      # resource -> count
+    by_result: dict[str, int]        # result -> count
+    avg_response_time_ms: float
+    top_denied_reasons: list[dict]   # [{"reason": "...", "count": N}]
+
+class AnomalyRecord(BaseModel):
+    anomaly_id: str
+    anomaly_type: str
+    description: str
+    severity: str                     # "low" | "medium" | "high" | "critical"
+    affected_users: list[str]
+    affected_resources: list[str]
+    first_occurred: datetime
+    last_occurred: datetime
+    occurrence_count: int
+    recommendation: str
+```
+
+#### 6.4.6 ArangoDB Collections
+
+**audit_logs**:
+
+```json
+{
+  "_key": "audit_xxx",
+  "timestamp": "2026-04-14T10:30:00Z",
+  "user_key": "user_123",
+  "username": "john.doe",
+  "user_role": "admin",
+  "action": "execute_tool",
+  "resource": "web_search",
+  "resource_params": {
+    "query": "..."
+  },
+  "decision": "allowed",
+  "denied_reason": null,
+  "risk_score": 0.2,
+  "anomalies_detected": [],
+  "ip_address": "192.168.1.1",
+  "user_agent": "...",
+  "execution_result": "success",
+  "error_message": null,
+  "session_key": "session_xxx",
+  "run_id": "pdca_run_xxx",
+  "tokens_used": 1234,
+  "latency_ms": 150
+}
+```
+
+**audit_reports**:
+
+```json
+{
+  "_key": "report_xxx",
+  "report_type": "daily",
+  "period_start": "2026-04-13T00:00:00Z",
+  "period_end": "2026-04-14T00:00:00Z",
+  "summary": {
+    "total_requests": 1000,
+    "allowed": 950,
+    "denied": 50,
+    "by_user": {"user_123": 200, "user_456": 150},
+    "by_action": {"execute_tool": 600, "execute_workflow": 400},
+    "by_resource": {"web_search": 300, "data_query": 250},
+    "by_result": {"success": 900, "failure": 100},
+    "avg_response_time_ms": 85.5,
+    "top_denied_reasons": [
+      {"reason": "insufficient_permissions", "count": 30},
+      {"reason": "rate_limit_exceeded", "count": 15}
+    ]
+  },
+  "anomalies": [
+    {
+      "anomaly_id": "ano_001",
+      "anomaly_type": "rate_limit",
+      "description": "用戶 user_789 在 1 分鐘內發起 120 次請求",
+      "severity": "medium",
+      "affected_users": ["user_789"],
+      "occurrence_count": 5
+    }
+  ],
+  "generated_at": "2026-04-14T00:05:00Z",
+  "status": "published"
+}
+```
+
+#### 6.4.7 與現有程式碼的整合點
+
+**整合點總覽**：
+
+| 現有檔案 | 改動方式 | 說明 |
+|---------|---------|------|
+| `mcp_tools/main.py` | Middleware/Dependency | 所有 `/execute` 請求經過 Security Agent |
+| `bpa/mm_agent/main.py` | Middleware/Dependency | 所有 `/execute` 請求經過 Security Agent |
+| `bpa/main.py` | Middleware/Dependency | 所有 `/execute` 請求經過 Security Agent |
+| `tool_executor.py` | Header 注入 | 注入已驗證的 user_key, user_role |
+| `clients.rs` | Header 轉發 | 轉發 Authorization header |
+
+**整合範例 - MCP Tools**:
+
+```python
+# ai-services/mcp_tools/main.py
+
+# 1. 新增 Security Agent 依賴
+from security_agent import SecurityAgent
+
+security_agent = SecurityAgent()
+
+# 2. 所有 execute 請求經過 Security Check
+@app.post("/execute")
+async def execute_tool(
+    request: ToolCall,
+    Authorization: str = Header(None),
+):
+    # Security Check
+    check_result = await security_agent.check(
+        user_token=Authorization,
+        action="execute_tool",
+        resource=request.tool,
+        params=request.parameters,
+    )
+    
+    # 如果 denied
+    if not check_result.allowed:
+        # 記錄 denial
+        await security_agent.log_denial(
+            user_key=check_result.user_key,
+            action="execute_tool",
+            resource=request.tool,
+            denied_reason=check_result.denied_reason,
+        )
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error": "Access denied",
+                "reason": check_result.denied_reason,
+                "user_key": check_result.user_key,
+            }
+        )
+    
+    # 執行工具
+    result = await execute_tool_impl(request)
+    
+    # 記錄成功
+    await security_agent.log_success(
+        user_key=check_result.user_key,
+        action="execute_tool",
+        resource=request.tool,
+        result="success",
+    )
+    
+    return result
+```
+
+**整合範例 - BPA**:
+
+```python
+# ai-services/bpa/mm_agent/main.py
+
+from security_agent import SecurityAgent
+
+security_agent = SecurityAgent()
+
+@app.post("/execute")
+async def execute_workflow(
+    request: WorkflowExecutionRequest,
+    Authorization: str = Header(None),
+):
+    # Security Check
+    check_result = await security_agent.check(
+        user_token=Authorization,
+        action="execute_workflow",
+        resource=request.workflow_id,
+        params=request.dict(),
+    )
+    
+    if not check_result.allowed:
+        await security_agent.log_denial(
+            user_key=check_result.user_key,
+            action="execute_workflow",
+            resource=request.workflow_id,
+            denied_reason=check_result.denied_reason,
+        )
+        raise HTTPException(status_code=403, detail=check_result.denied_reason)
+    
+    return await execute_workflow_impl(request)
+```
+
+#### 6.4.8 注意事項與最佳實踐
+
+**部署注意事項**：
+
+| 項目 | 說明 |
+|------|------|
+| **模型選擇** | 使用 `qwen2.5:1.5b-instruct`（平衡速度與準確性） |
+| **延遲目標** | P99 < 100ms，不應成為系統瓶頸 |
+| **可用性** | Security Agent 故障時應預設 deny，而非 allow |
+| **日誌保留** | audit_logs 建議保留 90 天 |
+| **報告生成** | 避免在 request path 內生成大型報告 |
+
+**安全注意事項**：
+
+| 項目 | 說明 |
+|------|------|
+| **Token 驗證** | 所有 token 必須經密碼學驗證，不可只做字串比對 |
+| **RBAC 查詢** | 權限查詢結果應緩存，但需設定 TTL |
+| **異常閾值** | 閾值應可動態調整，無需重啟服務 |
+| **敏感資料** | 審計日誌中的 resource_params 應脫敏處理 |
+| **審計完整性** | 關鍵操作採用 append-only 日誌 |
+
+**效能注意事項**：
+
+| 項目 | 說明 |
+|------|------|
+| **快取策略** | 用戶權限快取 5-15 分鐘 |
+| **連接池** | 使用連接池而非每次新建連接 |
+| **非同步寫入** | 審計日誌非同步寫入，不阻塞主流程 |
+| **批量寫入** | 高頻日誌採用批量寫入減少 IO |
+
+#### 6.4.9 與 Phase 0 的關係
+
+> **Phase 0 的安全強化工作，應該由 Security Agent 來統一實作，而非分散在各個服務中手動添加。**
+
+```
+Phase 0 實作策略：
+┌────────────────────────────────────────────────────────────┐
+│  Step 0.1: 部署 Security Agent 服務                       │
+│  Step 0.2: 整合 mcp_tools/main.py → Security Agent      │
+│  Step 0.3: 整合 bpa/mm_agent/main.py → Security Agent   │
+│  Step 0.4: 整合 bpa/main.py → Security Agent            │
+│  Step 0.5: 開啟審計日誌 (audit_logs)                     │
+│  Step 0.6: 設定異常偵測規則                              │
+└────────────────────────────────────────────────────────────┘
+```
+
+---
+
 ## 7. Phase 實作規劃
 
-### Phase 0: 安全強化（防止裸奔）
+### Phase 0: 安全強化（以 Security Agent 為核心）
 
-| Step | 檔案 | 改動 | 優先級 |
-|------|------|------|--------|
-| 0.1 | `clients.rs` | 轉發 Authorization header | **高** |
-| 0.2 | `tool_executor.py` | 取得真實 auth_token | **高** |
-| 0.3 | `mcp_tools/main.py` | `/execute` 加入 token 驗證 | **高** |
-| 0.4 | `bpa/mm_agent/main.py` | `/execute` 加入 permission check | **高** |
+| Step | 檔案/新增 | 改動 | 優先級 |
+|------|---------|------|--------|
+| 0.1 | `ai-services/security_agent/` | 部署 Security Agent 服務 | **高** |
+| 0.2 | `mcp_tools/main.py` | 整合 Security Agent | **高** |
+| 0.3 | `bpa/mm_agent/main.py` | 整合 Security Agent | **高** |
+| 0.4 | `bpa/main.py` | 整合 Security Agent | **高** |
+| 0.5 | `api/src/db/mod.rs` | 新增 `audit_logs` collection | **高** |
+| 0.6 | `security_agent` | 開啟異常偵測規則 | **中** |
 
 ---
 
@@ -873,7 +1396,20 @@ AVAILABLE_WORKFLOWS = ["pdca", "bpa_mm"]
 | `api/src/api/chat.rs` | Chat API | `create_session`, `send_message` |
 | `api/src/db/mod.rs` | DB 模型 | `ChatSession`, `ChatMessage` |
 
-### 9.6 LangGraph Checkpoint
+### 9.6 Security Agent
+
+| 檔案 | 說明 | 關鍵函數/類別 |
+|------|------|--------------|
+| `ai-services/security_agent/main.py` | Security Agent 入口 | `/security/check`, `/security/log` |
+| `ai-services/security_agent/auth/token_verifier.py` | JWT 驗證 | `verify_jwt`, `decode_token` |
+| `ai-services/security_agent/auth/user_resolver.py` | 用戶身份解析 | `resolve_user`, `get_user_roles` |
+| `ai-services/security_agent/permission/rbac_checker.py` | RBAC 檢查 | `check_permission`, `get_user_permissions` |
+| `ai-services/security_agent/permission/resource_guard.py` | 資源保護 | `guard_resource`, `check_access` |
+| `ai-services/security_agent/audit/logger.py` | 審計日誌 | `log_denial`, `log_success`, `log_anomaly` |
+| `ai-services/security_agent/audit/report_generator.py` | 報告生成 | `generate_report`, `generate_daily_report` |
+| `ai-services/security_agent/audit/anomaly_detector.py` | 異常偵測 | `detect_anomalies`, `check_rate_limit` |
+
+### 9.7 LangGraph Checkpoint
 
 | 檔案 | 說明 | 關鍵函數/類別 |
 |------|------|--------------|
@@ -887,4 +1423,5 @@ AVAILABLE_WORKFLOWS = ["pdca", "bpa_mm"]
 
 | 日期 | 版本 | 更新者 | 變更內容 |
 |------|------|--------|----------|
+| 2026-04-14 | 1.1.0 | AI Agent | 新增 Security Agent 詳細規格（設計理念、架構、API、異常偵測、審計報告、整合點、注意事項） |
 | 2026-04-14 | 1.0.0 | AI Agent | 初始版本：整合流程圖分析、程式碼地圖、缺口分析、整合點、安全性分析、實作規劃 |

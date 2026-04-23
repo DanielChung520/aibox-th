@@ -1,0 +1,113 @@
+{
+  "type": "domain",
+  "name": "Ragic_Manual",
+  "version": "1.0",
+  "default_version": true,
+  "ontology_name": "Ragic_Manual_Domain_Ontology",
+  "description": "Ragic 說明書領域本體論，定義操作說明書、章節、圖片、影片等核心概念。適用於 Ragic 操作問題查詢、RAG 檢索與使用者操作輔助場景。",
+  "author": "Daniel Chung",
+  "last_modified": "2026-04-20",
+  "inherits_from": ["5W1H_Base_Ontology_OWL"],
+  "compatible_domains": ["Knowledge_Assets", "Software_Documentation"],
+  "tags": ["Ragic", "Manual", "Documentation", "Tutorial", "KA"],
+  "use_cases": [
+    "Ragic 操作問題查詢",
+    "功能操作說明檢索",
+    "使用者操作輔助",
+    "RAG 知識庫建置"
+  ],
+
+  "entity_classes": [
+    {
+      "name": "Article",
+      "base_class": "Document",
+      "description": "Ragic 說明書文章，包含操作教學或功能說明。"
+    },
+    {
+      "name": "Chapter",
+      "base_class": "Concept",
+      "description": "章節，大章節如基本操作、搜尋排序、資料庫首頁等。"
+    },
+    {
+      "name": "Section",
+      "base_class": "Concept",
+      "description": "小節，附屬於章節下的特定功能說明。"
+    },
+    {
+      "name": "Image",
+      "base_class": "Media",
+      "description": "說明書中的截圖或示意圖，用於輔助理解操作步驟。"
+    },
+    {
+      "name": "Video",
+      "base_class": "Media",
+      "description": "教學影片，提供視覺化的操作演示。"
+    },
+    {
+      "name": "Operation_Step",
+      "base_class": "Concept",
+      "description": "操作步驟，包含具體的點擊或輸入動作。"
+    },
+    {
+      "name": "Related_Link",
+      "base_class": "Concept",
+      "description": "相關連結，指向其他說明書或外部資源。"
+    },
+    {
+      "name": "Tag",
+      "base_class": "Concept",
+      "description": "標籤，用於分類和檢索說明書。"
+    }
+  ],
+
+  "object_properties": [
+    {
+      "name": "belongs_to_chapter",
+      "description": "文章所屬的章節。",
+      "domain": ["Article"],
+      "range": ["Chapter"]
+    },
+    {
+      "name": "has_section",
+      "description": "章節包含的小節。",
+      "domain": ["Chapter"],
+      "range": ["Section"]
+    },
+    {
+      "name": "contains_image",
+      "description": "文章包含的圖片。",
+      "domain": ["Article", "Section"],
+      "range": ["Image"]
+    },
+    {
+      "name": "has_video",
+      "description": "文章包含的教學影片。",
+      "domain": ["Article"],
+      "range": ["Video"]
+    },
+    {
+      "name": "describes_step",
+      "description": "說明書描述的操作步驟。",
+      "domain": ["Article"],
+      "range": ["Operation_Step"]
+    },
+    {
+      "name": "linked_to",
+      "description": "相關連結。",
+      "domain": ["Article"],
+      "range": ["Related_Link"]
+    },
+    {
+      "name": "tagged_with",
+      "description": "文章的標籤。",
+      "domain": ["Article"],
+      "range": ["Tag"]
+    }
+  ],
+
+  "metadata": {
+    "domain_owner": "KA-Agent",
+    "data_classification": "INTERNAL",
+    "source": "Ragic Online Documentation"
+  }
+}

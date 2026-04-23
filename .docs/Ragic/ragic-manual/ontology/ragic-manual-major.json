@@ -1,0 +1,128 @@
+{
+  "type": "major",
+  "name": "Ragic_Manual_Operation",
+  "version": "1.0",
+  "default_version": true,
+  "ontology_name": "Ragic_Manual_Operation_Major_Ontology",
+  "description": "Ragic 操作說明書專業本體論，定義操作類型、權限、畫面元素、警示訊息等專業概念。適用於操作問題診斷、RAG 查詢與操作決策推斷。",
+  "author": "Daniel Chung",
+  "last_modified": "2026-04-20",
+
+  "inherits_from": [
+    "5W1H_Base_Ontology_OWL",
+    "Ragic_Manual_Domain_Ontology"
+  ],
+
+  "tags": ["Operation", "Instruction", "Tutorial", "KA"],
+  "use_cases": [
+    "操作問題診斷",
+    "功能位置查詢",
+    "替代方案推薦",
+    "操作錯誤排除"
+  ],
+
+  "entity_classes": [
+    {
+      "name": "Operation_Type",
+      "base_class": "Concept",
+      "description": "操作類型，如新增、編輯、刪除、匯入、匯出等。"
+    },
+    {
+      "name": "Screen_Element",
+      "base_class": "Concept",
+      "description": "畫面元素，如按鈕、選單、輸入框、核取方塊等。"
+    },
+    {
+      "name": "Permission",
+      "base_class": "Concept",
+      "description": "權限，如新增權限、編輯權限、刪除權限、管理權限。"
+    },
+    {
+      "name": "Warning_Message",
+      "base_class": "Concept",
+      "description": "警示訊息，如權限不足、功能無法使用等提示。"
+    },
+    {
+      "name": "Alternative_Solution",
+      "base_class": "Concept",
+      "description": "替代方案，當主要功能無法使用時的替代方法。"
+    },
+    {
+      "name": "Shortcut",
+      "base_class": "Concept",
+      "description": "快捷鍵，如 Alt+N, Ctrl+S 等快速操作。"
+    },
+    {
+      "name": "Menu_Path",
+      "base_class": "Concept",
+      "description": "選單路徑，找到功能的階層式操作路徑。"
+    },
+    {
+      "name": "Status_Indicator",
+      "base_class": "Concept",
+      "description": "狀態指示，如儲存中、已儲存、讀取中、權限不足等。"
+    }
+  ],
+
+  "object_properties": [
+    {
+      "name": "is_operation_type",
+      "description": "操作的類型。",
+      "domain": ["Operation_Step"],
+      "range": ["Operation_Type"]
+    },
+    {
+      "name": "located_at_element",
+      "description": "操作所在的畫面元素。",
+      "domain": ["Operation_Step"],
+      "range": ["Screen_Element"]
+    },
+    {
+      "name": "requires_permission",
+      "description": "操作需要的權限。",
+      "domain": ["Operation_Type"],
+      "range": ["Permission"]
+    },
+    {
+      "name": "shows_warning",
+      "description": "操作顯示的警示訊息。",
+      "domain": ["Operation_Type", "Permission"],
+      "range": ["Warning_Message"]
+    },
+    {
+      "name": "has_alternative",
+      "description": "替代方案。",
+      "domain": ["Operation_Type"],
+      "range": ["Alternative_Solution"]
+    },
+    {
+      "name": "uses_shortcut",
+      "description": "使用的快捷鍵。",
+      "domain": ["Operation_Step"],
+      "range": ["Shortcut"]
+    },
+    {
+      "name": "navigates_through",
+      "description": "選單路徑。",
+      "domain": ["Operation_Step"],
+      "range": ["Menu_Path"]
+    },
+    {
+      "name": "displays_status",
+      "description": "顯示的狀態。",
+      "domain": ["Operation_Step"],
+      "range": ["Status_Indicator"]
+    }
+  ],
+
+  "metadata": {
+    "domain": "Ragic_Manual",
+    "major_owner": "KA-Agent",
+    "data_classification": "INTERNAL",
+    "intended_usage": [
+      "RAG 檢索重排序",
+      "KG 三元組抽取",
+      "操作推斷與輔助決策"
+    ]
+  }
+}

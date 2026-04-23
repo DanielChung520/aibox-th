@@ -1,6 +1,12 @@
-# Agent Orchestrator + BPA 协作规格说明书
+# 智能體通用 Orchestrator 規格說明書
 
-## 一、系统架构
+| 版本 | 日期 | 修訂內容 | 修訂人 |
+|------|------|----------|--------|
+| 1.0 | 2026-04-21 | 新增元件層編排框架章節（第九、十章）：shared/orchestration/ 架構、核心類別、標準節點、工具執行框架、Agent 等級、新建 Agent 檢查清單 | Daniel Chung |
+
+---
+
+## 一、系統架構
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
@@ -515,27 +521,330 @@ IDLE ──[接收任务]──► RUNNING
 
 ---
 
-## 九、后续讨论主题
+## 九、兩層編排架構
 
-规格基础已覆盖，后续可以讨论：
+本系統採用**兩層編排架構**，各層職責分明：
 
-1. **Data Agent (DA) 详细设计**
-   - 数据抽象方式
-   - 支持的数据源类型
-   - 与 BPA 的交互
+| 層級 | 編排器 | 位置 | 職責 |
+|------|--------|------|------|
+| **系統層**（System-level） | Top Orchestrator | `aitask/` | 路由：User → 哪個 Agent（BPA/DA/KA...） |
+| **元件層**（Agent-level） | Agent Orchestrator | `shared/orchestration/` | 每個 Agent 內部的 workflow 框架 |
 
-2. **BPA 内部实现**
-   - LangGraph 工作流
-   - Task Decomposition Prompt
+### 9.1 兩層協作關係
 
-3. **前端交互设计**
-   - 任务卡片展示
-   - 确认/修改流程
+```
+User 輸入
+    │
+    ▼
+┌─────────────────────────────────────────────┐
+│  系統層：Top Orchestrator                    │
+│  - 意圖檢測（task vs chat）                 │
+│  - 路由到指定 Agent（BPA/DA/KA）           │
+│  - Handoff Protocol                        │
+└─────────────────┬───────────────────────────┘
+                  │
+                  ▼
+┌─────────────────────────────────────────────┐
+│  元件層：每個 Agent 內部                     │
+│  shared/orchestration/ 框架                │
+│  - 狀態管理 (AgentState)                   │
+│  - LLM 節點 (意圖分類、對話)               │
+│  - 工具執行節點 (shared/tools/)            │
+│  - 路由節點 (action_plan routing)          │
+└─────────────────┬───────────────────────────┘
+                  │
+                  ▼
+          Agent 執行結果
+                  │
+                  ▼
+┌─────────────────────────────────────────────┐
+│  系統層：Top Orchestrator 彙集回覆          │
+└─────────────────────────────────────────────┘
+```
 
-4. **持久化方案**
-   - 会话状态存储
-   - 检查点机制
+### 9.2 元件層框架約束
 
-5. **安全与权限**
-   - BPA 权限控制
-   - 数据访问限制
+所有 Agent（無論 BPA、DA、KA 或未來新建的 Agent）**必須**使用 `shared/orchestration/` 框架實作內部編排，**禁止**自行實作：
+
+- ❌ 自行寫 tool loop（應用 `tool_executor_node`）
+- ❌ 自行寫 LangGraph StateGraph（應用 `AgentGraphBuilder`）
+- ❌ 自行寫工具 HTTP 呼叫（應用 `shared/tools/` ToolRegistry）
+- ❌ 跳過 `OrchestrationEngine.run()` 自己實作執行邏輯
+
+---
+
+## 十、Agent 內部編排框架（元件層）
+
+### 10.1 框架定位
+
+`shared/orchestration/` 是**標準化的 Agent 內部編排框架**，所有 Agent 共享同一套工具執行、狀態管理、節點路由機制。
+
+### 10.2 目錄結構
+
+```
+ai-services/shared/
+├── orchestration/               # 編排框架
+│   ├── __init__.py             # 導出：AgentGraphBuilder, OrchestrationEngine, AgentState, AgentRunResult
+│   ├── state.py                # AgentState (TypedDict) + AgentRunResult
+│   ├── engine.py               # OrchestrationEngine.run() — 標準 tool loop 執行器
+│   ├── builder.py              # AgentGraphBuilder — 建構 LangGraph 節點圖
+│   └── nodes/
+│       ├── __init__.py         # 導出：llm_node, router_node, tool_executor_node
+│       ├── router.py           # 根據 action_plan 路由到下一節點
+│       ├── llm_node.py        # 標準 LLM 呼叫（含 function calling）
+│       └── tool_executor.py    # 執行 tool_calls → shared/tools/
+│
+├── tools/                      # 工具框架
+│   ├── __init__.py            # 導出：ToolRegistry, ToolExecutionContext, ToolResult, ToolSource
+│   ├── registry.py             # 工具發現、LLM function schema、派發
+│   └── executors.py            # MCPToolExecutor, DataAgentExecutor, KnowledgeAgentExecutor, BuiltinExecutor
+│
+└── conversation/               # 對話歷史（各 Agent 共用）
+    ├── storage.py              # 儲存訊息
+    └── query.py                # 查詢歷史
+```
+
+### 10.3 核心類別
+
+#### AgentState
+
+所有 Agent 的**最小共用狀態**（TypedDict + LangGraph `add_messages`）：
+
+```python
+class AgentState(TypedDict):
+    session_id: str                              # Session 識別
+    user_id: str                               # 用戶識別
+    messages: Annotated[list[BaseMessage], add_messages]  # 對話歷史（自動合併）
+    state_version: int                          # 狀態版本（每次更新 +1）
+    tool_results: list[dict[str, Any]]         # 工具執行結果
+    pending_tool_calls: list[dict[str, Any]]   # 待執行的 tool_calls
+    extra: dict[str, Any]                      # Agent 可自行擴展
+```
+
+各 Agent 可**擴展** AgentState，例如：
+
+```python
+class RagicHelperState(AgentState):
+    matched_intent: dict | None
+    intent_confidence: float
+    action_plan: Literal["direct_answer", "tool_call", "unknown"]
+```
+
+#### AgentRunResult
+
+`OrchestrationEngine.run()` 的輸出結構：
+
+```python
+class AgentRunResult(TypedDict):
+    session_id: str                     # Session ID
+    response: str                       # 最終回覆文字
+    messages: list[BaseMessage]         # 更新後的訊息歷史
+    tool_results: list[dict[str, Any]]  # 所有工具執行結果
+    state_version: int                  # 最終狀態版本
+    trace_id: str                       # 本次追蹤 ID
+    success: bool                       # 是否成功完成
+    error: str | None                   # 若失敗，錯誤原因
+```
+
+#### ToolExecutionContext
+
+工具執行的上下文，攜帶追蹤資訊：
+
+```python
+class ToolExecutionContext(BaseModel):
+    user_id: str        # 用戶識別
+    session_id: str     # Session 識別
+    trace_id: str       # 追蹤 ID（格式：{session_id}-{version}-{correlation_id}）
+    auth_token: str     # 認證 Token
+    correlation_id: str  # 工具呼叫 ID（用於關聯 tool_calls 和結果）
+```
+
+#### ToolResult
+
+工具執行結果：
+
+```python
+class ToolResult(BaseModel):
+    tool_name: str           # 工具名稱
+    tool_call_id: str        # 本次呼叫 ID
+    success: bool            # 是否成功
+    result: object           # 成功時的結果（dict/list/str）
+    error: str | None       # 失敗時的錯誤訊息
+    duration_ms: int         # 執行耗時（毫秒）
+    source: ToolSource       # 工具來源（MCP/DATA_AGENT/KNOWLEDGE/BUILTIN）
+    trace_id: str | None    # 追蹤 ID
+```
+
+#### ToolSource
+
+工具來源枚舉：
+
+```python
+class ToolSource(str, Enum):
+    MCP = "mcp"                    # MCP Tools 服務（port 8004）
+    DATA_AGENT = "data_agent"     # NL→SQL 查詢（port 8003）
+    KNOWLEDGE = "knowledge"       # 知識庫 RAG（port 8007）
+    BUILTIN = "builtin"           # 內建工具（current_time, session_summary）
+```
+
+### 10.4 標準節點
+
+#### router_node
+
+根據 `action_plan` 路由到下一節點：
+
+```python
+def router_node(state: AgentState) -> str:
+    action_plan = state.get("action_plan", "direct_answer")
+    return str(action_plan)
+```
+
+**可用 action_plan 值**：
+
+| action_plan | 下一節點 | 說明 |
+|-------------|----------|------|
+| `direct_answer` | chat_responder | LLM 直接回覆 |
+| `tool_call` | tool_executor | 執行工具 |
+| `process_orchestration` | bpa_orchestrator | BPA 流程編排 |
+
+#### llm_node
+
+標準 LLM 呼叫節點，支援 function calling：
+
+```python
+async def llm_node(
+    state: dict[str, Any],
+    model: str | None = None,
+    temperature: float = 0.7,
+    max_tokens: int = 2000,
+    tools: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]
+```
+
+#### tool_executor_node
+
+執行 LLM 發出的 tool_calls，使用 `shared/tools/`：
+
+```python
+async def tool_executor_node(state: AgentState) -> dict[str, Any]:
+    # 1. 從 state["messages"][-1] 取得 tool_calls
+    # 2. 透過 ToolRegistry 執行每個工具
+    # 3. 回傳 {messages: [ToolMessage, ...], tool_results: [...], state_version: +1}
+```
+
+### 10.5 工具執行框架（shared/tools/）
+
+#### ToolRegistry
+
+工具發現、LLM function schema 產生、執行派發：
+
+```python
+class ToolRegistry:
+    async def initialize(
+        self,
+        mcp_tools_url: str,
+        data_agent_url: str,
+        knowledge_agent_url: str,
+        auth_token: str = "",
+    ) -> None:
+        self._executors = {
+            ToolSource.MCP: MCPToolExecutor(mcp_tools_url),
+            ToolSource.DATA_AGENT: DataAgentExecutor(data_agent_url),
+            ToolSource.KNOWLEDGE: KnowledgeAgentExecutor(knowledge_agent_url),
+            ToolSource.BUILTIN: BuiltinExecutor(),
+        }
+
+    def get_tools_for_llm(self) -> list[dict[str, Any]]:
+        # 產生 LLM function calling schema
+
+    async def execute(
+        self,
+        tool_name: str,
+        arguments: dict[str, object],
+        context: ToolExecutionContext,
+    ) -> ToolResult:
+        # 派發到對應 Executor 執行
+```
+
+#### 已內建工具
+
+| 工具名稱 | 來源 | 參數 | 說明 |
+|----------|------|------|------|
+| `da_query` | DATA_AGENT | `query: str` | 自然語言查詢資料 |
+| `da_visualize` | DATA_AGENT | `query: str` | 查詢視覺化資料 |
+| `ka_search` | KNOWLEDGE | `query: str` | 知識庫 RAG 檢索 |
+| `ka_doc_retrieve` | KNOWLEDGE | `query: str` | 擷取知識庫文件內容 |
+| `current_time` | BUILTIN | — | 取得目前 UTC 時間 |
+| `session_summary` | BUILTIN | — | 取得 session 摘要 |
+
+### 10.6 OrchestrationEngine.run() 使用方式
+
+```python
+from shared.orchestration import AgentGraphBuilder, OrchestrationEngine
+from shared.tools import ToolRegistry
+
+# 1. 初始化 ToolRegistry（整個 service 只做一次）
+registry = ToolRegistry()
+await registry.initialize(
+    mcp_tools_url="http://localhost:8004",
+    data_agent_url="http://localhost:8003",
+    knowledge_agent_url="http://localhost:8007",
+)
+
+# 2. 取得 LLM function calling schema
+tools = registry.get_tools_for_llm()
+
+# 3. 建構 Agent 節點圖
+builder = AgentGraphBuilder()
+builder.add_node("classify_intent", my_intent_classifier_node)
+builder.add_node("router", router_node)
+builder.add_node("tool_executor", tool_executor_node)
+builder.add_node("chat_responder", my_chat_responder_node)
+builder.set_entry("classify_intent")
+builder.add_edge("classify_intent", "router")
+builder.add_conditional_edges("router", route_by_action, {
+    "direct_answer": "chat_responder",
+    "tool_call": "tool_executor",
+})
+graph = builder.build()
+
+# 4. 執行
+engine = OrchestrationEngine(graph, max_tool_loops=3)
+result = await engine.run(
+    session_id="sess_123",
+    user_id="user_456",
+    user_message="查詢庫存",
+    tools=tools,
+)
+# result.response       — 最終回覆文字
+# result.messages      — 訊息歷史
+# result.tool_results  — 工具執行結果
+# result.success       — 是否成功
+```
+
+### 10.7 Agent 等級
+
+| 等級 | 說明 | 所需框架 |
+|------|------|----------|
+| **L1 純聊天** | 無工具，只能 LLM 對話 | 直接 call LLM |
+| **L2 RAG 增強** | L1 + 意圖判斷 + 知識庫 RAG | `detect_intent()` + `hybrid_search()` |
+| **L3 工具呼叫** | L2 + 工具執行 | `shared/tools/` ToolRegistry + `tool_executor_node` |
+| **L4 完整編排** | L3 + 工作編排 + 多步任務 | `shared/orchestration/` OrchestrationEngine |
+
+### 10.8 新建 Agent 檢查清單
+
+建立新 Agent 前確認：
+
+- [ ] 目錄位於 `bpa/` 或 `agents/` 下
+- [ ] 使用 `shared/orchestration/` 而非自行實作編排
+- [ ] 使用 `shared/tools/` 而非自行寫 httpx 呼叫工具
+- [ ] 使用 `shared/conversation/` 而非自行實作歷史儲存
+- [ ] `ruff check` 無 error
+- [ ] `mypy --ignore-missing-imports` 無 type error
+- [ ] 環境變數皆從 `os.getenv()` 讀取，無 hardcode URL
+- [ ] 檔案表頭有標準 docstring（`@file` + `@lastUpdate` + `@author`）
+- [ ] 在 `AGENTS.md` Port 註冊表（10.6）新增獨立 port（如有）
+
+---
+
+## 十一、後續討論主題
