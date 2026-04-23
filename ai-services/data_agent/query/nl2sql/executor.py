@@ -5,19 +5,24 @@ Executes validated SQL queries against DuckDB with parquet data sources,
 or validated AQL queries against ArangoDB for Ragic data sources.
 SELECT-only enforcement at execution level as final safety net.
 
-# Last Update: 2026-04-02 21:00:00
+# Last Update: 2026-04-16 17:50:29
 # Author: Daniel Chung
-# Version: 3.0.0
+# Version: 3.1.0
 """
 
 import codecs
 import json
+import logging
+import os
 import re
 import time
+
 import httpx
 
 from data_agent.query.nl2sql.exceptions import ExecutionError
 from data_agent.query.nl2sql.models import PipelineConfig, SQLResult
+
+logger = logging.getLogger(__name__)
 
 
 async def execute_sql(
@@ -219,3 +224,93 @@ async def execute_aql(
         raise ExecutionError(f"ArangoDB HTTP error: {e.response.status_code} - {e.response.text[:200]}")
     except Exception as e:
         raise ExecutionError(f"ArangoDB execution failed: {str(e)}")
+
+
+async def fetch_table_schema(
+    table_name: str,
+    gateway_url: str = "",
+) -> list[dict[str, str]]:
+    """Fetch column schema from server DuckDB cache via information_schema.
+
+    Returns list of dicts: [{"column_name": "...", "data_type": "..."}, ...]
+    """
+    if not gateway_url:
+        gateway_url = os.getenv("GATEWAY_URL", "http://localhost:6500")
+
+    sql = (
+        f"SELECT column_name, data_type FROM information_schema.columns "
+        f"WHERE table_name = '{table_name}' ORDER BY ordinal_position;"
+    )
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(
+                f"{gateway_url}/api/v1/da/query/sql",
+                json={"sql": sql},
+            )
+            response.raise_for_status()
+            data = response.json()
+
+        if data.get("code") != 0:
+            logger.warning("Failed to fetch schema for %s: %s", table_name, data.get("message"))
+            return []
+
+        return list(data.get("data", {}).get("results", []))
+
+    except Exception as e:
+        logger.warning("Schema fetch error for %s: %s", table_name, e)
+        return []
+
+
+async def execute_on_server_cache(
+    sql: str,
+    gateway_url: str = "",
+) -> SQLResult:
+    """Execute SQL on the Rust API Gateway's Server DuckDB Cache.
+
+    Calls POST /api/v1/da/query/sql which runs against the file-backed
+    DuckDB at ./data/table_cache.duckdb.
+    """
+    sql_upper = sql.strip().upper()
+    if not sql_upper.startswith("SELECT"):
+        raise ExecutionError("Only SELECT queries are allowed")
+
+    if not gateway_url:
+        gateway_url = os.getenv("GATEWAY_URL", "http://localhost:6500")
+
+    start_ms = time.time() * 1000
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                f"{gateway_url}/api/v1/da/query/sql",
+                json={"sql": sql},
+            )
+            response.raise_for_status()
+            data = response.json()
+
+        if data.get("code") != 0:
+            raise ExecutionError(
+                f"Server cache query failed: {data.get('message', 'unknown error')}"
+            )
+
+        result_data = data.get("data", {})
+        rows: list[dict[str, object]] = result_data.get("results", [])
+        columns: list[str] = result_data.get("columns", [])
+        elapsed_ms = time.time() * 1000 - start_ms
+
+        return SQLResult(
+            sql=sql,
+            rows=rows,
+            columns=columns,
+            row_count=len(rows),
+            execution_time_ms=round(elapsed_ms, 2),
+        )
+
+    except httpx.HTTPStatusError as e:
+        raise ExecutionError(
+            f"Server cache HTTP error: {e.response.status_code}"
+        )
+    except httpx.ConnectError:
+        raise ExecutionError("Server cache connection error: All connection attempts failed")
+    except httpx.HTTPError as e:
+        raise ExecutionError(f"Server cache connection error: {str(e)}")

@@ -121,7 +121,7 @@ uvicorn mcp_tools.main:app --port 8004 --reload
 | ArangoDB | Schema 存儲、意圖目錄 | `http://localhost:8529` |
 | Qdrant | 向量檢索 | `http://localhost:6333` |
 | Ollama | LLM 推理 + Embedding | `http://localhost:11434` |
-| MinIO (S3) | Parquet 資料湖儲存 | `http://localhost:8334` |
+| SeaweedFS | 統一檔案備份儲存 | `http://localhost:8888` |
 | DuckDB | SQL-on-Parquet 查詢引擎 | 內嵌 (in-process) |
 
 ## 環境變數
@@ -134,7 +134,7 @@ uvicorn mcp_tools.main:app --port 8004 --reload
 | `ARANGO_DB` | 資料庫名稱 | `abc_desktop` |
 | `QDRANT_URL` | Qdrant 連線 | `http://localhost:6333` |
 | `OLLAMA_BASE_URL` | Ollama API | `http://localhost:11434` |
-| `S3_ENDPOINT` | MinIO S3 | `http://localhost:8334` |
+| `SEAWEED_URL` | SeaweedFS Filer | `http://localhost:8888` |
 
 ## 程式碼品質
 

@@ -8,7 +8,9 @@
 //! # Version: 1.1.0
 
 use crate::auth::verify_jwt;
+use crate::config::CONFIG;
 use crate::middleware::auth::jwt_auth_middleware;
+use crate::middleware::logging::logging_middleware;
 use crate::db::{
     get_db, CreateAgentRequest, CreateRoleRequest, CreateToolRequest, CreateUserRequest, Function, FunctionRoleAuth, Role, RoleFunction, SystemParam, UpdateParamRequest, UpdateRoleRequest, User, Agent, Tool, ModelProvider, LLMModel,
 };
@@ -45,6 +47,17 @@ pub mod intent;
 pub mod orch_intents;
 pub mod intent_catalog;
 pub mod leads;
+pub mod action_trail;
+pub mod aiq;
+pub mod intent_guess;
+
+use once_cell::sync::Lazy;
+use reqwest::Client;
+
+static HTTP_CLIENT: Lazy<Client> = Lazy::new(Client::new);
+pub mod intent_logs;
+pub mod platforms;
+pub mod ragic;
 
 async fn sync_tool_intents(
     Path(key): Path<String>,
@@ -111,6 +124,15 @@ pub fn create_router() -> Router {
         .route("/api/v1/functions/{key}/roles", get(get_function_roles).put(set_function_roles))
         .route("/api/v1/agents", get(list_agents).post(create_agent))
         .route("/api/v1/agents/{key}", get(get_agent).put(update_agent).delete(delete_agent))
+        .route("/api/v1/agents/{key}/intents", get(list_agent_intents).post(create_agent_intent))
+        .route("/api/v1/agents/{key}/intents/{intent_key}", put(update_agent_intent).delete(delete_agent_intent))
+        .route("/api/v1/agents/{key}/intents/{intent_key}/sync", post(sync_agent_intents_to_qdrant))
+        .route("/api/v1/agents/{key}/demands", get(list_agent_demands).post(create_agent_demand))
+        .route("/api/v1/agents/{key}/demands/{demand_key}", get(get_agent_demand).put(update_agent_demand).delete(delete_agent_demand))
+        .route("/api/v1/agents/{key}/demands/{demand_key}/suggest-intents", post(suggest_intents_for_demand))
+        .route("/api/v1/agents/{key}/demands/{demand_key}/status", patch(update_demand_status))
+        .route("/api/v1/demands/estimate-hours", post(estimate_demand_hours))
+        .route("/api/v1/demands/review", post(review_demand))
         .route("/api/v1/tools", get(list_tools).post(create_tool))
         .route("/api/v1/tools/{key}", get(get_tool).put(update_tool).delete(delete_tool))
         .route("/api/v1/tools/{key}/intents", post(sync_tool_intents))
@@ -169,12 +191,20 @@ pub fn create_router() -> Router {
         .merge(da_tables::create_da_tables_router())
         .merge(da_expressions::create_da_expressions_router())
         .merge(backup::create_backup_router())
+        .merge(platforms::line::create_line_router())
         .merge(da_query::create_da_query_router())
         .merge(web_search::create_web_search_router())
         .merge(weather::create_weather_router())
         .merge(orch_intents::create_orch_intents_router())
         .merge(intent_catalog::create_intent_catalog_router())
         .merge(leads::create_leads_router())
+        .merge(action_trail::create_action_trail_router())
+        .merge(intent_guess::create_intent_guess_router())
+        .merge(intent_logs::create_intent_logs_router())
+        .merge(aiq::create_aiq_router())
+        .merge(ragic::create_ragic_router())
+        .route("/api/v1/events", post(post_events))
+        .layer(middleware::from_fn(logging_middleware))
         .layer(cors)
 }
 
@@ -249,6 +279,61 @@ async fn login(Json(payload): Json<LoginRequest>) -> Result<impl IntoResponse, S
 
 async fn logout() -> Result<impl IntoResponse, StatusCode> {
     Ok(Json(ApiResponse::success("Logged out".to_string())))
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct AnalyticsEvent {
+    event: EventData,
+    timestamp: u64,
+    session_id: String,
+    user_key: Option<String>,
+}
+
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
+#[serde(untagged)]
+enum EventData {
+    PageView {
+        page: String,
+        title: Option<String>,
+        referrer: Option<String>,
+    },
+    Track {
+        category: String,
+        action: String,
+        label: Option<String>,
+        value: Option<f64>,
+        metadata: Option<serde_json::Value>,
+    },
+}
+
+#[derive(Debug, serde::Serialize)]
+struct PostEventsResponse {
+    received: usize,
+}
+
+async fn post_events(Json(payload): Json<serde_json::Value>) -> Result<impl IntoResponse, StatusCode> {
+    let events = payload
+        .get("events")
+        .and_then(|v| v.as_array())
+        .map(|arr| arr.iter().filter_map(|v| serde_json::from_value(v.clone()).ok()).collect::<Vec<AnalyticsEvent>>())
+        .unwrap_or_default();
+
+    let count = events.len();
+
+    for event in &events {
+        let log_entry = serde_json::json!({
+            "type": "analytics",
+            "timestamp": event.timestamp,
+            "session_id": event.session_id,
+            "user_key": event.user_key,
+            "event": event.event,
+        });
+        if let Ok(json) = serde_json::to_string(&log_entry) {
+            println!("{}", json);
+        }
+    }
+
+    Ok(Json(ApiResponse::success(PostEventsResponse { received: count })))
 }
 
 async fn me(headers: HeaderMap) -> Result<impl IntoResponse, StatusCode> {
@@ -1034,10 +1119,15 @@ async fn list_agents(headers: HeaderMap, Query(params): Query<std::collections::
     );
     let all_agents: Vec<Agent> = db.aql_str(&query).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
+    let is_admin = user_roles.as_ref().map(|r| r.contains(&"admin".to_string())).unwrap_or(false);
+
     let filtered: Vec<Agent> = match (&user_key, &user_roles) {
         (Some(uk), Some(roles)) => all_agents
             .into_iter()
             .filter(|a| {
+                if is_admin {
+                    return true;
+                }
                 match a.visibility.as_deref().unwrap_or("public") {
                     "public" => true,
                     "private" => a.created_by.as_ref() == Some(uk),
@@ -1045,7 +1135,7 @@ async fn list_agents(headers: HeaderMap, Query(params): Query<std::collections::
                     let agent_roles = a.visibility_roles.as_deref().unwrap_or(&[]);
                         roles.iter().any(|r| agent_roles.contains(r))
                     }
-                    _ => true,
+                    _ => false,
                 }
             })
             .collect(),
@@ -1170,6 +1260,827 @@ async fn delete_agent(Path(key): Path<String>) -> Result<impl IntoResponse, Stat
     Ok(Json(ApiResponse::success("Agent deleted".to_string())))
 }
 
+// Agent Intent CRUD
+
+async fn list_agent_intents(Path(key): Path<String>) -> Result<impl IntoResponse, StatusCode> {
+    let db = get_db();
+    let intents: Vec<serde_json::Value> = db
+        .aql_bind_vars(
+            "FOR i IN intent_catalog FILTER i.agent_key == @key SORT i.priority DESC RETURN i",
+            [("key", serde_json::json!(key))].into(),
+        )
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(Json(ApiResponse::success(intents)))
+}
+
+#[derive(serde::Deserialize)]
+struct CreateIntentRequest {
+    name: String,
+    description: Option<String>,
+    #[serde(default)]
+    nl_examples: Vec<String>,
+    #[serde(default)]
+    nl_patterns: Vec<String>,
+    #[serde(default)]
+    priority: i32,
+    #[serde(default)]
+    status: String,
+    #[serde(default)]
+    action: String,
+}
+
+async fn create_agent_intent(
+    Path(key): Path<String>,
+    Json(payload): Json<CreateIntentRequest>,
+) -> Result<impl IntoResponse, StatusCode> {
+    let db = get_db();
+    let col = db.collection("intent_catalog").await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let intent_key = uuid::Uuid::new_v4().to_string();
+    let now = chrono::Utc::now().to_rfc3339();
+
+    let doc = serde_json::json!({
+        "_key": intent_key.clone(),
+        "agent_key": key,
+        "name": payload.name,
+        "description": payload.description.unwrap_or_default(),
+        "nl_examples": payload.nl_examples,
+        "nl_patterns": payload.nl_patterns,
+        "priority": payload.priority,
+        "status": if payload.status.is_empty() { "enabled" } else { &payload.status },
+        "action": payload.action,
+        "created_at": now,
+        "updated_at": now,
+    });
+
+    col.create_document(doc, Default::default())
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let created: Vec<serde_json::Value> = db
+        .aql_bind_vars(
+            "FOR i IN intent_catalog FILTER i._key == @key LIMIT 1 RETURN i",
+            [("key", serde_json::json!(intent_key))].into(),
+        )
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let intent = created.into_iter().next().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(Json(ApiResponse::success(intent)))
+}
+
+async fn update_agent_intent(
+    Path((_key, intent_key)): Path<(String, String)>,
+    Json(payload): Json<serde_json::Value>,
+) -> Result<impl IntoResponse, StatusCode> {
+    if payload.is_null() || payload.as_object().map(|o| o.is_empty()).unwrap_or(true) {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    let db = get_db();
+    let col = db.collection("intent_catalog").await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let mut update_data = payload.clone();
+    if let Some(obj) = update_data.as_object_mut() {
+        obj.insert("updated_at".to_string(), serde_json::json!(chrono::Utc::now().to_rfc3339()));
+    }
+
+    col.update_document(&intent_key, update_data, Default::default())
+        .await
+        .map_err(|e| {
+            eprintln!("Update agent intent error: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    let updated: Vec<serde_json::Value> = db
+        .aql_bind_vars(
+            "FOR i IN intent_catalog FILTER i._key == @key LIMIT 1 RETURN i",
+            [("key", serde_json::json!(intent_key))].into(),
+        )
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let intent = updated.into_iter().next().ok_or(StatusCode::NOT_FOUND)?;
+    Ok(Json(ApiResponse::success(intent)))
+}
+
+async fn delete_agent_intent(Path((_key, intent_key)): Path<(String, String)>) -> Result<impl IntoResponse, StatusCode> {
+    let db = get_db();
+    let col = db.collection("intent_catalog").await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    col.remove_document::<serde_json::Value>(&intent_key, Default::default(), None)
+        .await
+        .map_err(|_| StatusCode::NOT_FOUND)?;
+    Ok(Json(ApiResponse::success("Intent deleted".to_string())))
+}
+
+async fn sync_agent_intents_to_qdrant(Path(key): Path<String>) -> Result<impl IntoResponse, StatusCode> {
+    let db = get_db();
+
+    // Determine agent_scope from agent_key
+    let agents: Vec<serde_json::Value> = db
+        .aql_bind_vars(
+            "FOR a IN agents FILTER a._key == @key LIMIT 1 RETURN a",
+            [("key", serde_json::json!(key))].into(),
+        )
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let agent = agents.into_iter().next().ok_or(StatusCode::NOT_FOUND)?;
+    let agent_type = agent.get("agent_type")
+        .and_then(|v| v.as_str())
+        .unwrap_or("ragic_helper");
+
+    let scope = match agent_type {
+        "data" => "data_agent",
+        "bpa" => "orchestrator",
+        _ => "ragic_helper",
+    };
+
+    let client = reqwest::Client::new();
+    let sync_url = format!("http://localhost:8011/da/intent-rag/{}/embed-sync", scope);
+
+    let resp = client.post(&sync_url).send().await.map_err(|e| {
+        eprintln!("Sync to Qdrant error: {}", e);
+        StatusCode::BAD_GATEWAY
+    })?;
+
+    if resp.status().is_success() {
+        Ok(Json(ApiResponse::success("Intents synced to Qdrant".to_string())))
+    } else {
+        Err(StatusCode::BAD_GATEWAY)
+    }
+}
+
+// ─── Agent Demand CRUD ────────────────────────────────────────────────────────
+
+async fn list_agent_demands(Path(key): Path<String>) -> Result<impl IntoResponse, StatusCode> {
+    let db = get_db();
+    let demands: Vec<serde_json::Value> = db
+        .aql_bind_vars(
+            "FOR d IN agent_demands FILTER d.agent_key == @key SORT d.version DESC RETURN d",
+            [("key", serde_json::json!(key))].into(),
+        )
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(Json(ApiResponse::success(demands)))
+}
+
+#[derive(serde::Deserialize)]
+struct CreateDemandRequest {
+    goal: String,
+    expected_effect: String,
+    problem_description: String,
+    #[serde(default)]
+    target_users: Option<String>,
+    #[serde(default)]
+    scope: Option<String>,
+    #[serde(default)]
+    excluded_scope: Option<String>,
+    #[serde(default)]
+    conversation_style: Option<String>,
+    #[serde(default)]
+    conversation_examples: Vec<serde_json::Value>,
+    #[serde(default)]
+    estimated_hours: Option<f64>,
+    #[serde(default)]
+    estimated_confidence: Option<String>,
+    #[serde(default)]
+    references: Vec<String>,
+    #[serde(default)]
+    input_description: Option<String>,
+    #[serde(default)]
+    input_format: Option<String>,
+    #[serde(default)]
+    example_documents: Vec<UploadedFile>,
+    #[serde(default)]
+    example_images: Vec<UploadedFile>,
+    #[serde(default)]
+    output_description: Option<String>,
+    #[serde(default)]
+    output_format: Option<String>,
+    #[serde(default)]
+    output_examples: Vec<UploadedFile>,
+    #[serde(default)]
+    ai_review: Option<AIReview>,
+}
+
+#[derive(serde::Deserialize, serde::Serialize, Clone)]
+struct AIReview {
+    completeness: String,
+    reasonableness: String,
+    feasibility: String,
+    estimated_hours: i32,
+    confidence: String,
+    summary: String,
+    suggestions: Vec<String>,
+    score: i32,
+}
+
+#[derive(serde::Deserialize, serde::Serialize, Clone)]
+struct UploadedFile {
+    name: String,
+    url: String,
+    #[serde(default)]
+    size: Option<i64>,
+    #[serde(default)]
+    mime_type: Option<String>,
+}
+
+async fn create_agent_demand(
+    Path(key): Path<String>,
+    Json(payload): Json<CreateDemandRequest>,
+) -> Result<impl IntoResponse, StatusCode> {
+    let db = get_db();
+    let col = db.collection("agent_demands").await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let demand_key = uuid::Uuid::new_v4().to_string();
+    let now = chrono::Utc::now().to_rfc3339();
+
+    // Determine next version
+    let existing: Vec<serde_json::Value> = db
+        .aql_bind_vars(
+            "FOR d IN agent_demands FILTER d.agent_key == @key SORT d.version DESC LIMIT 1 RETURN d",
+            [("key", serde_json::json!(key))].into(),
+        )
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let version = if let Some(last) = existing.first() {
+        let last_ver = last.get("version").and_then(|v| v.as_str()).unwrap_or("v0.0");
+        let num: f64 = last_ver.trim_start_matches('v').replace('.', "").parse().unwrap_or(0.0);
+        let major = (num / 10.0).floor() as i32;
+        let minor = (num % 10.0).floor() as i32 + 1;
+        format!("v{}.{}", major, minor)
+    } else {
+        "v1.0".to_string()
+    };
+
+    let doc = serde_json::json!({
+        "_key": demand_key.clone(),
+        "agent_key": key,
+        "version": version,
+        "status": "draft",
+        "goal": payload.goal,
+        "expected_effect": payload.expected_effect,
+        "problem_description": payload.problem_description,
+        "target_users": payload.target_users.unwrap_or_default(),
+        "scope": payload.scope.unwrap_or_default(),
+        "excluded_scope": payload.excluded_scope.unwrap_or_default(),
+        "conversation_style": payload.conversation_style.unwrap_or_default(),
+        "conversation_examples": payload.conversation_examples,
+        "estimated_hours": payload.estimated_hours,
+        "estimated_confidence": payload.estimated_confidence.unwrap_or_else(|| "medium".to_string()),
+        "final_hours": serde_json::Value::Null,
+        "rejection_history": serde_json::Value::Array(vec![]),
+        "references": payload.references,
+        "input_description": payload.input_description.unwrap_or_default(),
+        "input_format": payload.input_format.unwrap_or_default(),
+        "example_documents": payload.example_documents,
+        "example_images": payload.example_images,
+        "output_description": payload.output_description.unwrap_or_default(),
+        "output_format": payload.output_format.unwrap_or_default(),
+        "output_examples": payload.output_examples,
+        "ai_review": payload.ai_review,
+        "created_at": now,
+        "updated_at": now,
+        "submitted_at": serde_json::Value::Null,
+        "accepted_at": serde_json::Value::Null,
+        "cancelled_at": serde_json::Value::Null,
+        "online_at": serde_json::Value::Null,
+    });
+
+    col.create_document(doc, Default::default())
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let created: Vec<serde_json::Value> = db
+        .aql_bind_vars(
+            "FOR d IN agent_demands FILTER d._key == @key LIMIT 1 RETURN d",
+            [("key", serde_json::json!(demand_key))].into(),
+        )
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let demand = created.into_iter().next().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let _ = db.aql_bind_vars::<serde_json::Value>(
+        "FOR a IN agents FILTER a._key == @key UPDATE a WITH { current_demand_key: @dk, demand_version: @ver } IN agents",
+        [
+            ("key", serde_json::json!(key)),
+            ("dk", serde_json::json!(demand_key)),
+            ("ver", serde_json::json!(version)),
+        ].into(),
+    ).await;
+
+    Ok(Json(ApiResponse::success(demand)))
+}
+
+async fn get_agent_demand(
+    Path((_key, demand_key)): Path<(String, String)>,
+) -> Result<impl IntoResponse, StatusCode> {
+    let db = get_db();
+    let demands: Vec<serde_json::Value> = db
+        .aql_bind_vars(
+            "FOR d IN agent_demands FILTER d._key == @key LIMIT 1 RETURN d",
+            [("key", serde_json::json!(demand_key))].into(),
+        )
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let demand = demands.into_iter().next().ok_or(StatusCode::NOT_FOUND)?;
+    Ok(Json(ApiResponse::success(demand)))
+}
+
+async fn update_agent_demand(
+    Path((_key, demand_key)): Path<(String, String)>,
+    Json(payload): Json<serde_json::Value>,
+) -> Result<impl IntoResponse, StatusCode> {
+    if payload.is_null() || payload.as_object().map(|o| o.is_empty()).unwrap_or(true) {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    let db = get_db();
+    let col = db.collection("agent_demands").await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let existing: Vec<serde_json::Value> = db
+        .aql_bind_vars(
+            "FOR d IN agent_demands FILTER d._key == @key LIMIT 1 RETURN d.status",
+            [("key", serde_json::json!(demand_key))].into(),
+        )
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    if let Some(status_val) = existing.first() {
+        if let Some(status) = status_val.as_str() {
+            if status != "draft" {
+                return Err(StatusCode::BAD_REQUEST);
+            }
+        }
+    }
+
+    let mut update_data = payload.clone();
+    if let Some(obj) = update_data.as_object_mut() {
+        obj.insert("updated_at".to_string(), serde_json::json!(chrono::Utc::now().to_rfc3339()));
+    }
+
+    col.update_document(&demand_key, update_data, Default::default())
+        .await
+        .map_err(|e| {
+            eprintln!("Update agent demand error: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    let updated: Vec<serde_json::Value> = db
+        .aql_bind_vars(
+            "FOR d IN agent_demands FILTER d._key == @key LIMIT 1 RETURN d",
+            [("key", serde_json::json!(demand_key))].into(),
+        )
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let demand = updated.into_iter().next().ok_or(StatusCode::NOT_FOUND)?;
+    Ok(Json(ApiResponse::success(demand)))
+}
+
+async fn delete_agent_demand(
+    Path((_key, demand_key)): Path<(String, String)>,
+) -> Result<impl IntoResponse, StatusCode> {
+    let db = get_db();
+    let col = db.collection("agent_demands").await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let existing: Vec<serde_json::Value> = db
+        .aql_bind_vars(
+            "FOR d IN agent_demands FILTER d._key == @key LIMIT 1 RETURN d.status",
+            [("key", serde_json::json!(demand_key))].into(),
+        )
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    if let Some(status_val) = existing.first() {
+        if let Some(status) = status_val.as_str() {
+            if status != "draft" && status != "cancelled" {
+                return Err(StatusCode::BAD_REQUEST);
+            }
+        }
+    }
+
+    col.remove_document::<serde_json::Value>(&demand_key, Default::default(), None)
+        .await
+        .map_err(|_| StatusCode::NOT_FOUND)?;
+    Ok(Json(ApiResponse::success("Demand deleted".to_string())))
+}
+
+#[derive(serde::Deserialize)]
+struct UpdateDemandStatusRequest {
+    status: String,
+    #[serde(default)]
+    reason: Option<String>,
+    #[serde(default)]
+    estimated_hours: Option<f64>,
+    #[serde(default)]
+    final_hours: Option<f64>,
+    #[serde(default)]
+    ai_review: Option<AIReview>,
+}
+
+async fn update_demand_status(
+    Path((_key, demand_key)): Path<(String, String)>,
+    Json(payload): Json<UpdateDemandStatusRequest>,
+) -> Result<impl IntoResponse, StatusCode> {
+    let db = get_db();
+    let col = db.collection("agent_demands").await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let now = chrono::Utc::now().to_rfc3339();
+
+    let existing: Vec<serde_json::Value> = db
+        .aql_bind_vars(
+            "FOR d IN agent_demands FILTER d._key == @key LIMIT 1 RETURN d",
+            [("key", serde_json::json!(demand_key))].into(),
+        )
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let current = existing.into_iter().next().ok_or(StatusCode::NOT_FOUND)?;
+    let current_status = current.get("status").and_then(|v| v.as_str()).unwrap_or("");
+
+    let valid_transition = match (current_status, payload.status.as_str()) {
+        ("draft", "submitted") => true,
+        ("submitted", "draft") => true,
+        ("submitted", "in_development") => true,
+        ("submitted", "cancelled") => true,
+        ("in_development", "pending_acceptance") => true,
+        ("pending_acceptance", "in_development") => true,
+        ("pending_acceptance", "online") => true,
+        ("online", "draft") => true,
+        _ => false,
+    };
+
+    if !valid_transition {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    let mut update_doc = serde_json::json!({
+        "status": payload.status.clone(),
+        "updated_at": now,
+    });
+
+    match payload.status.as_str() {
+        "submitted" => {
+            update_doc["submitted_at"] = serde_json::json!(now);
+            if let Some(review) = &payload.ai_review {
+                update_doc["ai_review"] = serde_json::json!(review);
+            }
+        }
+        "in_development" => {
+            if let Some(reason) = &payload.reason {
+                if !reason.is_empty() {
+                    let rejection = serde_json::json!({
+                        "rejected_at": now,
+                        "reason": reason,
+                    });
+                    let mut history = current.get("rejection_history").cloned().unwrap_or(serde_json::json!([]));
+                    if let Some(arr) = history.as_array_mut() {
+                        arr.push(rejection);
+                    }
+                    update_doc["rejection_history"] = history;
+                    update_doc["status"] = serde_json::json!("in_development");
+                }
+            }
+            if let Some(hours) = payload.estimated_hours {
+                update_doc["estimated_hours"] = serde_json::json!(hours);
+            }
+        }
+        "online" => {
+            update_doc["online_at"] = serde_json::json!(now);
+        }
+        "cancelled" => {
+            update_doc["cancelled_at"] = serde_json::json!(now);
+        }
+        _ => {}
+    }
+
+    col.update_document(&demand_key, update_doc, Default::default())
+        .await
+        .map_err(|e| {
+            eprintln!("Update demand status error: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    let updated: Vec<serde_json::Value> = db
+        .aql_bind_vars(
+            "FOR d IN agent_demands FILTER d._key == @key LIMIT 1 RETURN d",
+            [("key", serde_json::json!(demand_key))].into(),
+        )
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let demand = updated.into_iter().next().ok_or(StatusCode::NOT_FOUND)?;
+    Ok(Json(ApiResponse::success(demand)))
+}
+
+#[derive(serde::Deserialize)]
+struct EstimateHoursRequest {
+    goal: String,
+    expected_effect: String,
+    problem_description: String,
+    #[serde(default)]
+    target_users: Option<String>,
+    #[serde(default)]
+    scope: Option<String>,
+    #[serde(default)]
+    excluded_scope: Option<String>,
+    #[serde(default)]
+    systems_to_integrate: Vec<String>,
+}
+
+async fn estimate_demand_hours(
+    Json(payload): Json<EstimateHoursRequest>,
+) -> Result<impl IntoResponse, StatusCode> {
+    let scope_count = payload.scope
+        .as_ref()
+        .map(|s| s.split(',').count())
+        .unwrap_or(0)
+        .max(1);
+
+    let system_count = payload.systems_to_integrate.len();
+
+    let base_hours = scope_count * 8;
+    let integration_hours = system_count * 8;
+
+    let complexity_factor = if payload.problem_description.len() > 500 {
+        1.5
+    } else if payload.problem_description.len() > 200 {
+        1.2
+    } else {
+        1.0
+    };
+
+    let total = ((base_hours + integration_hours) as f64 * complexity_factor).round() as i32;
+    let range_min = (total as f64 * 0.8).round() as i32;
+    let range_max = (total as f64 * 1.3).round() as i32;
+
+    let confidence = if scope_count <= 3 && system_count <= 2 {
+        "high"
+    } else if scope_count <= 5 && system_count <= 4 {
+        "medium"
+    } else {
+        "low"
+    };
+
+    let reasoning = format!(
+        "需求涉及 {} 個主要領域，{} 個外部系統串接，複雜度{}。",
+        scope_count,
+        system_count,
+        match confidence {
+            "high" => "較低",
+            "medium" => "中等",
+            _ => "較高",
+        }
+    );
+
+    Ok(Json(serde_json::json!({
+        "code": 0,
+        "data": {
+            "estimated_hours": total,
+            "range_min": range_min,
+            "range_max": range_max,
+            "confidence": confidence,
+            "reasoning": reasoning,
+        }
+    })))
+}
+
+async fn review_demand(
+    Json(payload): Json<CreateDemandRequest>,
+) -> Result<impl IntoResponse, StatusCode> {
+    let ollama_url = CONFIG.ai_services.ollama_base_url.clone();
+    let model = "qwen3-coder:30b";
+
+    let prompt = build_review_prompt(&payload);
+
+    let ollama_body = serde_json::json!({
+        "model": model,
+        "prompt": prompt,
+        "stream": false,
+        "options": {
+            "temperature": 0.3,
+            "num_predict": 512,
+        }
+    });
+
+    let result = HTTP_CLIENT
+        .post(format!("{}/api/generate", ollama_url))
+        .json(&ollama_body)
+        .timeout(std::time::Duration::from_secs(30))
+        .send()
+        .await;
+
+    let review = match result {
+        Ok(resp) if resp.status().is_success() => {
+            let body: serde_json::Value = resp.json().await.unwrap_or_default();
+            let response_text = body.get("response").and_then(|v| v.as_str()).unwrap_or("");
+            parse_ai_review_response(response_text)
+        }
+        _ => {
+            AIReview {
+                completeness: "無法完成 AI 審查".to_string(),
+                reasonableness: "無法完成 AI 審查".to_string(),
+                feasibility: "無法完成 AI 審查".to_string(),
+                estimated_hours: 0,
+                confidence: "low".to_string(),
+                summary: "AI 審查服務暫時無法使用".to_string(),
+                suggestions: vec![],
+                score: 0,
+            }
+        }
+    };
+
+    Ok(Json(ApiResponse::success(review)))
+}
+
+fn build_review_prompt(req: &CreateDemandRequest) -> String {
+    format!(
+        r#"你是一個專業的 AI 需求審查專家。我們已有 AI 對話框架、RAG 檢索、工具系統等基礎建設，只需建立新的 AI Agent 来處理特定領域問題。
+
+請審查以下需求並提供詳細分析：
+
+需求目標：{}
+預期效果：{}
+問題描述：{}
+目標用戶：{}
+服務範圍：{}
+不包含範圍：{}
+對話風格：{}
+輸入說明：{}
+輸入格式：{}
+輸出說明：{}
+輸出格式：{}
+
+請以 JSON 格式回覆，包含以下欄位：
+- completeness: 需求完整性評估（是否清楚定義了需求目標、範圍、輸入輸出）
+- reasonableness: 合理性評估（需求是否合理、是否符合業務邏輯）
+- feasibility: 可行性評估（技術上是否可行、是否有明顯障礙）
+- estimated_hours: 預估工時（小時，整數，僅估算建立新 Agent 的增量工作，不含基礎建設）
+- confidence: 估計信心（low/medium/high）
+- summary: 總結（一句話概括這個需求）
+- suggestions: 改進建議（陣列，每項一字元串，若無建議則回空陣列）
+- score: 綜合評分（0-100，低於70分不建議開發）
+
+請只回覆 JSON，不要有其他文字："#,
+        req.goal,
+        req.expected_effect,
+        req.problem_description,
+        req.target_users.as_deref().unwrap_or("未指定"),
+        req.scope.as_deref().unwrap_or("未指定"),
+        req.excluded_scope.as_deref().unwrap_or("未指定"),
+        req.conversation_style.as_deref().unwrap_or("未指定"),
+        req.input_description.as_deref().unwrap_or("未指定"),
+        req.input_format.as_deref().unwrap_or("未指定"),
+        req.output_description.as_deref().unwrap_or("未指定"),
+        req.output_format.as_deref().unwrap_or("未指定"),
+    )
+}
+
+fn parse_ai_review_response(response: &str) -> AIReview {
+    let trimmed = response.trim();
+
+    if let Some(start) = trimmed.find('{') {
+        if let Some(end) = trimmed.rfind('}') {
+            let json_str = &trimmed[start..=end];
+            if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(json_str) {
+                return AIReview {
+                    completeness: parsed.get("completeness")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("無法評估")
+                        .to_string(),
+                    reasonableness: parsed.get("reasonableness")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("無法評估")
+                        .to_string(),
+                    feasibility: parsed.get("feasibility")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("無法評估")
+                        .to_string(),
+                    estimated_hours: parsed.get("estimated_hours")
+                        .and_then(|v| v.as_i64())
+                        .unwrap_or(0) as i32,
+                    confidence: parsed.get("confidence")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("low")
+                        .to_string(),
+                    summary: parsed.get("summary")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("無法生成摘要")
+                        .to_string(),
+                    suggestions: parsed.get("suggestions")
+                        .and_then(|v| v.as_array())
+                        .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+                        .unwrap_or_default(),
+                    score: parsed.get("score")
+                        .and_then(|v| v.as_i64())
+                        .unwrap_or(0) as i32,
+                };
+            }
+        }
+    }
+
+    AIReview {
+        completeness: format!("解析失敗：{}", &response[..response.len().min(100)]),
+        reasonableness: "無法評估".to_string(),
+        feasibility: "無法評估".to_string(),
+        estimated_hours: 0,
+        confidence: "low".to_string(),
+        summary: "AI 回應格式不符預期".to_string(),
+        suggestions: vec![],
+        score: 0,
+    }
+}
+
+async fn suggest_intents_for_demand(
+    Path((_agent_key, demand_key)): Path<(String, String)>,
+) -> Result<impl IntoResponse, StatusCode> {
+    let db = get_db();
+
+    let demand: Vec<serde_json::Value> = db
+        .aql_bind_vars(
+            "FOR d IN agent_demands FILTER d._key == @key LIMIT 1 RETURN d",
+            [("key", serde_json::json!(demand_key))].into(),
+        )
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let demand = demand.into_iter().next().ok_or(StatusCode::NOT_FOUND)?;
+
+    let ollama_url = CONFIG.ai_services.ollama_base_url.clone();
+    let model = "qwen3-coder:30b";
+
+    let prompt = format!(
+        r#"你是一個 AI Agent 意圖設計專家。根據以下需求，設計 3-5 個意圖（Intent）。
+
+需求目標：{}
+問題描述：{}
+服務範圍：{}
+輸入說明：{}
+輸出說明：{}
+
+請以 JSON 格式回覆，包含一個 intents 陣列，每個意圖包含：
+- name: 意圖名稱（簡短，如「查庫存」、「天氣查詢」）
+- description: 意圖描述
+- action_type: 動作類型（direct_answer / tool_call / process_orchestration）
+- tool_category: 工具類別（web_search / data / knowledge / mcp），若不需要工具則省略
+- tool_name: 具體工具名稱，若不需要則省略
+- response_strategy: 響應策略（direct_llm / confirm_then_execute / clarify_first / handoff_bpa）
+
+請只回覆 JSON，格式如下：
+{{ "intents": [{{"name": "...", "description": "...", "action_type": "...", ...}}] }}"#,
+        demand.get("goal").and_then(|v| v.as_str()).unwrap_or("未指定"),
+        demand.get("problem_description").and_then(|v| v.as_str()).unwrap_or("未指定"),
+        demand.get("scope").and_then(|v| v.as_str()).unwrap_or("未指定"),
+        demand.get("input_description").and_then(|v| v.as_str()).unwrap_or("未指定"),
+        demand.get("output_description").and_then(|v| v.as_str()).unwrap_or("未指定"),
+    );
+
+    let ollama_body = serde_json::json!({
+        "model": model,
+        "prompt": prompt,
+        "stream": false,
+        "options": {
+            "temperature": 0.3,
+            "num_predict": 512,
+        }
+    });
+
+    let result = HTTP_CLIENT
+        .post(format!("{}/api/generate", ollama_url))
+        .json(&ollama_body)
+        .timeout(std::time::Duration::from_secs(30))
+        .send()
+        .await;
+
+    let intents = match result {
+        Ok(resp) if resp.status().is_success() => {
+            let body: serde_json::Value = resp.json().await.unwrap_or_default();
+            let response_text = body.get("response").and_then(|v| v.as_str()).unwrap_or("");
+            parse_suggested_intents(response_text)
+        }
+        _ => vec![],
+    };
+
+    Ok(Json(ApiResponse::success(intents)))
+}
+
+fn parse_suggested_intents(response: &str) -> Vec<serde_json::Value> {
+    let trimmed = response.trim();
+    if let Some(start) = trimmed.find('{') {
+        if let Some(end) = trimmed.rfind('}') {
+            let json_str = &trimmed[start..=end];
+            if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(json_str) {
+                if let Some(intents_array) = parsed.get("intents").and_then(|v| v.as_array()) {
+                    return intents_array.iter().map(|v| v.clone()).collect();
+                }
+            }
+        }
+    }
+    vec![]
+}
+
 async fn list_tools(headers: HeaderMap, Query(params): Query<std::collections::HashMap<String, String>>) -> Result<impl IntoResponse, StatusCode> {
     let db = get_db();
     let tool_type = params.get("tool_type").map(|s| s.as_str());
@@ -1211,15 +2122,20 @@ async fn list_tools(headers: HeaderMap, Query(params): Query<std::collections::H
         String::new()
     };
     let query = format!(
-        "FOR t IN tools FILTER (t.visibility == null || t.visibility == 'public' || t.visibility == 'role' || t.visibility == 'account'){} SORT t.created_at DESC RETURN t",
+        "FOR t IN tools FILTER (t.visibility == null || t.visibility == 'public' || t.visibility == 'role' || t.visibility == 'account' || t.visibility == 'private'){} SORT t.created_at DESC RETURN t",
         tool_filter
     );
     let all_tools: Vec<Tool> = db.aql_str(&query).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let is_admin = user_roles.as_ref().map(|r| r.contains(&"admin".to_string())).unwrap_or(false);
 
     let filtered: Vec<Tool> = match (&user_key, &user_roles) {
         (Some(uk), Some(roles)) => all_tools
             .into_iter()
             .filter(|t| {
+                if is_admin {
+                    return true;
+                }
                 match t.visibility.as_deref().unwrap_or("public") {
                     "public" => true,
                     "role" => {
@@ -1230,7 +2146,7 @@ async fn list_tools(headers: HeaderMap, Query(params): Query<std::collections::H
                         let tool_accounts = t.visibility_accounts.as_deref().unwrap_or(&[]);
                         tool_accounts.contains(uk)
                     }
-                    _ => true,
+                    _ => false,
                 }
             })
             .collect(),

@@ -17,7 +17,7 @@ QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
 ARANGO_URL = os.getenv("ARANGO_URL", "http://localhost:8529")
 ARANGO_DB = os.getenv("ARANGO_DATABASE", "abc_desktop")
 ARANGO_USER = os.getenv("ARANGO_USER", "root")
-ARANGO_PASSWORD = os.getenv("ARANGO_PASSWORD", "abc_desktop_2026")
+ARANGO_PASSWORD = os.getenv("ARANGO_PASSWORD", "")
 
 QDRANT_COLLECTION = "da_intents"
 ARANGO_TABLES = "da_tables"

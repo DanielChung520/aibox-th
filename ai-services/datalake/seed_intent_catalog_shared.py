@@ -136,6 +136,14 @@ def make_orch_doc(
     confidence_threshold: float = 0.7,
     priority: int = 0,
     response_strategy: str = "",  # "direct_llm" | "handoff_bpa" | "confirm_then_execute" | "clarify_first"
+    # TopIntentRAG 行動方案欄位
+    action_type: str = "",  # "direct_answer" | "tool_call" | "process_orchestration"
+    target_agent: str = "",  # "chat" | "tool" | "pdca" | "bpa" | "ca"
+    tool_category: str = "",  # "web_search" | "data" | "knowledge" | "mcp"
+    tool_name: str = "",
+    pdca_id: str = "",
+    ca_id: str = "",
+    nl_patterns: list[str] | None = None,
 ) -> dict[str, object]:
     """Build an orchestrator intent document (BPA routing model v2).
 
@@ -144,6 +152,11 @@ def make_orch_doc(
       handoff_bpa          - 直接 handoff 給 BPA 執行，不需用戶確認（純查詢）
       confirm_then_execute - 展示計劃給用戶確認後再執行（寫入/操作類）
       clarify_first        - 先反問用戶釐清意圖（信心度低、意圖模糊時）
+
+    action_type 語義：
+      direct_answer        - 直接由 LLM 回覆
+      tool_call            - 需要呼叫工具
+      process_orchestration - 需要協調複雜流程（PDCA/BPA/CA）
     """
     doc: dict[str, object] = {
         "_key": intent_id,
@@ -168,4 +181,18 @@ def make_orch_doc(
         doc["task_type"] = task_type
     if response_strategy:
         doc["response_strategy"] = response_strategy
+    if action_type:
+        doc["action_type"] = action_type
+    if target_agent:
+        doc["target_agent"] = target_agent
+    if tool_category:
+        doc["tool_category"] = tool_category
+    if tool_name:
+        doc["tool_name"] = tool_name
+    if pdca_id:
+        doc["pdca_id"] = pdca_id
+    if ca_id:
+        doc["ca_id"] = ca_id
+    if nl_patterns:
+        doc["nl_patterns"] = nl_patterns
     return doc

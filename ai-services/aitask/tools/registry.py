@@ -1,7 +1,8 @@
 """
 @file        Tool registry models and service
-@description Defines tool metadata, execution context, and tool discovery/dispatch.
-@lastUpdate  2026-04-11 03:12:30
+@description AITask-specific tool registry that delegates to shared/tools/registry.
+             Maintains backward compatibility with ServiceConfig while using shared core.
+@lastUpdate  2026-04-21 10:00:00
 @author      AI Agent
 @version     1.0.0
 """
@@ -17,7 +18,7 @@ from pydantic import BaseModel
 from aitask.config import ServiceConfig
 
 if TYPE_CHECKING:
-    from aitask.tools.executors import BaseExecutor
+    from shared.tools.executors import BaseExecutor
 
 
 class ToolSource(str, Enum):

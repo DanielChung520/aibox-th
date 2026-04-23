@@ -40,7 +40,7 @@ DEFAULT_WEIGHTS: Final[dict[str, dict[str, float]]] = {
 ARANGO_URL = os.getenv("ARANGO_URL", "http://localhost:8529")
 ARANGO_DB = os.getenv("ARANGO_DATABASE", "abc_desktop")
 ARANGO_USER = os.getenv("ARANGO_USER", "root")
-ARANGO_PASSWORD = os.getenv("ARANGO_PASSWORD", "abc_desktop_2026")
+ARANGO_PASSWORD = os.getenv("ARANGO_PASSWORD", "")
 
 
 # ---------------------------------------------------------------------------
@@ -163,6 +163,7 @@ class HybridRAGConfigService:
         self._arango_user = arango_user or ARANGO_USER
         self._arango_password = arango_password or ARANGO_PASSWORD
         self._cache_ttl = CONFIG_CACHE_TTL
+        self._providers_cache: dict[str, tuple[list[str], float] | None] = {}
 
     def _get_cache_key(
         self, scope: str, tenant_id: str | None, user_id: str | None
@@ -376,6 +377,37 @@ class HybridRAGConfigService:
         if abs(vector_weight + graph_weight - 1.0) > 0.01:
             return False
         return True
+
+    def get_allowed_llm_providers(self) -> list[str]:
+        cached = self._providers_cache.get("allowed")
+        if cached is not None and (time.time() - cached[1]) < self._cache_ttl:
+            return cached[0]
+        try:
+            import json as _json
+            with httpx.Client(timeout=10.0) as client:
+                resp = client.get(
+                    f"{self._arango_url}/_db/{self._arango_db}/_api/document/"
+                    f"system_params/knowledge.allowed_llm_providers",
+                    auth=(self._arango_user, self._arango_password),
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    raw = data.get("param_value", "[]")
+                    providers = _json.loads(raw) if isinstance(raw, str) else raw
+                    if isinstance(providers, list):
+                        self._providers_cache["allowed"] = (providers, time.time())
+                        return providers
+        except Exception:
+            pass
+        return []
+
+    def assert_llm_provider_allowed(self, provider: str) -> None:
+        allowed = self.get_allowed_llm_providers()
+        if allowed and provider not in allowed:
+            raise ValueError(
+                f"LLM provider '{provider}' is not allowed. "
+                f"Allowed providers: {allowed}"
+            )
 
 
 # ---------------------------------------------------------------------------

@@ -8,16 +8,135 @@
 //! # Version: 1.0.0
 
 use axum::http::{HeaderMap, StatusCode};
+use std::fmt::Write as _;
 
 #[allow(deprecated)]
 use crate::api::intent::{route_tool_intent, sse_text_to_stream, summarize_text, ToolIntentResult};
 use crate::config::CONFIG;
-use crate::db::{get_db, ChatMessage, ModelProvider, SendMessageRequest};
+use crate::db::{
+    get_db, AssistantContextFocus, AssistantContextIntentHint, AssistantContextPayload,
+    AssistantContextRecentAction, ChatMessage, ModelProvider, SendMessageRequest,
+};
 
 use super::clients::{call_aitask_chat, call_aitask_graph_chat, call_aitask_tagging};
 use super::models::ChatSse;
 use super::repo::{extract_user_key_from_headers, get_message_history, get_session_with_messages, get_system_param, insert_message, load_chat_defaults};
 use super::sse_proxy::{stream_aitask_response, stream_langgraph_response};
+
+fn push_focus_block(lines: &mut Vec<String>, title: &str, focus: &AssistantContextFocus) {
+    let mut parts: Vec<String> = Vec::new();
+    if let Some(component) = &focus.component {
+        parts.push(format!("組件={component}"));
+    }
+    if let Some(component_name) = &focus.component_name {
+        parts.push(format!("組件名稱={component_name}"));
+    }
+    if let Some(entity) = &focus.entity {
+        parts.push(format!("實體={entity}"));
+    }
+    if let Some(entity_type) = &focus.entity_type {
+        parts.push(format!("實體類型={entity_type}"));
+    }
+    if let Some(action) = &focus.action {
+        parts.push(format!("動作={action}"));
+    }
+    if let Some(data_summary) = &focus.data_summary {
+        parts.push(format!("摘要={data_summary}"));
+    }
+
+    if !parts.is_empty() {
+        lines.push(format!("- {title}：{}", parts.join("；")));
+    }
+}
+
+fn format_intent_hints(intent_hints: &[AssistantContextIntentHint]) -> Option<String> {
+    if intent_hints.is_empty() {
+        return None;
+    }
+
+    let mut line = String::new();
+    for (index, hint) in intent_hints.iter().enumerate() {
+        if index > 0 {
+            line.push_str(" ｜ ");
+        }
+        let _ = write!(
+            line,
+            "{}（{:.0}%/{}{}）",
+            hint.text,
+            hint.confidence * 100.0,
+            hint.source,
+            hint.strategy
+                .as_ref()
+                .map(|strategy| format!("/{strategy}"))
+                .unwrap_or_default()
+        );
+    }
+    Some(line)
+}
+
+fn format_recent_actions(recent_actions: &[AssistantContextRecentAction]) -> Option<String> {
+    if recent_actions.is_empty() {
+        return None;
+    }
+
+    let parts: Vec<String> = recent_actions
+        .iter()
+        .map(|action| {
+            action
+                .summary
+                .clone()
+                .unwrap_or_else(|| format!("{} @ {}", action.event_type, action.page))
+        })
+        .collect();
+    Some(parts.join(" ｜ "))
+}
+
+fn build_assistant_context_prompt(context: &AssistantContextPayload) -> String {
+    let mut lines = vec![
+        "以下是使用者當前所在頁面的即時上下文，請優先用它理解『這個頁面 / 這筆資料 / 這個視窗』指的是什麼。若上下文不足，再主動澄清。".to_string(),
+        format!(
+            "- 當前頁面：{}（{}）",
+            context.page.name, context.page.pathname
+        ),
+    ];
+
+    if let Some(description) = &context.page.description {
+        lines.push(format!("- 頁面說明：{description}"));
+    }
+    if let Some(page_types) = &context.page.page_types {
+        if !page_types.is_empty() {
+            lines.push(format!("- 頁面類型：{}", page_types.join("、")));
+        }
+    }
+    if let Some(focus) = &context.focus {
+        push_focus_block(&mut lines, "當前焦點", focus);
+    }
+    if let Some(entity) = &context.entity {
+        push_focus_block(&mut lines, "當前實體", entity);
+    }
+    if let Some(modal) = &context.modal {
+        let mut modal_line = format!("- 開啟視窗：{}", modal.modal);
+        if let Some(mode) = &modal.mode {
+            let _ = write!(modal_line, "（模式：{mode}）");
+        }
+        if let Some(summary) = &modal.summary {
+            let _ = write!(modal_line, "；摘要={summary}");
+        }
+        lines.push(modal_line);
+    }
+    if let Some(intent_hints) = &context.intent_hints {
+        if let Some(line) = format_intent_hints(intent_hints) {
+            lines.push(format!("- 意圖線索：{line}"));
+        }
+    }
+    if let Some(recent_actions) = &context.recent_actions {
+        if let Some(line) = format_recent_actions(recent_actions) {
+            lines.push(format!("- 最近操作：{line}"));
+        }
+    }
+
+    lines.join("\n")
+}
 
 pub async fn handle_send_message(headers: HeaderMap, session_key: String, payload: SendMessageRequest) -> Result<ChatSse, StatusCode> {
     if payload.content.trim().is_empty() {
@@ -89,9 +208,21 @@ pub async fn handle_send_message(headers: HeaderMap, session_key: String, payloa
         history_all
     };
 
+    let context_prompt = payload
+        .assistant_context
+        .as_ref()
+        .map(build_assistant_context_prompt)
+        .filter(|prompt| !prompt.is_empty());
+
+    let mut system_prompt = defaults.system_prompt.clone();
+    if let Some(context_prompt) = &context_prompt {
+        system_prompt.push_str("\n\n[PAGE_AWARE_CONTEXT]\n");
+        system_prompt.push_str(context_prompt);
+    }
+
     let mut messages: Vec<serde_json::Value> = vec![serde_json::json!({
         "role": "system",
-        "content": defaults.system_prompt,
+        "content": system_prompt,
     })];
 
     let history_for_intent: Vec<serde_json::Value> = history
@@ -109,7 +240,13 @@ pub async fn handle_send_message(headers: HeaderMap, session_key: String, payloa
     let orchestrator_mode = get_system_param(db, "task_chat.orchestrator_mode").await.unwrap_or_else(|| "legacy".to_string());
 
     if orchestrator_mode == "langgraph" {
-        let graph_body = serde_json::json!({ "session_id": session_key, "user_id": user_key, "message": payload.content, "mode": "chat" });
+        let graph_body = serde_json::json!({
+            "session_id": session_key,
+            "user_id": user_key,
+            "message": payload.content,
+            "mode": "chat",
+            "assistant_context_prompt": context_prompt,
+        });
         let response = call_aitask_graph_chat(graph_body).await?;
         return Ok(stream_langgraph_response(response, session_key).await);
     }

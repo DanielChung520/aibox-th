@@ -241,7 +241,7 @@ class Pipeline:
             primary_major: str | None = None
             try:
                 file_doc = self.arango.get_file(file_id)
-                root_id = file_doc.get("knowledge_root_id") if file_doc else None
+                root_id = cast(str | None, file_doc.get("knowledge_root_id")) if file_doc else None
                 if root_id:
                     root_doc = self.arango.get_root(str(root_id))
                     majors = cast(
@@ -368,7 +368,7 @@ class Pipeline:
                 f"LLM returned {len(entities)} entities, {len(relations)} relations",
             )
             if entities or relations:
-                self.arango.upsert_graph(file_id, entities, relations)
+                self.arango.upsert_graph(file_id, entities, relations, root_id=root_id)
                 self.arango.update_status(file_id, graph_status="completed")
                 self.arango.log_event(
                     file_id,

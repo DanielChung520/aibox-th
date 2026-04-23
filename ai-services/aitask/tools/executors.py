@@ -14,7 +14,7 @@ from time import perf_counter
 
 import httpx
 
-from aitask.tools.registry import ToolExecutionContext, ToolResult, ToolSource
+from shared.tools.registry import ToolExecutionContext, ToolResult, ToolSource
 
 
 def _auth_headers(context: ToolExecutionContext) -> dict[str, str]:

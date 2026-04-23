@@ -29,7 +29,7 @@ OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 DEFAULT_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2:latest")
 ARANGO_URL = os.getenv("ARANGO_URL", "http://localhost:8529")
 ARANGO_USER = os.getenv("ARANGO_USER", "root")
-ARANGO_PASSWORD = os.getenv("ARANGO_PASSWORD", "abc_desktop_2026")
+ARANGO_PASSWORD = os.getenv("ARANGO_PASSWORD", "")
 
 
 class WorkflowStatus(str, Enum):

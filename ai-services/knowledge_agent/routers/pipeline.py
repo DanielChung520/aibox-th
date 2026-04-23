@@ -1,15 +1,32 @@
-from fastapi import APIRouter, HTTPException
-from fastapi.responses import FileResponse
-from pydantic import BaseModel
+import os
 from pathlib import Path
-from typing import Optional, cast
+from typing import Any, Optional, cast
 
-router = APIRouter(prefix="/pipeline", tags=["Knowledge Pipeline"])
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import FileResponse
+from knowledge_agent import service as kms_module
+from pydantic import BaseModel
+from shared.security import verify_internal_token
+
+router = APIRouter(
+    prefix="/pipeline",
+    tags=["Knowledge Pipeline"],
+    dependencies=[Depends(verify_internal_token)],
+)
+
+
+def _kms_check(root_id: str | None, user_role: str | None, operation: str) -> None:
+    """Wrapper that translates KMS ValueError → HTTPException(403)."""
+    try:
+        kms = kms_module.get_knowledge_management_service()
+        kms.check_access(root_id, user_role, operation)
+    except ValueError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
 
 ARANGO_URL = "http://localhost:8529"
 ARANGO_DB = "abc_desktop"
 ARANGO_USER = "root"
-ARANGO_PASSWORD = "abc_desktop_2026"
+ARANGO_PASSWORD = os.getenv("ARANGO_PASSWORD", "")
 
 
 class TriggerRequest(BaseModel):
@@ -18,19 +35,28 @@ class TriggerRequest(BaseModel):
     local_path: str
     root_id: str
     session_key: Optional[str] = None
+    user_role: Optional[str] = None
 
 
 @router.post("/vector")
-async def trigger_vector(file_id: str, root_id: str) -> dict[str, object]:
+async def trigger_vector(
+    request: Request,
+    file_id: str,
+    root_id: str,
+    user_role: Optional[str] = None,
+) -> dict[str, object]:
     from celery_app.tasks import vectorize_task
     from kb_pipeline.arango_ops import ArangoOps
+
+    user_role = request.headers.get("X-User-Role") or user_role
+    _kms_check(root_id, user_role, operation="index")
 
     arango = ArangoOps()
     file_doc = arango.get_file(file_id)
     local_path = file_doc.get("local_path") if file_doc else None
     if not local_path:
         return {"error": "file not found or local_path missing"}
-    result = vectorize_task.delay(file_id, local_path, root_id)
+    result = cast(Any, vectorize_task).delay(file_id, local_path, root_id)
     arango.set_task_id(file_id, vector_task_id=result.id)
     return {
         "status": "queued",
@@ -41,15 +67,18 @@ async def trigger_vector(file_id: str, root_id: str) -> dict[str, object]:
 
 
 @router.post("/trigger")
-async def trigger_pipeline(body: TriggerRequest) -> dict[str, object]:
+async def trigger_pipeline(request: Request, body: TriggerRequest) -> dict[str, object]:
     from celery_app.tasks import graph_task, vectorize_task
     from kb_pipeline.arango_ops import ArangoOps
 
+    effective_role = request.headers.get("X-User-Role") or body.user_role
+    _kms_check(body.root_id, effective_role, operation="index")
+
     arango = ArangoOps()
-    vector_result = vectorize_task.delay(
+    vector_result = cast(Any, vectorize_task).delay(
         body.file_id, body.local_path, body.root_id, session_key=body.session_key
     )
-    graph_result = graph_task.delay(
+    graph_result = cast(Any, graph_task).delay(
         body.file_id, body.local_path, session_key=body.session_key
     )
     arango.set_task_id(
@@ -64,16 +93,27 @@ async def trigger_pipeline(body: TriggerRequest) -> dict[str, object]:
 
 
 @router.post("/graph")
-async def trigger_graph(file_id: str) -> dict[str, object]:
+async def trigger_graph(
+    request: Request,
+    file_id: str,
+    user_role: Optional[str] = None,
+) -> dict[str, object]:
     from celery_app.tasks import graph_task
     from kb_pipeline.arango_ops import ArangoOps
 
     arango = ArangoOps()
     file_doc = arango.get_file(file_id)
-    local_path = file_doc.get("local_path") if file_doc else None
-    if not local_path:
-        return {"error": "file not found or local_path missing"}
-    result = graph_task.delay(file_id, local_path)
+    if not file_doc:
+        raise HTTPException(status_code=404, detail="file not found")
+    root_id = str(file_doc.get("knowledge_root_id", ""))
+    if not root_id:
+        raise HTTPException(status_code=400, detail="knowledge_root_id not found in file doc")
+
+    role = request.headers.get("X-User-Role") or user_role
+    _kms_check(root_id, role, operation="index")
+
+    local_path = file_doc.get("local_path")
+    result = cast(Any, graph_task).delay(file_id, local_path)
     arango.set_task_id(file_id, graph_task_id=result.id)
     return {
         "status": "queued",
@@ -84,7 +124,13 @@ async def trigger_graph(file_id: str) -> dict[str, object]:
 
 
 @router.get("/vectors")
-async def get_vectors(file_id: str, limit: int = 50, offset: int = 0) -> dict[str, object]:
+async def get_vectors(
+    request: Request,
+    file_id: str,
+    limit: int = 50,
+    offset: int = 0,
+    user_role: Optional[str] = None,
+) -> dict[str, object]:
     from kb_pipeline.arango_ops import ArangoOps
     from kb_pipeline.qdrant_ops import QdrantStore
 
@@ -92,9 +138,12 @@ async def get_vectors(file_id: str, limit: int = 50, offset: int = 0) -> dict[st
     file_doc = arango.get_file(file_id)
     if not file_doc:
         raise HTTPException(status_code=404, detail="file not found")
-    root_id = str(file_doc.get("knowledge_root_id", ""))
+    raw_root_id = file_doc.get("knowledge_root_id")
+    root_id: str | None = str(raw_root_id) if raw_root_id else None
     if not root_id:
         return {"chunks": [], "total": 0, "file_id": file_id}
+    role = request.headers.get("X-User-Role") or user_role
+    _kms_check(root_id, role, operation="query")
     qdrant = QdrantStore()
     collection = f"knowledge_{root_id}"
     chunks = qdrant.get_chunks(collection, file_id, limit, offset)
@@ -102,7 +151,13 @@ async def get_vectors(file_id: str, limit: int = 50, offset: int = 0) -> dict[st
 
 
 @router.get("/similar")
-async def get_similar(file_id: str, chunk_id: str, top_k: int = 10) -> dict[str, object]:
+async def get_similar(
+    request: Request,
+    file_id: str,
+    chunk_id: str,
+    top_k: int = 10,
+    user_role: Optional[str] = None,
+) -> dict[str, object]:
     from kb_pipeline.arango_ops import ArangoOps
     from kb_pipeline.qdrant_ops import QdrantStore
 
@@ -110,9 +165,12 @@ async def get_similar(file_id: str, chunk_id: str, top_k: int = 10) -> dict[str,
     file_doc = arango.get_file(file_id)
     if not file_doc:
         raise HTTPException(status_code=404, detail="file not found")
-    root_id = str(file_doc.get("knowledge_root_id", ""))
+    raw_root_id = file_doc.get("knowledge_root_id")
+    root_id: str | None = str(raw_root_id) if raw_root_id else None
     if not root_id:
         return {"similar": []}
+    role = request.headers.get("X-User-Role") or user_role
+    _kms_check(root_id, role, operation="query")
 
     qdrant = QdrantStore()
     collection = f"knowledge_{root_id}"
@@ -135,7 +193,11 @@ async def get_similar(file_id: str, chunk_id: str, top_k: int = 10) -> dict[str,
 
 
 @router.post("/regenerate/{file_id}")
-async def regenerate_pipeline(file_id: str) -> dict[str, object]:
+async def regenerate_pipeline(
+    request: Request,
+    file_id: str,
+    user_role: Optional[str] = None,
+) -> dict[str, object]:
     from celery_app.tasks import graph_task, vectorize_task
     from kb_pipeline.arango_ops import ArangoOps
 
@@ -144,14 +206,18 @@ async def regenerate_pipeline(file_id: str) -> dict[str, object]:
     if not file_doc:
         raise HTTPException(status_code=404, detail="file not found")
     local_path = file_doc.get("local_path")
-    root_id = file_doc.get("knowledge_root_id")
+    root_id: str | None = str(file_doc.get("knowledge_root_id")) if file_doc.get("knowledge_root_id") else None
     if not local_path or not root_id:
         raise HTTPException(
             status_code=400,
             detail="file missing local_path or knowledge_root_id",
         )
-    vector_result = vectorize_task.delay(file_id, local_path, root_id)
-    graph_result = graph_task.delay(file_id, local_path)
+
+    role = request.headers.get("X-User-Role") or user_role
+    _kms_check(root_id, role, operation="index")
+
+    vector_result = cast(Any, vectorize_task).delay(file_id, local_path, root_id)
+    graph_result = cast(Any, graph_task).delay(file_id, local_path)
     arango.set_task_id(
         file_id, vector_task_id=vector_result.id, graph_task_id=graph_result.id
     )
@@ -165,19 +231,32 @@ async def regenerate_pipeline(file_id: str) -> dict[str, object]:
 
 
 @router.get("/graph")
-async def get_graph(file_id: str) -> dict[str, object]:
+async def get_graph(
+    request: Request,
+    file_id: str,
+    user_role: Optional[str] = None,
+) -> dict[str, object]:
     from kb_pipeline.arango_ops import ArangoOps
 
     arango = ArangoOps()
     file_doc = arango.get_file(file_id)
     if not file_doc:
         raise HTTPException(status_code=404, detail="file not found")
+    raw_root_id = file_doc.get("knowledge_root_id")
+    root_id: str | None = str(raw_root_id) if raw_root_id else None
+    if root_id:
+        role = request.headers.get("X-User-Role") or user_role
+        _kms_check(root_id, role, operation="query")
     graph_data = arango.get_graph(file_id)
     return {"nodes": graph_data["nodes"], "edges": graph_data["edges"]}
 
 
 @router.post("/retry")
-async def retry_pipeline(file_id: str) -> dict[str, object]:
+async def retry_pipeline(
+    request: Request,
+    file_id: str,
+    user_role: Optional[str] = None,
+) -> dict[str, object]:
     from celery_app.tasks import graph_task, vectorize_task
     from kb_pipeline.arango_ops import ArangoOps
 
@@ -187,12 +266,17 @@ async def retry_pipeline(file_id: str) -> dict[str, object]:
         raise HTTPException(status_code=404, detail="file not found")
 
     local_path = file_doc.get("local_path", "")
-    root_id = file_doc.get("knowledge_root_id", "")
+    raw_root_id = file_doc.get("knowledge_root_id")
+    root_id: str | None = str(raw_root_id) if raw_root_id else None
     if not local_path:
         raise HTTPException(status_code=400, detail="local_path missing")
 
-    v_result = vectorize_task.delay(file_id, local_path, root_id)
-    g_result = graph_task.delay(file_id, local_path)
+    if root_id:
+        role = request.headers.get("X-User-Role") or user_role
+        _kms_check(root_id, role, operation="index")
+
+    v_result = cast(Any, vectorize_task).delay(file_id, local_path, root_id)
+    g_result = cast(Any, graph_task).delay(file_id, local_path)
     arango.set_task_id(file_id, vector_task_id=v_result.id, graph_task_id=g_result.id)
     arango.update_status(file_id, vector_status="pending", graph_status="pending")
     return {
@@ -224,7 +308,11 @@ async def get_active_celery_tasks() -> dict[str, object]:
 
 
 @router.post("/abort")
-async def abort_pipeline(file_id: str) -> dict[str, object]:
+async def abort_pipeline(
+    request: Request,
+    file_id: str,
+    user_role: Optional[str] = None,
+) -> dict[str, object]:
     from celery_app.app import app as celery_app
     from kb_pipeline.arango_ops import ArangoOps
 
@@ -232,6 +320,12 @@ async def abort_pipeline(file_id: str) -> dict[str, object]:
     file_doc = arango.get_file(file_id)
     if not file_doc:
         raise HTTPException(status_code=404, detail="file not found")
+
+    raw_root_id = file_doc.get("knowledge_root_id")
+    root_id: str | None = str(raw_root_id) if raw_root_id else None
+    if root_id:
+        role = request.headers.get("X-User-Role") or user_role
+        _kms_check(root_id, role, operation="delete")
 
     revoked: list[str] = []
     vector_task_id = file_doc.get("vector_task_id")
@@ -252,7 +346,11 @@ async def abort_pipeline(file_id: str) -> dict[str, object]:
 
 
 @router.post("/delete")
-async def delete_file_data(file_id: str) -> dict[str, object]:
+async def delete_file_data(
+    request: Request,
+    file_id: str,
+    user_role: Optional[str] = None,
+) -> dict[str, object]:
     import base64
     import json
 
@@ -267,6 +365,12 @@ async def delete_file_data(file_id: str) -> dict[str, object]:
     if not file_doc:
         raise HTTPException(status_code=404, detail="file not found")
 
+    raw_root_id = file_doc.get("knowledge_root_id")
+    root_id: str | None = str(raw_root_id) if raw_root_id else None
+    if root_id:
+        role = request.headers.get("X-User-Role") or user_role
+        _kms_check(root_id, role, operation="delete")
+
     revoked: list[str] = []
     try:
         for tid_key in ("vector_task_id", "graph_task_id"):
@@ -277,10 +381,11 @@ async def delete_file_data(file_id: str) -> dict[str, object]:
 
         r = redis_lib.from_url(REDIS_URL)
         queue_key = "celery"
-        queue_len = r.llen(queue_key)
+        queue_len = cast(int, r.llen(queue_key))
         if queue_len and queue_len > 0:
-            to_remove: list[bytes] = []
-            for raw in r.lrange(queue_key, 0, queue_len - 1) or []:
+            to_remove: list[str] = []
+            queued_items = cast(list[bytes | str], r.lrange(queue_key, 0, queue_len - 1) or [])
+            for raw in queued_items:
                 try:
                     msg = json.loads(raw)
                     body = msg.get("body")
@@ -292,7 +397,7 @@ async def delete_file_data(file_id: str) -> dict[str, object]:
                         if task_id:
                             celery_app.control.revoke(task_id, terminate=True)
                             revoked.append(task_id)
-                        to_remove.append(raw if isinstance(raw, bytes) else raw.encode())
+                        to_remove.append(raw.decode() if isinstance(raw, bytes) else raw)
                 except Exception:
                     continue
             for item in to_remove:
@@ -300,7 +405,6 @@ async def delete_file_data(file_id: str) -> dict[str, object]:
     except Exception:
         pass
 
-    root_id = str(file_doc.get("knowledge_root_id", ""))
     qdrant_deleted = False
     if root_id:
         try:
@@ -330,8 +434,8 @@ async def delete_file_data(file_id: str) -> dict[str, object]:
             import httpx
 
             seaweed_base = os.getenv("SEAWEED_AIBOX_URL", "http://localhost:8888")
-            seaweed_user = os.getenv("SEAWEED_USER", "admin")
-            seaweed_pass = os.getenv("SEAWEED_PASS", "admin123")
+            seaweed_user = os.getenv("SEAWEED_USER", "")
+            seaweed_pass = os.getenv("SEAWEED_PASS", "")
             async with httpx.AsyncClient(timeout=15.0) as client:
                 resp = await client.request(
                     "DELETE",
@@ -354,22 +458,43 @@ async def delete_file_data(file_id: str) -> dict[str, object]:
 
 
 @router.get("/logs")
-async def get_pipeline_logs(file_id: str) -> dict[str, object]:
+async def get_pipeline_logs(
+    request: Request,
+    file_id: str,
+    user_role: Optional[str] = None,
+) -> dict[str, object]:
     from kb_pipeline.arango_ops import ArangoOps
 
     arango = ArangoOps()
+    file_doc = arango.get_file(file_id)
+    if file_doc:
+        raw_root_id = file_doc.get("knowledge_root_id")
+        root_id: str | None = str(raw_root_id) if raw_root_id else None
+        if root_id:
+            role = request.headers.get("X-User-Role") or user_role
+            _kms_check(root_id, role, operation="query")
     logs = arango.get_job_logs(file_id)
     return {"file_id": file_id, "logs": logs, "count": len(logs)}
 
 
 @router.get("/preview")
-async def get_preview(file_id: str) -> dict[str, object]:
+async def get_preview(
+    request: Request,
+    file_id: str,
+    user_role: Optional[str] = None,
+) -> dict[str, object]:
     from kb_pipeline.arango_ops import ArangoOps
 
     arango = ArangoOps()
     file_doc = arango.get_file(file_id)
     if not file_doc:
         raise HTTPException(status_code=404, detail="file not found")
+
+    raw_root_id = file_doc.get("knowledge_root_id")
+    root_id: str | None = str(raw_root_id) if raw_root_id else None
+    if root_id:
+        role = request.headers.get("X-User-Role") or user_role
+        _kms_check(root_id, role, operation="query")
 
     local_path = str(file_doc.get("local_path"))
     if not local_path or not Path(local_path).exists():
@@ -408,6 +533,8 @@ async def get_preview(file_id: str) -> dict[str, object]:
 
             wb = openpyxl.load_workbook(local_path, data_only=True)
             ws = wb.active
+            if ws is None:
+                raise HTTPException(status_code=500, detail="worksheet not found")
             for i, row in enumerate(ws.iter_rows(values_only=True)):
                 if i == 0:
                     headers = [str(c) if c is not None else "" for c in row]
@@ -459,13 +586,23 @@ async def get_preview(file_id: str) -> dict[str, object]:
 
 
 @router.get("/download")
-async def download_file(file_id: str) -> FileResponse:
+async def download_file(
+    request: Request,
+    file_id: str,
+    user_role: Optional[str] = None,
+) -> FileResponse:
     from kb_pipeline.arango_ops import ArangoOps
 
     arango = ArangoOps()
     file_doc = arango.get_file(file_id)
     if not file_doc:
         raise HTTPException(status_code=404, detail="file not found")
+
+    raw_root_id = file_doc.get("knowledge_root_id")
+    root_id: str | None = str(raw_root_id) if raw_root_id else None
+    if root_id:
+        role = request.headers.get("X-User-Role") or user_role
+        _kms_check(root_id, role, operation="query")
 
     local_path: str = str(file_doc.get("local_path"))
     if not local_path or not Path(local_path).exists():

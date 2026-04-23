@@ -6,40 +6,43 @@ Provides:
 - NL→SQL: 3-tier hybrid NL→SQL pipeline (template/small_llm/large_llm)
   over Parquet data lake via DuckDB
 
-# Last Update: 2026-03-26 08:58:10
+# Last Update: 2026-04-16 17:50:29
 # Author: Daniel Chung
-# Version: 2.2.0
+# Version: 2.3.0
 """
 
 import logging
 import os
 import time
-from typing import Optional
+from typing import Optional, cast
 
 import httpx
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from shared.security import verify_internal_token
+from shared.logging import get_structured_logger, log_nl_sql_request
 
 from data_agent.query.nl2sql import run_nl2sql_pipeline
 from data_agent.query.nl2sql.models import (
     GenerationStrategy,
     IntentMatch,
+    NLQueryRequest,
     PipelineConfig,
     QueryPlan,
     QueryPlanFilter,
-    QueryPlanOrderBy,
+    StructuredQueryRequest,
 )
 from data_agent.query.nl2sql.plan_generator import generate_query_plan
-from data_agent.query.nl2sql.schema_retriever import retrieve_schema
+from data_agent.query.nl2sql.structured_orchestrator import run_structured_pipeline
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(verify_internal_token)])
 
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 DEFAULT_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5-coder:7b")
 ARANGO_URL = os.getenv("ARANGO_URL", "http://localhost:8529")
 ARANGO_DB = os.getenv("ARANGO_DATABASE", "abc_desktop")
 ARANGO_USER = os.getenv("ARANGO_USER", "root")
-ARANGO_PASSWORD = os.getenv("ARANGO_PASSWORD", "abc_desktop_2026")
+ARANGO_PASSWORD = os.getenv("ARANGO_PASSWORD", "")
 
 SYSTEM_PROMPT = """You are a database expert. Convert the user's natural language \
 query into an ArangoDB AQL query.
@@ -176,11 +179,23 @@ async def explain_aql(request: ExplainRequest) -> dict[str, object]:
 @router.post("/nl2sql")
 async def nl2sql(request: NL2SqlRequest) -> dict[str, object]:
     """NL→SQL pipeline: natural language → DuckDB SQL over Parquet data lake."""
+    logger = get_structured_logger("data_agent", "nl2sql")
+    timer = log_nl_sql_request(
+        logger,
+        query=request.natural_language,
+        intent_type="nl2sql",
+    )
     try:
         result = await run_nl2sql_pipeline(query=request.natural_language)
+        timer.stop(
+            success=True,
+            strategy=result.strategy.value if hasattr(result, "strategy") else "unknown",
+            rows_returned=len(result.data) if hasattr(result, "data") else 0,
+        )
         return result.model_dump()
     except Exception as e:
-        logger.error("NL→SQL endpoint error: %s", str(e))
+        timer.stop(success=False, error=str(e))
+        logger.error("nl_sql_error", error=str(e))
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -214,7 +229,7 @@ async def preview_table_data(
         if not table_info:
             raise HTTPException(status_code=404, detail=f"Table '{table_name}' not found")
 
-        table_id = table_info.get("table_id", table_name)
+        table_id = str(table_info.get("table_id", table_name))
 
         field_col = "da_field_info" if data_source == "sap" else "da_field_info_ragic"
         async with httpx.AsyncClient(timeout=15.0) as client:
@@ -230,7 +245,7 @@ async def preview_table_data(
             fields = fields_resp.json().get("result", [])
 
         if data_source == "sap":
-            s3_path = table_info.get("s3_path", "")
+            s3_path = str(table_info.get("s3_path", ""))
             if not s3_path:
                 raise HTTPException(status_code=404, detail=f"No s3_path configured for table '{table_name}'")
             total, rows = _query_parquet_preview(s3_path, offset, limit)
@@ -262,7 +277,7 @@ async def _query_arangodb_preview(
     limit: int,
     fields: list[dict[str, object]],
 ) -> tuple[int, list[dict[str, object]]]:
-    field_map = {str(f["field_id"]): f["field_name"] for f in fields if f.get("field_id")}
+    field_map = {str(f["field_id"]): str(f["field_name"]) for f in fields if f.get("field_id")}
     async with httpx.AsyncClient(timeout=15.0) as client:
         count_resp = await client.post(
             f"{ARANGO_URL}/_db/{ARANGO_DB}/_api/cursor",
@@ -292,7 +307,7 @@ async def _query_arangodb_preview(
                 if key in ("_key", "_id", "_rev", "_ragicId", "table_id", "created_at", "updated_at"):
                     continue
                 name = field_map.get(key, key)
-                row[name] = value
+                row[str(name)] = value
             rows.append(row)
         return total, rows
 
@@ -304,8 +319,8 @@ def _query_parquet_preview(
 
     config = PipelineConfig(
         s3_endpoint=os.getenv("S3_ENDPOINT", "http://localhost:8334"),
-        s3_access_key=os.getenv("S3_ACCESS_KEY", "admin"),
-        s3_secret_key=os.getenv("S3_SECRET_KEY", "admin123"),
+        s3_access_key=os.getenv("S3_ACCESS_KEY", ""),
+        s3_secret_key=os.getenv("S3_SECRET_KEY", ""),
     )
 
     parquet_glob = f"{s3_path}*.parquet"
@@ -419,13 +434,19 @@ def _extract_filters_from_nl(
     field_id_to_name: dict[str, str],
 ) -> list[QueryPlanFilter]:
     field_enums: list[str] = []
-    props = tool_schema.get("properties", {})
-    filters_prop = props.get("filters", {})
-    if isinstance(filters_prop, dict):
-        items = filters_prop.get("items", {})
-        field_enum = items.get("properties", {}).get("field_id", {})
-        if isinstance(field_enum, dict):
-            field_enums = field_enum.get("enum", [])
+    props_obj = tool_schema.get("properties", {})
+    if isinstance(props_obj, dict):
+        filters_prop = props_obj.get("filters", {})
+        if isinstance(filters_prop, dict):
+            items = filters_prop.get("items", {})
+            if isinstance(items, dict):
+                item_props = items.get("properties", {})
+                if isinstance(item_props, dict):
+                    field_enum = item_props.get("field_id", {})
+                    if isinstance(field_enum, dict):
+                        enum_values = field_enum.get("enum", [])
+                        if isinstance(enum_values, list):
+                            field_enums = [str(value) for value in enum_values]
 
     query_lower = nl_query.lower()
     filters: list[QueryPlanFilter] = []
@@ -487,15 +508,28 @@ async def _fetch_field_names(table_key: str) -> dict[str, str]:
     return {}
 
 
-def _truncate_tool_schema(tool_schema: dict, max_fields: int = 30) -> dict:
+def _truncate_tool_schema(tool_schema: dict[str, object], max_fields: int = 30) -> dict[str, object]:
     """Truncate tool_schema to limit number of fields for simpler queries."""
     if not tool_schema:
         return tool_schema
     props = tool_schema.get("properties", {})
+    if not isinstance(props, dict):
+        return tool_schema
     filters = props.get("filters", {})
+    if not isinstance(filters, dict):
+        return tool_schema
     items = filters.get("items", {})
+    if not isinstance(items, dict):
+        return tool_schema
     items_props = items.get("properties", {})
-    field_enum = items_props.get("field_id", {}).get("enum", [])
+    if not isinstance(items_props, dict):
+        return tool_schema
+    field_id_config = items_props.get("field_id", {})
+    if not isinstance(field_id_config, dict):
+        return tool_schema
+    field_enum = field_id_config.get("enum", [])
+    if not isinstance(field_enum, list):
+        return tool_schema
     if len(field_enum) > max_fields:
         logger = logging.getLogger(__name__)
         logger.info("Truncating tool_schema from %d to %d fields", len(field_enum), max_fields)
@@ -518,8 +552,10 @@ def _truncate_tool_schema(tool_schema: dict, max_fields: int = 30) -> dict:
 async def _build_rule_plan(
     nl_query: str, intent_data: dict[str, object],
 ) -> QueryPlan:
-    tool_schema = intent_data.get("tool_schema", {})
-    tool_schema = _truncate_tool_schema(tool_schema, max_fields=30)
+    tool_schema_obj = intent_data.get("tool_schema", {})
+    if not isinstance(tool_schema_obj, dict):
+        tool_schema_obj = {}
+    tool_schema = _truncate_tool_schema(cast(dict[str, object], tool_schema_obj), max_fields=30)
     table_key = str(intent_data.get("table_key", ""))
     field_id_to_name = await _fetch_field_names(table_key)
     field_names = list(field_id_to_name.values())
@@ -640,8 +676,10 @@ async def query_plan(request: QueryPlanRequest) -> dict[str, object]:
             "query_plan": None,
         }
 
-    intent_data: dict[str, object] = matched["payload"]
-    score = matched["score"]
+    payload = matched.get("payload", {})
+    intent_data = cast(dict[str, object], payload if isinstance(payload, dict) else {})
+    raw_score = matched.get("score", 0.0)
+    score = float(raw_score if isinstance(raw_score, int | float | str) else 0.0)
     query_type = str(intent_data.get("query_type", "simple_filter"))
     difficulty = str(intent_data.get("difficulty_level", "easy"))
 
@@ -671,6 +709,23 @@ async def query_plan(request: QueryPlanRequest) -> dict[str, object]:
     }
 
 
+@router.post("/structured")
+async def structured_query(request: StructuredQueryRequest) -> dict[str, object]:
+    result = await run_structured_pipeline(request)
+    return result.model_dump()
+
+
+@router.post("/nl")
+async def nl_query_with_hints(request: NLQueryRequest) -> dict[str, object]:
+    config = PipelineConfig(
+        ollama_base_url=OLLAMA_BASE_URL,
+    )
+    pipeline_result = await run_nl2sql_pipeline(
+        request.natural_language, config,
+    )
+    return pipeline_result.model_dump()
+
+
 @router.get("/health")
 def query_health() -> dict[str, str]:
-    return {"status": "ok", "sub_service": "query", "version": "2.1.0"}
+    return {"status": "ok", "sub_service": "query", "version": "2.3.0"}

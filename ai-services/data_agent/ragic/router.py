@@ -80,7 +80,7 @@ _DEFAULT_API_KEY = os.getenv("RAGIC_API_KEY", "")
 _ARANGO_URL = os.getenv("ARANGO_URL", "http://localhost:8529")
 _ARANGO_DB = os.getenv("ARANGO_DATABASE", "abc_desktop")
 _ARANGO_USER = os.getenv("ARANGO_USER", "root")
-_ARANGO_PASSWORD = os.getenv("ARANGO_PASSWORD", "abc_desktop_2026")
+_ARANGO_PASSWORD = os.getenv("ARANGO_PASSWORD", "")
 
 
 async def _resolve_da_table_key(table_key: str) -> tuple[str, int] | None:
@@ -170,6 +170,7 @@ class DirectQueryRequest(BaseModel):
     order_direction: str = Field(default="DESC")
     naming: str = Field(default="EID")
     subtables: Optional[int] = None
+    connection_name: Optional[str] = Field(default=None, description="Connection/account name override")
 
 
 class DirectQueryResponse(BaseModel):
@@ -221,7 +222,7 @@ async def query_records(request: DirectQueryRequest) -> DirectQueryResponse:
     if not _DEFAULT_API_KEY:
         raise HTTPException(status_code=500, detail="RAGIC_API_KEY not configured")
 
-    client = _build_client()
+    client = _build_client(account=request.connection_name)
 
     params = RagicQueryParams(
         where=request.where,

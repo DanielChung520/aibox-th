@@ -5,9 +5,9 @@
 //! 以 agent_scope 欄位區分不同 Agent 的意圖（orchestrator / data_agent / …）
 //! sync-qdrant / models 路由依 scope 代理轉發到對應 Python 服務
 //!
-//! # Last Update: 2026-03-29 02:31:29
+//! # Last Update: 2026-04-16 20:34:33
 //! # Author: Daniel Chung
-//! # Version: 1.2.0
+//! # Version: 1.3.0
 
 use crate::config::CONFIG;
 use crate::db::get_db;
@@ -107,6 +107,12 @@ async fn list_catalog(
     if let Some(tool_name) = params.get("tool_name").filter(|v| !v.trim().is_empty()) {
         filters.push("d.tool_name == @tool_name".into());
         bind_entries.push(("tool_name".into(), serde_json::json!(tool_name)));
+    }
+
+    // ── page_action-specific filters ──
+    if let Some(page_type) = params.get("page_type").filter(|v| !v.trim().is_empty()) {
+        filters.push("d.page_type == @page_type".into());
+        bind_entries.push(("page_type".into(), serde_json::json!(page_type)));
     }
 
     // ── data_agent-specific filters ──

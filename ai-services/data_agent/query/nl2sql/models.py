@@ -5,9 +5,9 @@ Defines all data models for the NL→SQL pipeline:
 PipelineConfig, PipelineResult, IntentMatch, QueryPlan,
 SchemaContext, SQLResult, ValidationResult.
 
-# Last Update: 2026-04-13 06:08:56
+# Last Update: 2026-04-16 17:50:29
 # Author: Daniel Chung
-# Version: 1.3.0
+# Version: 1.4.0
 """
 
 from enum import Enum
@@ -36,7 +36,7 @@ class PipelineConfig(BaseModel):
     arango_url: str = Field(default="http://localhost:8529")
     arango_db: str = Field(default="abc_desktop")
     arango_user: str = Field(default="root")
-    arango_password: str = Field(default="abc_desktop_2026")
+    arango_password: str = Field(default="")
     s3_endpoint: str = Field(default="http://localhost:8334")
     s3_bucket: str = Field(default="sap")
     data_source: str = Field(default="sap")
@@ -228,3 +228,64 @@ class ErrorExplanation(BaseModel):
     error_type: str
     explanation: str
     suggestions: list[str] = Field(default_factory=list)
+
+
+# ──────────────────────────────────────────────────────────
+# Structured Query Models (Phase 1 — 艾企 Agent → Data Agent)
+# ──────────────────────────────────────────────────────────
+
+
+class StructuredFilter(BaseModel):
+    """結構化查詢過濾條件。"""
+
+    field: str
+    op: str = "eq"  # eq, ne, gt, lt, gte, lte, like, in, between
+    value: str | list[str] = ""
+
+
+class StructuredSort(BaseModel):
+    """結構化查詢排序。"""
+
+    field: str
+    order: str = "asc"  # asc, desc
+
+
+class StructuredQueryRequest(BaseModel):
+    """結構化查詢請求 — 艾企 Agent 呼叫。
+
+    艾企已完成意圖判斷與 Schema 檢索，直接傳入精準指令。
+    """
+
+    table: str
+    table_id: str = ""
+    intent: str = "list"  # count, list, aggregate, filter, top_n, trend, detail
+    fields: list[str] = Field(default_factory=list)
+    filters: list[StructuredFilter] = Field(default_factory=list)
+    aggregations: list[str] = Field(default_factory=list)
+    group_by: list[str] = Field(default_factory=list)
+    sort: StructuredSort | None = None
+    limit: int = 100
+    source: str = "server_cache"  # server_cache, arangodb
+
+
+class NLQueryRequest(BaseModel):
+    """帶 hints 的自然語言查詢請求 — fallback 模式。"""
+
+    natural_language: str
+    table_hint: str = ""
+    table_id_hint: str = ""
+    field_hints: list[str] = Field(default_factory=list)
+    source: str = "server_cache"
+
+
+class StructuredQueryResult(BaseModel):
+    """結構化查詢結果。"""
+
+    success: bool
+    generated_sql: str = ""
+    execution_result: SQLResult | None = None
+    model_used: str = ""
+    fallback_used: bool = False
+    attempts: int = 0
+    error: str = ""
+    total_time_ms: float = 0.0

@@ -21,6 +21,8 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
+STARTED_AT = datetime.now(timezone.utc).isoformat()
+
 app = FastAPI(
     title="AIBox BPA MM Agent",
     description="Material Management business process automation.",
@@ -44,7 +46,7 @@ OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 DEFAULT_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5-coder:7b")
 ARANGO_URL = os.getenv("ARANGO_URL", "http://localhost:8529")
 ARANGO_USER = os.getenv("ARANGO_USER", "root")
-ARANGO_PASSWORD = os.getenv("ARANGO_PASSWORD", "abc_desktop_2026")
+ARANGO_PASSWORD = os.getenv("ARANGO_PASSWORD", "")
 DATA_AGENT_URL = os.getenv("DATA_AGENT_URL", "http://localhost:8003")
 
 
@@ -208,7 +210,7 @@ def root() -> dict[str, str]:
 @app.get("/health")
 def health() -> dict[str, str]:
     """Health check."""
-    return {"status": "ok", "service": "bpa_mm_agent"}
+    return {"status": "ok", "service": "bpa_mm_agent", "started_at": STARTED_AT}
 
 
 @app.get("/workflows")

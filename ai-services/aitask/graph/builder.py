@@ -1,9 +1,9 @@
 """
 LangGraph builder for AITask.
 
-# Last Update: 2026-04-11 02:57:52
+# Last Update: 2026-04-14
 # Author: AI Agent
-# Version: 1.0.0
+# Version: 1.1.0
 """
 
 from typing import cast
@@ -18,6 +18,7 @@ from aitask.graph.nodes import (
     classify_intent_node,
     da_query_node,
     ka_search_node,
+    matcher_node,
     memory_manager_node,
     resolve_coreference_node,
     tool_executor_node,
@@ -25,10 +26,24 @@ from aitask.graph.nodes import (
 from aitask.graph.state import TopState
 
 
-def route_by_intent(state: TopState) -> str:
-    intent = state.get("current_intent") or "general_chat"
-    valid_intents = {"general_chat", "data_query", "knowledge", "tool_use", "bpa_task"}
-    return intent if intent in valid_intents else "general_chat"
+def route_by_action_plan(state: TopState) -> str:
+    action_plan = state.get("action_plan", "unknown")
+    if action_plan == "direct_answer":
+        return "chat_responder"
+    if action_plan == "tool_call":
+        return "tool_executor"
+    if action_plan == "process_orchestration":
+        matched = state.get("matched_intent_data")
+        if matched:
+            target_agent = matched.get("target_agent", "")
+            if target_agent == "bpa":
+                return "bpa_orchestrator"
+            if target_agent == "data":
+                return "da_query"
+            if target_agent == "knowledge":
+                return "ka_search"
+        return "bpa_orchestrator"
+    return "chat_responder"
 
 
 def build_graph(
@@ -36,6 +51,7 @@ def build_graph(
 ) -> CompiledStateGraph[TopState, None, TopState, TopState]:
     graph = StateGraph(TopState)
     graph.add_node("classify_intent", classify_intent_node)
+    graph.add_node("matcher", matcher_node)
     graph.add_node("resolve_coreference", resolve_coreference_node)
     graph.add_node("chat_responder", chat_responder_node)
     graph.add_node("tool_executor", tool_executor_node)
@@ -44,16 +60,17 @@ def build_graph(
     graph.add_node("ka_search", ka_search_node)
     graph.add_node("memory_manager", memory_manager_node)
     graph.add_edge(START, "classify_intent")
-    graph.add_edge("classify_intent", "resolve_coreference")
+    graph.add_edge("classify_intent", "matcher")
+    graph.add_edge("matcher", "resolve_coreference")
     graph.add_conditional_edges(
         "resolve_coreference",
-        route_by_intent,
+        route_by_action_plan,
         {
-            "general_chat": "chat_responder",
-            "data_query": "da_query",
-            "knowledge": "ka_search",
-            "tool_use": "tool_executor",
-            "bpa_task": "bpa_orchestrator",
+            "chat_responder": "chat_responder",
+            "da_query": "da_query",
+            "ka_search": "ka_search",
+            "tool_executor": "tool_executor",
+            "bpa_orchestrator": "bpa_orchestrator",
         },
     )
     graph.add_edge("chat_responder", "memory_manager")

@@ -42,6 +42,7 @@ pub struct ServiceInfo {
     pub health_url: Option<String>,
     pub last_check: Option<String>,
     pub latency_ms: Option<u64>,
+    pub started_at: Option<String>,
     pub health_via_tcp: bool,
 }
 
@@ -81,26 +82,19 @@ struct ServiceDef {
 fn service_defs() -> Vec<ServiceDef> {
     vec![
         ServiceDef { name: "aitask",           display_name: "AI Task",         port: 8001, health_via_tcp: false },
-        ServiceDef { name: "data-agent",       display_name: "Data Agent",      port: 8003, health_via_tcp: false },
-        ServiceDef { name: "mcp-tools",        display_name: "MCP Tools",      port: 8004, health_via_tcp: false },
         ServiceDef { name: "bpa-mm-agent",     display_name: "BPA MM Agent",   port: 8005, health_via_tcp: false },
-        ServiceDef { name: "knowledge-agent",   display_name: "Knowledge Agent",port: 8007, health_via_tcp: false },
-        ServiceDef { name: "backup-agent",      display_name: "Backup Agent",   port: 8010, health_via_tcp: false },
-        ServiceDef { name: "celery",            display_name: "Celery Worker",   port: 6379, health_via_tcp: true  },
+        ServiceDef { name: "unified-agents",   display_name: "Unified Agents", port: 8011, health_via_tcp: false },
+        ServiceDef { name: "celery",           display_name: "Celery Worker",   port: 6379, health_via_tcp: false },
     ]
 }
 
 fn base_url_for(name: &str) -> String {
     let cfg = &CONFIG.ai_services;
     match name {
-        "aitask"          => cfg.aitask_url.clone(),
-        "data-agent"      => cfg.data_agent_url.clone(),
-        "mcp-tools"      => cfg.mcp_tools_url.clone(),
-        "bpa-mm-agent"   => cfg.bpa_mm_agent_url.clone(),
-        "knowledge-agent" => cfg.knowledge_agent_url.clone(),
-        "backup-agent"  => std::env::var("BACKUP_AGENT_URL")
-            .unwrap_or_else(|_| "http://localhost:8010".to_string()),
-        "celery"        => "http://localhost:6379".to_string(),
+        "aitask" => cfg.aitask_url.clone(),
+        "bpa-mm-agent" => cfg.bpa_mm_agent_url.clone(),
+        "unified-agents" => cfg.unified_agents_url.clone(),
+        "celery" => format!("{}/celery", cfg.unified_agents_url),
         _ => "http://localhost:0".to_string(),
     }
 }
@@ -113,14 +107,23 @@ fn health_url_for(def: &ServiceDef) -> Option<String> {
     }
 }
 
-async fn check_http_health(client: &Client, url: &str) -> (ServiceStatus, Option<u64>) {
+async fn check_http_health(client: &Client, url: &str) -> (ServiceStatus, Option<u64>, Option<String>) {
     let start = Instant::now();
     let resp = client.get(url).send().await;
     let latency_ms = start.elapsed().as_millis() as u64;
 
     match resp {
-        Ok(r) if r.status().is_success() => (ServiceStatus::Running, Some(latency_ms)),
-        _ => (ServiceStatus::Error, Some(latency_ms)),
+        Ok(r) if r.status().is_success() => {
+            let started_at = if let Ok(json) = r.json::<serde_json::Value>().await {
+                json.get("started_at")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string())
+            } else {
+                None
+            };
+            (ServiceStatus::Running, Some(latency_ms), started_at)
+        }
+        _ => (ServiceStatus::Error, Some(latency_ms), None),
     }
 }
 
@@ -142,8 +145,9 @@ async fn check_service(def: ServiceDef) -> ServiceInfo {
         .build()
         .unwrap_or_else(|_| Client::new());
 
-    let (status, latency_ms) = if def.health_via_tcp {
-        check_tcp_health(def.port).await
+    let (status, latency_ms, started_at) = if def.health_via_tcp {
+        let (s, l) = check_tcp_health(def.port).await;
+        (s, l, None)
     } else {
         let url = format!("{}/health", base_url_for(def.name));
         check_http_health(&client, &url).await
@@ -159,6 +163,7 @@ async fn check_service(def: ServiceDef) -> ServiceInfo {
         health_url: health_url_for(&def),
         last_check: Some(chrono::Utc::now().to_rfc3339()),
         latency_ms,
+        started_at,
         health_via_tcp: def.health_via_tcp,
     }
 }

@@ -15,6 +15,7 @@ pub mod auth;
 pub mod config;
 pub mod db;
 pub mod duckdb_conn;
+pub mod table_cache;
 pub mod error;
 pub mod middleware;
 pub mod models;

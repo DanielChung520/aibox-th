@@ -3,6 +3,10 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from shared.logging import LoggingMiddleware, setup_logging
+
+setup_logging("knowledge_agent", os.getenv("LOG_LEVEL", "INFO"))
+
 app = FastAPI(
     title="AIBox Knowledge Agent Service",
     description="RAG-based knowledge retrieval service.",
@@ -21,11 +25,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(LoggingMiddleware, service_name="knowledge_agent")
 
-from knowledge_agent.routers.hybrid import router as hybrid_router
-from knowledge_agent.routers.intent import router as intent_router
-from knowledge_agent.routers.search import router as search_router
-from knowledge_agent.routers.pipeline import router as pipeline_router
+from knowledge_agent.routers.hybrid import router as hybrid_router  # noqa: E402
+from knowledge_agent.routers.intent import router as intent_router  # noqa: E402
+from knowledge_agent.routers.search import router as search_router  # noqa: E402
+from knowledge_agent.routers.pipeline import router as pipeline_router  # noqa: E402
 
 app.include_router(hybrid_router)
 app.include_router(intent_router)

@@ -12,13 +12,16 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
 
-ARANGO_URL = "http://localhost:8529"
-DB = "abc_desktop"
-AUTH = "root:abc_desktop_2026"
+ARANGO_URL = os.environ.get("ARANGODB_URL", "http://localhost:8529")
+DB = os.environ.get("ARANGODB_DATABASE", "abc_desktop")
+_user = os.environ.get("ARANGODB_USERNAME", "root")
+_pass = os.environ.get("ARANGODB_PASSWORD", "")
+AUTH = f"{_user}:{_pass}"
 SOURCE_TABLES = (
     "da_table_info_ragic",
     "da_field_info_ragic",
@@ -107,18 +110,23 @@ def ensure_collection(name: str) -> None:
     print(f"✓ collection ready: {name}")
 
 
-def bulk_upsert(collection: str, docs: list[dict[str, object]]) -> None:
+def bulk_upsert(collection: str, docs: list[dict[str, object]], batch_size: int = 30) -> None:
     if not docs:
         return
-    data = run_curl(
-        f"{ARANGO_URL}/_db/{DB}/_api/document/{collection}?overwriteMode=replace",
-        payload=docs,
-    )
-    if not isinstance(data, list):
-        raise RuntimeError(f"Unexpected bulk upsert response for {collection}")
-    errors = [item for item in data if isinstance(item, dict) and item.get("error")]
-    if errors:
-        raise RuntimeError(f"Bulk upsert failed for {collection}: {errors[:3]}")
+    total_errors: list[dict[str, object]] = []
+    for i in range(0, len(docs), batch_size):
+        batch = docs[i:i + batch_size]
+        data = run_curl(
+            f"{ARANGO_URL}/_db/{DB}/_api/document/{collection}?overwriteMode=replace",
+            payload=batch,
+        )
+        if not isinstance(data, list):
+            raise RuntimeError(f"Unexpected bulk upsert response for {collection}")
+        errors = [item for item in data if isinstance(item, dict) and item.get("error")]
+        total_errors.extend(errors)
+        print(f"  {collection} batch {i // batch_size + 1}: {len(batch) - len(errors)}/{len(batch)} ok")
+    if total_errors:
+        raise RuntimeError(f"Bulk upsert failed for {collection}: {total_errors[:3]}")
     print(f"✓ upserted {len(docs)} docs into {collection}")
 
 

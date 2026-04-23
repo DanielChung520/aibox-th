@@ -1,12 +1,13 @@
 //! Backup Agent Router
 //!
 //! # Description
-//! Proxy backup/restore requests to backup_agent:8010
+//! Proxy backup/restore requests to unified_agents/backup
 //!
-//! # Last Update: 2026-04-04
+//! # Last Update: 2026-04-14
 //! # Author: Daniel Chung
-//! # Version: 1.0.0
+//! # Version: 1.1.0
 
+use crate::config::CONFIG;
 use axum::{
     extract::{Path, State},
     http::StatusCode,
@@ -59,8 +60,7 @@ pub fn create_backup_router() -> Router {
 }
 
 fn backup_base_url() -> String {
-    std::env::var("BACKUP_AGENT_URL")
-        .unwrap_or_else(|_| "http://localhost:8010".to_string())
+    format!("{}/backup", CONFIG.ai_services.unified_agents_url)
 }
 
 fn reqwest_to_axum_status(reqwest_status: reqwest::StatusCode) -> StatusCode {

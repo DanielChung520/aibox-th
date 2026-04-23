@@ -76,7 +76,7 @@ async fn ensure_collections(db: &Database<ReqwestClient>) -> Result<(), String> 
         .map(|c| c.name)
         .collect();
 
-    let docs = ["users", "roles", "system_params", "functions", "role_functions", "agents", "tools", "tool_logs", "model_providers", "theme_templates", "knowledge_roots", "knowledge_files", "ontologies", "job_logs", "knowledge_graphs", "knowledge_graph_edges", "chat_sessions", "chat_messages", "orch_intents", "intent_catalog", "leads", "da_tables", "da_expressions"];
+    let docs = ["users", "roles", "system_params", "functions", "role_functions", "agents", "tools", "tool_logs", "model_providers", "theme_templates", "knowledge_roots", "knowledge_files", "ontologies", "job_logs", "knowledge_graphs", "knowledge_graph_edges", "chat_sessions", "chat_messages", "orch_intents", "intent_catalog", "leads", "da_tables", "da_expressions", "ragic_cache_meta", "user_profiles", "agent_demands"];
     for name in docs {
         if !existing.contains(&name.to_string()) {
             db.create_collection(name)
@@ -105,6 +105,8 @@ async fn ensure_indexes(_db: &Database<ReqwestClient>) -> Result<(), String> {
         ("job_logs", &["session_key"]),
         ("knowledge_graphs", &["file_id"]),
         ("knowledge_graph_edges", &["file_id"]),
+        ("agent_demands", &["agent_key", "status"]),
+        ("agent_demands", &["agent_key", "version"]),
     ];
 
     let base_url = ARANGO_URL.get().ok_or("ARANGO_URL not set")?;
@@ -282,6 +284,51 @@ async fn ensure_upload_params(db: &Database<ReqwestClient>) -> Result<(), String
     Ok(())
 }
 
+async fn ensure_aiq_params(db: &Database<ReqwestClient>) -> Result<(), String> {
+    let col = db
+        .collection("system_params")
+        .await
+        .map_err(|e| format!("system_params collection: {e}"))?;
+
+    let defaults: &[(&str, &str, &str)] = &[
+        ("aiq.signal_debounce_ms", "1000", "number"),
+        ("aiq.signal_max_retry_ms", "30000", "number"),
+        ("aiq.signal_retry_backoff", "2", "number"),
+        ("aiq.max_signals_per_push", "100", "number"),
+        ("aiq.max_contexts", "500", "number"),
+        ("aiq.context_ttl_seconds", "3600", "number"),
+    ];
+
+    let now = Utc::now().to_rfc3339();
+    for (key, value, param_type) in defaults {
+        let existing: Vec<serde_json::Value> = db
+            .aql_bind_vars(
+                "FOR p IN system_params FILTER p.param_key == @k LIMIT 1 RETURN p",
+                [("k", serde_json::json!(key))].into(),
+            )
+            .await
+            .map_err(|e| format!("AQL error on '{key}': {e}"))?;
+
+        if existing.is_empty() {
+            col.create_document(
+                SystemParam {
+                    _key: Some(key.to_string()),
+                    param_key: key.to_string(),
+                    param_value: value.to_string(),
+                    param_type: param_type.to_string(),
+                    require_restart: false,
+                    category: "aiq".to_string(),
+                    updated_at: now.clone(),
+                },
+                Default::default(),
+            )
+            .await
+            .map_err(|e| format!("Seed aiq param '{key}' failed: {e}"))?;
+        }
+    }
+    Ok(())
+}
+
 async fn seed_defaults(db: &Database<ReqwestClient>) -> Result<(), String> {
     seed_roles(db).await?;
     seed_users(db).await?;
@@ -295,6 +342,7 @@ async fn seed_defaults(db: &Database<ReqwestClient>) -> Result<(), String> {
     ensure_websearch_params(db).await?;
     ensure_weather_params(db).await?;
     ensure_upload_params(db).await?;
+    ensure_aiq_params(db).await?;
     Ok(())
 }
 
@@ -899,10 +947,63 @@ pub struct UpdateSessionRequest {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AssistantContextPage {
+    pub pathname: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub page_types: Option<Vec<String>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AssistantContextFocus {
+    pub component: Option<String>,
+    pub component_name: Option<String>,
+    pub entity: Option<String>,
+    pub entity_type: Option<String>,
+    pub action: Option<String>,
+    pub data_summary: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AssistantContextModal {
+    pub modal: String,
+    pub mode: Option<String>,
+    pub summary: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AssistantContextIntentHint {
+    pub text: String,
+    pub confidence: f64,
+    pub source: String,
+    pub strategy: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AssistantContextRecentAction {
+    #[serde(rename = "type")]
+    pub event_type: String,
+    pub at: i64,
+    pub page: String,
+    pub summary: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AssistantContextPayload {
+    pub page: AssistantContextPage,
+    pub focus: Option<AssistantContextFocus>,
+    pub modal: Option<AssistantContextModal>,
+    pub entity: Option<AssistantContextFocus>,
+    pub intent_hints: Option<Vec<AssistantContextIntentHint>>,
+    pub recent_actions: Option<Vec<AssistantContextRecentAction>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SendMessageRequest {
     pub content: String,
     pub provider: Option<String>,
     pub model: Option<String>,
     pub temperature: Option<f64>,
     pub max_tokens: Option<i32>,
+    pub assistant_context: Option<AssistantContextPayload>,
 }

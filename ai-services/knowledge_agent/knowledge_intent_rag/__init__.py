@@ -11,8 +11,10 @@ semantic search, similar to data_agent/intent_rag but for knowledge queries.
 
 from __future__ import annotations
 
+import logging
 import os
-from typing import Final, Optional
+import time
+from typing import Final
 
 import httpx
 from pydantic import BaseModel
@@ -26,11 +28,44 @@ QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
 ARANGO_URL = os.getenv("ARANGO_URL", "http://localhost:8529")
 ARANGO_DB = os.getenv("ARANGO_DATABASE", "abc_desktop")
 ARANGO_USER = os.getenv("ARANGO_USER", "root")
-ARANGO_PASSWORD = os.getenv("ARANGO_PASSWORD", "abc_desktop_2026")
+ARANGO_PASSWORD = os.getenv("ARANGO_PASSWORD", "")
 
 KNOWLEDGE_SCOPE: Final[str] = "knowledge"
 KNOWLEDGE_QDRANT_COLLECTION: Final[str] = "knowledge_intents"
-MATCH_THRESHOLD: float = float(os.getenv("KNOWLEDGE_INTENT_MATCH_THRESHOLD", "0.56"))
+_MATCH_THRESHOLD_DEFAULT: float = 0.45
+
+
+_threshold_cache: float | None = None
+_threshold_cache_ts: float = 0.0
+_THRESHOLD_CACHE_TTL: float = 60.0
+
+
+async def _get_match_threshold() -> float:
+    global _threshold_cache, _threshold_cache_ts
+    now = time.monotonic()
+    if _threshold_cache is not None and (now - _threshold_cache_ts) < _THRESHOLD_CACHE_TTL:
+        return _threshold_cache
+
+    aql = "FOR p IN system_params FILTER p.param_key == @key RETURN p.param_value"
+    value = _MATCH_THRESHOLD_DEFAULT
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(
+                f"{ARANGO_URL}/_db/{ARANGO_DB}/_api/cursor",
+                json={"query": aql, "bindVars": {"key": "intent.matching_threshold"}},
+                auth=(ARANGO_USER, ARANGO_PASSWORD),
+            )
+            if response.status_code in (200, 201):
+                data = response.json()
+                result = data.get("result", [])
+                if result:
+                    value = float(result[0])
+    except (httpx.HTTPError, ValueError, TypeError) as exc:
+        logging.getLogger(__name__).warning("Failed to read match threshold from DB: %s", exc)
+
+    _threshold_cache = value
+    _threshold_cache_ts = now
+    return value
 
 
 # ---------------------------------------------------------------------------
@@ -238,10 +273,11 @@ async def match_intent(
         raise ValueError(f"Qdrant search failed: {e}")
 
     # Build response
+    threshold = await _get_match_threshold()
     matches: list[IntentMatchResult] = []
     for r in results:
         score = float(r.get("score", 0.0))
-        if score < MATCH_THRESHOLD:
+        if score < threshold:
             continue
         payload = r.get("payload", {})
         matches.append(

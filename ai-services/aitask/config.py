@@ -44,7 +44,7 @@ class ArangoConfig:
     db_name: str = field(default_factory=lambda: os.getenv("ARANGO_DB", "abc_desktop"))
     username: str = field(default_factory=lambda: os.getenv("ARANGO_USER", "root"))
     password: str = field(
-        default_factory=lambda: os.getenv("ARANGO_PASSWORD", "abc_desktop_2026")
+        default_factory=lambda: os.getenv("ARANGO_PASSWORD", "")
     )
 
 

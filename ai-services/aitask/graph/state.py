@@ -1,9 +1,9 @@
 """
 Top-level LangGraph state.
 
-# Last Update: 2026-04-11 02:57:52
+# Last Update: 2026-04-14
 # Author: AI Agent
-# Version: 1.0.0
+# Version: 1.1.0
 """
 
 from typing import Annotated, Literal, Optional, TypedDict
@@ -20,6 +20,10 @@ class TopState(TypedDict):
     current_intent: Optional[str]
     intent_confidence: float
     intent_method: Literal["rule", "semantic", "llm"]
+    # Action plan determined by TopIntentRAG
+    action_plan: Literal["direct_answer", "tool_call", "process_orchestration", "unknown"]
+    # Full matched intent data from TopIntentRAG
+    matched_intent_data: Optional[dict[str, object]]
     entities: dict[str, str]
     coreference_resolved: bool
     context_entities: dict[str, str]

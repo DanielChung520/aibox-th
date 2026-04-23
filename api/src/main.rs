@@ -20,6 +20,7 @@ mod config;
 mod middleware;
 mod services;
 mod duckdb_conn;
+mod table_cache;
 
 use api::create_router;
 use std::net::SocketAddr;
@@ -38,7 +39,12 @@ async fn main() {
         eprintln!("Failed to initialize DuckDB: {e}");
         std::process::exit(1);
     }
-    println!("DuckDB initialized (in-memory + S3)");
+    println!("DuckDB initialized (file-backed table_cache)");
+
+    if let Err(e) = table_cache::init() {
+        eprintln!("Failed to initialize TableCache: {e}");
+        std::process::exit(1);
+    }
 
     let app = create_router();
     let port: u16 = std::env::var("PORT")

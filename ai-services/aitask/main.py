@@ -4,9 +4,9 @@ AITask Service - AI Chat Service
 Provides natural language conversation with streaming support,
 and 5W1H tagging for chat sessions.
 
-# Last Update: 2026-04-10 21:30:00
+# Last Update: 2026-04-14
 # Author: Daniel Chung
-# Version: 1.2.0
+# Version: 1.3.0
 """
 
 import asyncio
@@ -14,13 +14,14 @@ import json
 import logging
 import os
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from typing import AsyncGenerator, Optional
 
 import httpx
 from arango.client import ArangoClient
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
 from pydantic import BaseModel
 
@@ -28,8 +29,13 @@ from aitask.checkpointer.arango_saver import ArangoDBSaver
 from aitask.collections import ensure_collections
 from aitask.config import settings
 from aitask.graph.builder import build_graph
+from aitask.top_intent_rag import router as top_intent_rag_router
+from shared.logging import LoggingMiddleware, setup_logging
 
+setup_logging("aitask", os.getenv("LOG_LEVEL", "INFO"))
 logger = logging.getLogger("aitask")
+
+STARTED_AT = datetime.now(timezone.utc).isoformat()
 
 
 @asynccontextmanager
@@ -51,6 +57,9 @@ app = FastAPI(
     version="1.3.0",
     lifespan=lifespan,
 )
+
+app.add_middleware(LoggingMiddleware, service_name="aitask")
+app.include_router(top_intent_rag_router)
 
 OLLAMA_BASE_URL = settings.provider.ollama_base_url
 OPENAI_BASE_URL = settings.provider.openai_base_url
@@ -99,6 +108,7 @@ class ServiceInfo(BaseModel):
 class HealthResponse(BaseModel):
     status: str
     service: str
+    started_at: str
 
 
 class TaggingMessage(BaseModel):
@@ -122,6 +132,7 @@ class GraphChatRequest(BaseModel):
     user_id: str
     message: str
     mode: str = "chat"
+    assistant_context_prompt: Optional[str] = None
 
 
 @app.get("/", response_model=ServiceInfo)
@@ -137,7 +148,7 @@ def root() -> ServiceInfo:
 
 @app.get("/health", response_model=HealthResponse)
 def health() -> HealthResponse:
-    return HealthResponse(status="ok", service="aitask")
+    return HealthResponse(status="ok", service="aitask", started_at=STARTED_AT)
 
 
 def get_provider_config(provider: str, provider_base_url: Optional[str]) -> tuple[str, str]:
@@ -638,11 +649,16 @@ def _parse_tags_response(raw: str) -> dict[str, str]:
 
 
 def _build_graph_input(request: GraphChatRequest) -> dict[str, object]:
+    messages = []
+    if request.assistant_context_prompt:
+        messages.append(SystemMessage(content=request.assistant_context_prompt))
+    messages.append(HumanMessage(content=request.message))
+
     return {
         "session_id": request.session_id,
         "user_id": request.user_id,
         "mode": request.mode if request.mode in {"chat", "task"} else "chat",
-        "messages": [HumanMessage(content=request.message)],
+        "messages": messages,
         "current_intent": None,
         "intent_confidence": 0.0,
         "intent_method": "rule",

@@ -13,6 +13,7 @@ import httpx
 
 from aitask.config import AITaskSettings, settings
 from aitask.graph.state import TopState
+from aitask.top_intent_rag.config import get_matching_threshold
 
 VALID_INTENTS = {"general_chat", "data_query", "knowledge", "tool_use", "bpa_task"}
 RULE_PATTERNS: dict[str, re.Pattern[str]] = {
@@ -109,7 +110,7 @@ async def _try_semantic_match(
     qdrant_url = settings_obj.services.qdrant_url
     embedding_model = "bge-m3"
     collection = "orchestrator_intents"
-    threshold = 0.65
+    threshold = await get_matching_threshold()
     try:
         embedding = await _get_embedding(text, ollama_url, embedding_model)
         if not embedding:

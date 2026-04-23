@@ -5,9 +5,9 @@
 //! 使用 DuckDB 連線工廠模式（每次查詢建立獨立連線）避免 mutex poison 問題。
 //! /nl2sql proxy 轉發到 Python data_agent 服務。
 //!
-//! # Last Update: 2026-04-12 01:19:50
+//! # Last Update: 2026-04-16 17:50:29
 //! # Author: Daniel Chung
-//! # Version: 1.3.0
+//! # Version: 1.4.0
 
 use crate::config::CONFIG;
 use crate::db::get_db;
@@ -32,6 +32,8 @@ pub fn create_da_query_router() -> Router {
         .route("/api/v1/da/query", post(execute_da_query))
         .route("/api/v1/da/query/sql", post(execute_direct_sql))
         .route("/api/v1/da/query/nl2sql", post(proxy_nl2sql))
+        .route("/api/v1/da/query/structured", post(proxy_structured_query))
+        .route("/api/v1/da/query/nl", post(proxy_nl_query))
         .route("/api/v1/da/ragic/query", post(proxy_ragic_nl_query))
         .route("/api/v1/da/query/tables/{table_name}/preview", get(proxy_table_preview))
         .route("/api/v1/da/health", get(da_health))
@@ -203,9 +205,12 @@ async fn trigger_sync() -> Result<impl IntoResponse, StatusCode> {
     })))
 }
 
-/// Proxy POST /api/v1/da/query/nl2sql → data_agent:8003/query/nl2sql
+/// Proxy POST /api/v1/da/query/nl2sql → unified_agents/da/query/nl2sql
 async fn proxy_nl2sql(Json(payload): Json<Value>) -> Result<impl IntoResponse, StatusCode> {
-    let url = format!("{}/query/nl2sql", CONFIG.ai_services.data_agent_url);
+    let url = format!(
+        "{}/da/query/nl2sql",
+        CONFIG.ai_services.unified_agents_url
+    );
 
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(120))
@@ -214,6 +219,7 @@ async fn proxy_nl2sql(Json(payload): Json<Value>) -> Result<impl IntoResponse, S
 
     let resp = client
         .post(&url)
+        .header("X-Internal-Token", &CONFIG.ai_services.internal_token)
         .json(&payload)
         .send()
         .await
@@ -226,9 +232,11 @@ async fn proxy_nl2sql(Json(payload): Json<Value>) -> Result<impl IntoResponse, S
     Ok(Json(body))
 }
 
-/// Proxy POST /api/v1/da/ragic/query → data_agent:8003/ragic/query
-async fn proxy_ragic_nl_query(Json(payload): Json<Value>) -> Result<impl IntoResponse, StatusCode> {
-    let url = format!("{}/ragic/query", CONFIG.ai_services.data_agent_url);
+async fn proxy_structured_query(Json(payload): Json<Value>) -> Result<impl IntoResponse, StatusCode> {
+    let url = format!(
+        "{}/da/query/structured",
+        CONFIG.ai_services.unified_agents_url
+    );
 
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(120))
@@ -237,6 +245,60 @@ async fn proxy_ragic_nl_query(Json(payload): Json<Value>) -> Result<impl IntoRes
 
     let resp = client
         .post(&url)
+        .header("X-Internal-Token", &CONFIG.ai_services.internal_token)
+        .json(&payload)
+        .send()
+        .await
+        .map_err(|e| {
+            eprintln!("proxy_structured_query error: {e}");
+            StatusCode::BAD_GATEWAY
+        })?;
+
+    let body: Value = resp.json().await.map_err(|_| StatusCode::BAD_GATEWAY)?;
+    Ok(Json(body))
+}
+
+async fn proxy_nl_query(Json(payload): Json<Value>) -> Result<impl IntoResponse, StatusCode> {
+    let url = format!(
+        "{}/da/query/nl",
+        CONFIG.ai_services.unified_agents_url
+    );
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(120))
+        .build()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let resp = client
+        .post(&url)
+        .header("X-Internal-Token", &CONFIG.ai_services.internal_token)
+        .json(&payload)
+        .send()
+        .await
+        .map_err(|e| {
+            eprintln!("proxy_nl_query error: {e}");
+            StatusCode::BAD_GATEWAY
+        })?;
+
+    let body: Value = resp.json().await.map_err(|_| StatusCode::BAD_GATEWAY)?;
+    Ok(Json(body))
+}
+
+/// Proxy POST /api/v1/da/ragic/query → unified_agents/da/ragic/query
+async fn proxy_ragic_nl_query(Json(payload): Json<Value>) -> Result<impl IntoResponse, StatusCode> {
+    let url = format!(
+        "{}/da/ragic/query",
+        CONFIG.ai_services.unified_agents_url
+    );
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(120))
+        .build()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let resp = client
+        .post(&url)
+        .header("X-Internal-Token", &CONFIG.ai_services.internal_token)
         .json(&payload)
         .send()
         .await
@@ -262,8 +324,8 @@ async fn proxy_table_preview(
     let offset = params.offset.unwrap_or(0);
     let limit = params.limit.unwrap_or(20);
     let url = format!(
-        "{}/query/tables/{}/preview?offset={}&limit={}",
-        CONFIG.ai_services.data_agent_url, table_name, offset, limit
+        "{}/da/query/tables/{}/preview?offset={}&limit={}",
+        CONFIG.ai_services.unified_agents_url, table_name, offset, limit
     );
 
     let client = reqwest::Client::builder()
@@ -273,6 +335,7 @@ async fn proxy_table_preview(
 
     let resp = client
         .get(&url)
+        .header("X-Internal-Token", &CONFIG.ai_services.internal_token)
         .send()
         .await
         .map_err(|e| {

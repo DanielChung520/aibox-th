@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 ARANGO_URL = os.getenv("ARANGO_URL", "http://localhost:8529")
 ARANGO_DB = os.getenv("ARANGO_DATABASE", "abc_desktop")
 ARANGO_USER = os.getenv("ARANGO_USER", "root")
-ARANGO_PASSWORD = os.getenv("ARANGO_PASSWORD", "abc_desktop_2026")
+ARANGO_PASSWORD = os.getenv("ARANGO_PASSWORD", "")
 
 
 class ArangoOps:
@@ -278,12 +278,14 @@ class ArangoOps:
         file_id: str,
         nodes: list[dict[str, object]],
         edges: list[dict[str, object]],
+        root_id: str | None = None,
     ) -> None:
         self.ensure_graph_collections()
         nodes_data = [
             {
                 "_key": f"{file_id}_node_{i}",
                 "file_id": file_id,
+                "root_id": root_id,
                 "entity": n["entity"],
                 "entity_type": n.get("entity_type", "concept"),
                 "description": n.get("description", ""),
@@ -319,6 +321,7 @@ class ArangoOps:
                     "_from": f"knowledge_graphs/{file_id}_node_{src_idx}",
                     "_to": f"knowledge_graphs/{file_id}_node_{tgt_idx}",
                     "file_id": file_id,
+                    "root_id": root_id,
                     "relation": e.get("relation", "related_to"),
                     "source": f"{file_id}_node_{src_idx}",
                     "target": f"{file_id}_node_{tgt_idx}",

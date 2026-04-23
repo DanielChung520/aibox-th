@@ -7,14 +7,19 @@ import httpx
 from fastapi import FastAPI
 from pydantic import BaseModel
 
+from shared.logging import LoggingMiddleware, setup_logging
+
+setup_logging("mcp_tools", os.getenv("LOG_LEVEL", "INFO"))
+
 app = FastAPI(
     title="AIBox MCP Tools Service",
     description="MCP tool execution service.",
     version="2.0.0",
 )
+app.add_middleware(LoggingMiddleware, service_name="mcp_tools")
 
-from tools.process_advisor.router import app as process_advisor_app
-from tools.report_agent.router import app as report_agent_app
+from tools.process_advisor.router import app as process_advisor_app  # noqa: E402
+from tools.report_agent.router import app as report_agent_app  # noqa: E402
 app.mount("/process-advisor", process_advisor_app)
 app.mount("/report-agent", report_agent_app)
 

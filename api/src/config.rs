@@ -42,12 +42,15 @@ pub struct AiServicesConfig {
     pub knowledge_agent_url: String,
     pub mcp_tools_url: String,
     pub bpa_mm_agent_url: String,
+    pub unified_agents_url: String,
+    pub aiq_agent_url: String,
     pub ollama_base_url: String,
     pub lm_studio_url: String,
     pub qdrant_url: String,
     pub seaweed_aibox_url: String,
     pub seaweed_user: String,
     pub seaweed_pass: String,
+    pub internal_token: String,
     pub intent_router_enabled: bool,
 }
 
@@ -73,12 +76,11 @@ impl Config {
     pub fn from_env() -> Self {
         Self {
             database: DatabaseConfig {
-                url: env::var("DATABASE_URL")
+                url: env::var("ARANGODB_URL")
                     .unwrap_or_else(|_| "http://localhost:8529".to_string()),
-                name: env::var("DATABASE_NAME").unwrap_or_else(|_| "aibox".to_string()),
-                user: env::var("DATABASE_USER").unwrap_or_else(|_| "root".to_string()),
-                password: env::var("DATABASE_PASSWORD")
-                    .unwrap_or_else(|_| "abc_desktop_2026".to_string()),
+                name: env::var("ARANGODB_DATABASE").unwrap_or_else(|_| "abc_desktop".to_string()),
+                user: env::var("ARANGODB_USERNAME").unwrap_or_else(|_| "root".to_string()),
+                password: env::var("ARANGODB_PASSWORD").expect("ARANGODB_PASSWORD must be set"),
             },
             jwt: JwtConfig {
                 secret: env::var("JWT_SECRET").expect("JWT_SECRET is required"),
@@ -98,6 +100,10 @@ impl Config {
                     .unwrap_or_else(|_| "http://localhost:8004".to_string()),
                 bpa_mm_agent_url: env::var("BPA_MM_AGENT_URL")
                     .unwrap_or_else(|_| "http://localhost:8005".to_string()),
+                unified_agents_url: env::var("UNIFIED_AGENTS_URL")
+                    .unwrap_or_else(|_| "http://localhost:8011".to_string()),
+                aiq_agent_url: env::var("AIQ_AGENT_URL")
+                    .unwrap_or_else(|_| "http://localhost:8009".to_string()),
                 ollama_base_url: env::var("OLLAMA_BASE_URL")
                     .unwrap_or_else(|_| "http://localhost:11434".to_string()),
                 lm_studio_url: env::var("LM_STUDIO_URL")
@@ -106,8 +112,9 @@ impl Config {
                     .unwrap_or_else(|_| "http://localhost:6333".to_string()),
                 seaweed_aibox_url: env::var("SEAWEED_AIBOX_URL")
                     .unwrap_or_else(|_| "http://localhost:8888".to_string()),
-                seaweed_user: env::var("SEAWEED_USER").unwrap_or_else(|_| "admin".to_string()),
-                seaweed_pass: env::var("SEAWEED_PASS").unwrap_or_else(|_| "admin123".to_string()),
+                seaweed_user: env::var("SEAWEED_USER").unwrap_or_default(),
+                seaweed_pass: env::var("SEAWEED_PASS").unwrap_or_default(),
+                internal_token: env::var("INTERNAL_SERVICE_TOKEN").unwrap_or_default(),
                 intent_router_enabled: env::var("INTENT_ROUTER_ENABLED")
                     .unwrap_or_else(|_| "true".to_string())
                     .parse()
@@ -138,7 +145,7 @@ impl Config {
                     .unwrap_or_else(|_| "6500".to_string())
                     .parse()
                     .unwrap_or(6500),
-                host: env::var("HOST").unwrap_or_else(|_| "0.0.0.0".to_string()),
+                host: env::var("HOST").unwrap_or_else(|_| "127.0.0.1".to_string()),
             },
         }
     }

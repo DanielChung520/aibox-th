@@ -272,9 +272,9 @@ class HybridRAGFusionEngine:
 
             # Determine primary source
             primary_source = (
-                RetrievalSource.VECTOR.value
+                "vector"
                 if result.source == RetrievalSource.VECTOR
-                else RetrievalSource.GRAPH.value
+                else "graph"
             )
 
             fusion_results.append(

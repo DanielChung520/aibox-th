@@ -22,14 +22,10 @@ API_PORT="${PORT:-6500}"
 
 # ─── Python AI Services 定義 ────────────────────────────────────────────────
 # 格式: "名稱:端口:模組路徑"
+# 注意：已整合到 unified_agents 的服務（da/ka/memory/backup/mcp）不再單獨啟動
 AI_SERVICES=(
   "aitask:8001:aitask.main:app"
-  "data_agent:8003:data_agent.main:app"
-  "mcp_tools:8004:mcp_tools.main:app"
   "bpa_mm_agent:8005:bpa.mm_agent.main:app"
-  "knowledge_agent:8007:knowledge_agent.main:app"
-  "memory_agent:8008:memory_agent.main:app"
-  "backup_agent:8010:backup_agent.main:app"
   "unified_agents:8011:unified_agents.main:app"
 )
 
@@ -236,7 +232,7 @@ start_ai_service() {
     return 1
   fi
 
-  "$VENV_PYTHON" -m uvicorn "$module" --host 0.0.0.0 --port "$port" --reload \
+  "$VENV_PYTHON" -m uvicorn "$module" --host 127.0.0.1 --port "$port" --reload \
     > "/tmp/abc-${name}.log" 2>&1 &
   echo $! > "$PID_DIR/${name}.pid"
 
@@ -422,12 +418,12 @@ status() {
     echo "❌ Not running"
   fi
 
-  printf "  %-22s (port %s): " "MinIO (S3)" "8334"
-  local minio_http
-  minio_http=$(curl -so /dev/null -w "%{http_code}" --max-time 3 "http://localhost:8334/" 2>/dev/null || echo "000")
-  if [ "$minio_http" != "000" ]; then
-    echo "✅ Healthy (HTTP $minio_http)"
-  elif lsof -ti :8334 > /dev/null 2>&1; then
+  printf "  %-22s (port %s): " "SeaWeedFS Filer" "8888"
+  local seaweed_http
+  seaweed_http=$(curl -so /dev/null -w "%{http_code}" --max-time 3 "http://localhost:8888/" 2>/dev/null || echo "000")
+  if [ "$seaweed_http" != "000" ]; then
+    echo "✅ Healthy (HTTP $seaweed_http)"
+  elif lsof -ti :8888 > /dev/null 2>&1; then
     echo "⚠️  Port open but not responding"
   else
     echo "❌ Not running"

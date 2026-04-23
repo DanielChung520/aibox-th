@@ -7,6 +7,7 @@
 use arangors::client::reqwest::ReqwestClient;
 use arangors::Database;
 use crate::auth::verify_jwt;
+use crate::config::CONFIG;
 use crate::db::{
     get_db,
     knowledge::{KnowledgeFile, KnowledgeRoot},
@@ -302,11 +303,12 @@ pub async fn delete_file(
 
     // Pipeline cleanup MUST complete before ArangoDB removal,
     // otherwise Python cannot resolve root_id → Qdrant collection.
-    let agent_url = std::env::var("KNOWLEDGE_AGENT_URL")
-        .unwrap_or_else(|_| "http://localhost:8007".to_string());
     let client = reqwest::Client::new();
     let pipeline_ok = client
-        .post(format!("{}/pipeline/delete?file_id={}", agent_url, file_key))
+        .post(format!(
+            "{}/ka/pipeline/delete?file_id={}",
+            CONFIG.ai_services.unified_agents_url, file_key
+        ))
         .timeout(std::time::Duration::from_secs(30))
         .send()
         .await
@@ -443,8 +445,8 @@ pub async fn upload_file(
     let s3_path = format!("bucket-aibox-assets/{}/{}.{}", root_id, file_key, ext);
 
     // Upload to SeaweedFS ai-box cluster (backup / long-term storage)
-    let seaweed_user = std::env::var("SEAWEED_USER").unwrap_or_else(|_| "admin".to_string());
-    let seaweed_pass = std::env::var("SEAWEED_PASS").unwrap_or_else(|_| "admin123".to_string());
+    let seaweed_user = CONFIG.ai_services.seaweed_user.clone();
+    let seaweed_pass = CONFIG.ai_services.seaweed_pass.clone();
     let seaweed_base = std::env::var("SEAWEED_AIBOX_URL").unwrap_or_else(|_| "http://localhost:8888".to_string());
     let seaweed_url = format!("{}/{}", seaweed_base, s3_path);
     let client = reqwest::Client::new();
@@ -485,9 +487,11 @@ pub async fn upload_file(
         .await
         .map_err(|_| err_500())?;
 
-    // Trigger Celery task via knowledge_agent
-    let agent_url = std::env::var("KNOWLEDGE_AGENT_URL").unwrap_or_else(|_| "http://localhost:8007".to_string());
-    let trigger_url = format!("{}/pipeline/trigger", agent_url);
+    let trigger_url = format!(
+        "{}/ka/pipeline/trigger",
+        CONFIG.ai_services.unified_agents_url
+    );
+    let user_role = extract_user_role(&headers).unwrap_or_default();
     let payload = serde_json::json!({
         "task": "process_file",
         "file_id": file_key,
@@ -496,6 +500,7 @@ pub async fn upload_file(
     });
     let _ = client
         .post(&trigger_url)
+        .header("X-User-Role", &user_role)
         .json(&payload)
         .timeout(std::time::Duration::from_secs(5))
         .send()
@@ -567,6 +572,19 @@ async fn get_upload_max_size(
                 5242880 // 5 MB for general
             }
         })
+}
+
+fn extract_user_role(headers: &HeaderMap) -> Option<String> {
+    let token = headers
+        .get(axum::http::header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.strip_prefix("Bearer "))?;
+
+    let Ok(token_data) = verify_jwt(token) else {
+        return None;
+    };
+
+    Some(token_data.claims.role)
 }
 
 pub fn create_upload_router() -> Router {
@@ -697,16 +715,12 @@ pub async fn list_jobs_stuck() -> Result<impl IntoResponse, (StatusCode, Json<se
         return Ok(Json(json!({ "code": 200, "data": [] })));
     }
 
-    // Call knowledge agent to get active Celery tasks
-    let agent_url = std::env::var("KNOWLEDGE_AGENT_URL")
-        .unwrap_or_else(|_| "http://localhost:8007".to_string());
-
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(10))
         .build()
         .unwrap_or_else(|_| reqwest::Client::new());
 
-    let active_tasks_url = format!("{}/pipeline/active-tasks", agent_url);
+    let active_tasks_url = format!("{}/ka/pipeline/active-tasks", CONFIG.ai_services.unified_agents_url);
     let agent_active: Vec<String> = match client.get(&active_tasks_url).send().await {
         Ok(resp) => resp.json().await.unwrap_or_default(),
         Err(_) => Vec::new(),
@@ -746,9 +760,6 @@ async fn revoke_celery_tasks(
     vector_task_id: Option<&str>,
     graph_task_id: Option<&str>,
 ) -> (Vec<String>, bool) {
-    let agent_url = std::env::var("KNOWLEDGE_AGENT_URL")
-        .unwrap_or_else(|_| "http://localhost:8007".to_string());
-
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(10))
         .build()
@@ -761,8 +772,7 @@ async fn revoke_celery_tasks(
         if task_id.is_empty() {
             continue;
         }
-        // Call knowledge agent's abort endpoint for each task
-        let url = format!("{}/pipeline/abort?file_id={}", agent_url, file_key);
+        let url = format!("{}/ka/pipeline/abort?file_id={}", CONFIG.ai_services.unified_agents_url, file_key);
         if let Ok(resp) = client.post(&url).send().await {
             if resp.status().is_success() {
                 revoked.push(task_id.to_string());
@@ -775,6 +785,7 @@ async fn revoke_celery_tasks(
 
 pub async fn abort_job(
     Path(file_key): Path<String>,
+    headers: HeaderMap,
 ) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
     let db = get_db();
     let col = db
@@ -789,8 +800,8 @@ pub async fn abort_job(
         std::env::var("DATABASE_NAME").unwrap_or_else(|_| "abc_desktop".to_string()),
         file_key
     );
-    let arango_user = std::env::var("DATABASE_USER").unwrap_or_else(|_| "root".to_string());
-    let arango_pass = std::env::var("DATABASE_PASSWORD").unwrap_or_else(|_| "abc_desktop_2026".to_string());
+    let arango_user = CONFIG.database.user.clone();
+    let arango_pass = CONFIG.database.password.clone();
 
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(5))
@@ -827,10 +838,17 @@ pub async fn abort_job(
         Err(_) => (None, None),
     };
 
-    let agent_url = std::env::var("KNOWLEDGE_AGENT_URL")
-        .unwrap_or_else(|_| "http://localhost:8007".to_string());
-    let agent_abort_url = format!("{}/pipeline/abort?file_id={}", agent_url, file_key);
-    let agent_result: serde_json::Value = match client.post(&agent_abort_url).send().await {
+    let agent_abort_url = format!(
+        "{}/ka/pipeline/abort?file_id={}",
+        CONFIG.ai_services.unified_agents_url, file_key
+    );
+    let user_role = extract_user_role(&headers).unwrap_or_default();
+    let agent_result: serde_json::Value = match client
+        .post(&agent_abort_url)
+        .header("X-User-Role", &user_role)
+        .send()
+        .await
+    {
         Ok(resp) => resp.json().await.unwrap_or_default(),
         Err(_) => serde_json::Value::Null,
     };
@@ -864,14 +882,18 @@ pub async fn abort_job(
 
 pub async fn job_logs(
     Path(file_key): Path<String>,
+    headers: HeaderMap,
 ) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
-    let agent_url = std::env::var("KNOWLEDGE_AGENT_URL")
-        .unwrap_or_else(|_| "http://localhost:8007".to_string());
-    let url = format!("{}/pipeline/logs?file_id={}", agent_url, file_key);
+    let url = format!(
+        "{}/ka/pipeline/logs?file_id={}",
+        CONFIG.ai_services.unified_agents_url, file_key
+    );
 
+    let user_role = extract_user_role(&headers).unwrap_or_default();
     let client = reqwest::Client::new();
     match client
         .get(&url)
+        .header("X-User-Role", &user_role)
         .timeout(std::time::Duration::from_secs(10))
         .send()
         .await
@@ -890,19 +912,20 @@ pub async fn job_logs(
 pub async fn get_vectors(
     Path(file_key): Path<String>,
     Query(params): Query<std::collections::HashMap<String, String>>,
+    headers: HeaderMap,
 ) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
-    let agent_url = std::env::var("KNOWLEDGE_AGENT_URL")
-        .unwrap_or_else(|_| "http://localhost:8007".to_string());
     let limit = params.get("limit").and_then(|s| s.parse::<usize>().ok()).unwrap_or(50);
     let offset = params.get("offset").and_then(|s| s.parse::<usize>().ok()).unwrap_or(0);
+    let user_role = extract_user_role(&headers).unwrap_or_default();
     let url = format!(
-        "{}/pipeline/vectors?file_id={}&limit={}&offset={}",
-        agent_url, file_key, limit, offset
+        "{}/ka/pipeline/vectors?file_id={}&limit={}&offset={}",
+        CONFIG.ai_services.unified_agents_url, file_key, limit, offset
     );
 
     let client = reqwest::Client::new();
     match client
         .get(&url)
+        .header("X-User-Role", &user_role)
         .timeout(std::time::Duration::from_secs(10))
         .send()
         .await
@@ -920,14 +943,18 @@ pub async fn get_vectors(
 
 pub async fn get_graph(
     Path(file_key): Path<String>,
+    headers: HeaderMap,
 ) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
-    let agent_url = std::env::var("KNOWLEDGE_AGENT_URL")
-        .unwrap_or_else(|_| "http://localhost:8007".to_string());
-    let url = format!("{}/pipeline/graph?file_id={}", agent_url, file_key);
+    let user_role = extract_user_role(&headers).unwrap_or_default();
+    let url = format!(
+        "{}/ka/pipeline/graph?file_id={}",
+        CONFIG.ai_services.unified_agents_url, file_key
+    );
 
     let client = reqwest::Client::new();
     match client
         .get(&url)
+        .header("X-User-Role", &user_role)
         .timeout(std::time::Duration::from_secs(10))
         .send()
         .await
@@ -945,14 +972,18 @@ pub async fn get_graph(
 
 pub async fn preview_file(
     Path(file_key): Path<String>,
+    headers: HeaderMap,
 ) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
-    let agent_url = std::env::var("KNOWLEDGE_AGENT_URL")
-        .unwrap_or_else(|_| "http://localhost:8007".to_string());
-    let url = format!("{}/pipeline/preview?file_id={}", agent_url, file_key);
+    let user_role = extract_user_role(&headers).unwrap_or_default();
+    let url = format!(
+        "{}/ka/pipeline/preview?file_id={}",
+        CONFIG.ai_services.unified_agents_url, file_key
+    );
 
     let client = reqwest::Client::new();
     match client
         .get(&url)
+        .header("X-User-Role", &user_role)
         .timeout(std::time::Duration::from_secs(30))
         .send()
         .await
@@ -970,14 +1001,18 @@ pub async fn preview_file(
 
 pub async fn download_file_proxy(
     Path(file_key): Path<String>,
+    headers: HeaderMap,
 ) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
-    let agent_url = std::env::var("KNOWLEDGE_AGENT_URL")
-        .unwrap_or_else(|_| "http://localhost:8007".to_string());
-    let url = format!("{}/pipeline/download?file_id={}", agent_url, file_key);
+    let user_role = extract_user_role(&headers).unwrap_or_default();
+    let url = format!(
+        "{}/ka/pipeline/download?file_id={}",
+        CONFIG.ai_services.unified_agents_url, file_key
+    );
 
     let client = reqwest::Client::new();
     match client
         .get(&url)
+        .header("X-User-Role", &user_role)
         .timeout(std::time::Duration::from_secs(120))
         .send()
         .await
@@ -1031,14 +1066,18 @@ fn err_404(resource: &str) -> (StatusCode, Json<serde_json::Value>) {
 
 pub async fn regenerate_vector(
     Path(file_key): Path<String>,
+    headers: HeaderMap,
 ) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
-    let agent_url = std::env::var("KNOWLEDGE_AGENT_URL")
-        .unwrap_or_else(|_| "http://localhost:8007".to_string());
-    let url = format!("{}/pipeline/vector?file_id={}", agent_url, file_key);
+    let user_role = extract_user_role(&headers).unwrap_or_default();
+    let url = format!(
+        "{}/ka/pipeline/vector?file_id={}",
+        CONFIG.ai_services.unified_agents_url, file_key
+    );
 
     let client = reqwest::Client::new();
     match client
         .post(&url)
+        .header("X-User-Role", &user_role)
         .timeout(std::time::Duration::from_secs(10))
         .send()
         .await
@@ -1056,14 +1095,18 @@ pub async fn regenerate_vector(
 
 pub async fn regenerate_graph(
     Path(file_key): Path<String>,
+    headers: HeaderMap,
 ) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
-    let agent_url = std::env::var("KNOWLEDGE_AGENT_URL")
-        .unwrap_or_else(|_| "http://localhost:8007".to_string());
-    let url = format!("{}/pipeline/graph?file_id={}", agent_url, file_key);
+    let user_role = extract_user_role(&headers).unwrap_or_default();
+    let url = format!(
+        "{}/ka/pipeline/graph?file_id={}",
+        CONFIG.ai_services.unified_agents_url, file_key
+    );
 
     let client = reqwest::Client::new();
     match client
         .post(&url)
+        .header("X-User-Role", &user_role)
         .timeout(std::time::Duration::from_secs(10))
         .send()
         .await
@@ -1082,19 +1125,20 @@ pub async fn regenerate_graph(
 pub async fn get_similar_chunks(
     Path(file_key): Path<String>,
     Query(params): Query<std::collections::HashMap<String, String>>,
+    headers: HeaderMap,
 ) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
-    let agent_url = std::env::var("KNOWLEDGE_AGENT_URL")
-        .unwrap_or_else(|_| "http://localhost:8007".to_string());
+    let user_role = extract_user_role(&headers).unwrap_or_default();
     let chunk_id = params.get("chunk_id").cloned().unwrap_or_default();
     let top_k = params.get("top_k").and_then(|s| s.parse::<usize>().ok()).unwrap_or(10);
     let url = format!(
-        "{}/pipeline/similar?file_id={}&chunk_id={}&top_k={}",
-        agent_url, file_key, chunk_id, top_k
+        "{}/ka/pipeline/similar?file_id={}&chunk_id={}&top_k={}",
+        CONFIG.ai_services.unified_agents_url, file_key, chunk_id, top_k
     );
 
     let client = reqwest::Client::new();
     match client
         .get(&url)
+        .header("X-User-Role", &user_role)
         .timeout(std::time::Duration::from_secs(10))
         .send()
         .await
@@ -1112,14 +1156,18 @@ pub async fn get_similar_chunks(
 
 pub async fn delete_job(
     Path(file_key): Path<String>,
+    headers: HeaderMap,
 ) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
-    let agent_url = std::env::var("KNOWLEDGE_AGENT_URL")
-        .unwrap_or_else(|_| "http://localhost:8007".to_string());
-    let url = format!("{}/pipeline/delete?file_id={}", agent_url, file_key);
+    let user_role = extract_user_role(&headers).unwrap_or_default();
+    let url = format!(
+        "{}/ka/pipeline/delete?file_id={}",
+        CONFIG.ai_services.unified_agents_url, file_key
+    );
 
     let client = reqwest::Client::new();
     let agent_result: serde_json::Value = match client
         .post(&url)
+        .header("X-User-Role", &user_role)
         .timeout(std::time::Duration::from_secs(30))
         .send()
         .await
@@ -1155,9 +1203,10 @@ pub async fn delete_job(
 pub async fn retry_job(
     Path(file_key): Path<String>,
 ) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
-    let agent_url = std::env::var("KNOWLEDGE_AGENT_URL")
-        .unwrap_or_else(|_| "http://localhost:8007".to_string());
-    let url = format!("{}/pipeline/retry?file_id={}", agent_url, file_key);
+    let url = format!(
+        "{}/ka/pipeline/retry?file_id={}",
+        CONFIG.ai_services.unified_agents_url, file_key
+    );
 
     let client = reqwest::Client::new();
     match client

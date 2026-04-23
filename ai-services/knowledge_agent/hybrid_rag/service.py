@@ -18,6 +18,21 @@ from typing import TypedDict
 
 import httpx
 
+from knowledge_agent.hybrid_rag.models.evidence import (
+    AuditRecord,
+    BoundaryStatus,
+    EvidenceProvenance,
+    EvidenceSearchResponse,
+    EvidenceSet,
+    EvidenceUnit,
+    NextStep,
+    SourceType,
+    Sufficiency,
+)
+from knowledge_agent.hybrid_rag.models.inquiry import (
+    EvidenceSearchRequest,
+)
+
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
@@ -28,7 +43,7 @@ QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
 ARANGO_URL = os.getenv("ARANGO_URL", "http://localhost:8529")
 ARANGO_DB = os.getenv("ARANGO_DATABASE", "abc_desktop")
 ARANGO_USER = os.getenv("ARANGO_USER", "root")
-ARANGO_PASSWORD = os.getenv("ARANGO_PASSWORD", "abc_desktop_2026")
+ARANGO_PASSWORD = os.getenv("ARANGO_PASSWORD", "")
 
 
 # ---------------------------------------------------------------------------
@@ -42,11 +57,12 @@ class HybridSearchRequest(TypedDict, total=False):
     query: str
     collection: str
     top_k: int
-    strategy: str  # "hybrid" | "vector_first" | "graph_first"
+    strategy: str
     min_relevance: float
     tenant_id: str | None
     user_id: str | None
     root_id: str | None
+    user_role: str | None
 
 
 class HybridSearchMetadata(TypedDict, total=False):
@@ -103,6 +119,9 @@ class HybridRAGService:
     _arango_db: str = field(default=ARANGO_DB)
     _arango_auth: tuple[str, str] = field(default_factory=lambda: (ARANGO_USER, ARANGO_PASSWORD))
     _embedding_model: str = field(default=OLLAMA_EMBEDDING_MODEL)
+    _boundary_checker: object | None = field(default=None)
+    _inquiry_decomposer: object | None = field(default=None)
+    _evidence_analyzer: object | None = field(default=None)
 
     def __init__(
         self,
@@ -163,6 +182,29 @@ class HybridRAGService:
             from knowledge_agent.hybrid_rag.fusion_engine import HybridRAGFusionEngine
             self._fusion_engine = HybridRAGFusionEngine()
         return self._fusion_engine
+
+    @property
+    def boundary_checker(self):
+        """Get boundary checker (lazy loaded)."""
+        if self._boundary_checker is None:
+            from knowledge_agent.hybrid_rag.boundary_checker import get_boundary_checker
+            self._boundary_checker = get_boundary_checker()
+        return self._boundary_checker
+
+    @property
+    def evidence_analyzer(self):
+        if self._evidence_analyzer is None:
+            from knowledge_agent.hybrid_rag.evidence_analyzer import get_evidence_analyzer
+            self._evidence_analyzer = get_evidence_analyzer()
+        return self._evidence_analyzer
+
+    @property
+    def inquiry_decomposer(self):
+        """Get inquiry decomposer (lazy loaded)."""
+        if self._inquiry_decomposer is None:
+            from knowledge_agent.hybrid_rag.inquiry_decomposer import get_inquiry_decomposer
+            self._inquiry_decomposer = get_inquiry_decomposer()
+        return self._inquiry_decomposer
 
     # -------------------------------------------------------------------------
     # Embedding
@@ -273,7 +315,6 @@ class HybridRAGService:
         aql = f"""
         FOR d IN knowledge_graphs
         {filter_clause}
-        SORT BM25(d) DESC
         LIMIT @top_k
         RETURN d
         """
@@ -357,25 +398,16 @@ class HybridRAGService:
         tenant_id: str | None = None,
         user_id: str | None = None,
         root_id: str | None = None,
+        llm_provider: str = "ollama",
+        user_role: str | None = None,
     ) -> HybridSearchResponse:
-        """Execute hybrid search combining vector and graph retrieval.
-
-        Args:
-            query: Natural language query.
-            collection: Qdrant collection name.
-            top_k: Number of results to return.
-            strategy: Search strategy - "hybrid", "vector_first", or "graph_first".
-            min_relevance: Minimum relevance score threshold.
-            tenant_id: Optional tenant ID for config.
-            user_id: Optional user ID for config.
-            root_id: Optional root ID to filter graph search.
-
-        Returns:
-            HybridSearchResponse with fused results.
-        """
         start_time = time.time()
 
-        # Step 1: Detect query type
+        self.config_service.assert_llm_provider_allowed(llm_provider)
+
+        if root_id and collection == "knowledge_default":
+            collection = f"knowledge_{root_id}"
+
         query_type = self.classifier.classify(query)
 
         # Step 2: Get weights for query type
@@ -479,6 +511,221 @@ class HybridRAGService:
             total_vector_hits=total_vector,
             total_graph_hits=total_graph,
             fusion_time_ms=fusion_time_ms,
+        )
+
+    # -------------------------------------------------------------------------
+    # Evidence Search (v2)
+    # -------------------------------------------------------------------------
+
+    async def evidence_search(
+        self,
+        request: EvidenceSearchRequest,
+        llm_provider: str = "ollama",
+    ) -> EvidenceSearchResponse:
+        import time
+
+        start_time = time.time()
+        self.config_service.assert_llm_provider_allowed(llm_provider)
+        hypothesis = request.hypothesis
+        boundary = request.boundary
+
+        if not hypothesis.statement and not request.query:
+            evidence_set = EvidenceSet(
+                hypothesis_id="",
+                boundary_status=BoundaryStatus.WITHIN_BOUNDARY,
+                sufficiency=Sufficiency.INSUFFICIENT,
+                evidences=[],
+                contradictions=[],
+                gaps=["No hypothesis and no query provided"],
+                next_step=NextStep.ASK_FOR_CLARIFICATION,
+            )
+            audit = AuditRecord(
+                query=request.query,
+                hypothesis_id=None,
+                boundary_checked=True,
+                channels_used=[],
+                stop_reason="no_hypothesis",
+                total_time_ms=int((time.time() - start_time) * 1000),
+            )
+            return EvidenceSearchResponse(evidence_set=evidence_set, audit=audit)
+
+        decomposer = self.inquiry_decomposer
+        if not hypothesis.statement and request.query:
+            hypothesis = decomposer.create_implicit_hypothesis(
+                request.query, boundary, request.context_signals
+            )
+        elif request.inquiry_plan is None:
+            request.inquiry_plan = decomposer.decompose(hypothesis, boundary, request.query)
+        query = request.query or hypothesis.statement
+
+        boundary_result = self.boundary_checker.check(boundary, hypothesis, user_role=request.user_role)
+        if boundary_result.is_out_of_boundary:
+            evidence_set = EvidenceSet(
+                hypothesis_id=hypothesis.hypothesis_id or "",
+                boundary_status=BoundaryStatus.OUT_OF_BOUNDARY,
+                sufficiency=Sufficiency.INSUFFICIENT,
+                evidences=[],
+                contradictions=[],
+                gaps=[],
+                next_step=NextStep.STOP,
+            )
+            audit = AuditRecord(
+                query=query,
+                hypothesis_id=hypothesis.hypothesis_id,
+                boundary_checked=True,
+                channels_used=[],
+                discarded_candidates=0,
+                discard_reasons=[boundary_result.reason or "out_of_boundary"],
+                stop_reason="out_of_boundary",
+                fusion_strategy="rrf_v2",
+                total_time_ms=int((time.time() - start_time) * 1000),
+            )
+            return EvidenceSearchResponse(evidence_set=evidence_set, audit=audit)
+
+        if boundary_result.is_boundary_unclear:
+            evidence_set = EvidenceSet(
+                hypothesis_id=hypothesis.hypothesis_id or "",
+                boundary_status=BoundaryStatus.BOUNDARY_UNCLEAR,
+                sufficiency=Sufficiency.INSUFFICIENT,
+                evidences=[],
+                contradictions=[],
+                gaps=[boundary_result.reason or "boundary_unclear"],
+                next_step=NextStep.ASK_FOR_CLARIFICATION,
+            )
+            audit = AuditRecord(
+                query=query,
+                hypothesis_id=hypothesis.hypothesis_id,
+                boundary_checked=True,
+                channels_used=[],
+                discarded_candidates=0,
+                discard_reasons=[boundary_result.reason or "boundary_unclear"],
+                stop_reason="boundary_unclear",
+                fusion_strategy="rrf_v2",
+                total_time_ms=int((time.time() - start_time) * 1000),
+            )
+            return EvidenceSearchResponse(evidence_set=evidence_set, audit=audit)
+
+        channels_used: list[str] = []
+        discarded = 0
+        discard_reasons: list[str] = []
+
+        top_k = boundary.max_top_k
+        actual_plan = request.inquiry_plan
+        allowed = actual_plan.allowed_channels if actual_plan else ["vector", "graph"]
+
+        vector_results: list[dict] = []
+        graph_results: list[dict] = []
+        total_vector = 0
+        total_graph = 0
+
+        if "vector" in allowed:
+            channels_used.append("vector")
+            collection = f"knowledge_{boundary.root_id}" if boundary.root_id else "knowledge_default"
+            query_emb = await self._get_embedding(query)
+            vector_results, total_vector = await self._vector_search(
+                query_emb, collection, top_k * 2
+            )
+
+        if "graph" in allowed:
+            channels_used.append("graph")
+            graph_results, total_graph = await self._graph_search(
+                query, boundary.root_id, top_k * 2
+            )
+
+        from knowledge_agent.hybrid_rag.fusion_engine import (
+            RetrievalResult,
+            RetrievalSource,
+        )
+
+        vector_retrieval = [
+            RetrievalResult(
+                content=r.get("payload", {}).get("text_full", r.get("payload", {}).get("text", "")),
+                source=RetrievalSource.VECTOR,
+                score=float(r.get("score", 0.0)),
+                metadata={
+                    "file_id": r.get("payload", {}).get("file_id", ""),
+                    "chunk_index": r.get("payload", {}).get("chunk_index"),
+                    "root_id": r.get("payload", {}).get("root_id", ""),
+                },
+            )
+            for r in vector_results
+        ]
+
+        graph_retrieval = [
+            RetrievalResult(
+                content=self._build_graph_result_content(r, []),
+                source=RetrievalSource.GRAPH,
+                score=1.0,
+                metadata={
+                    "file_id": r.get("file_id", ""),
+                    "entity_type": r.get("entity_type", ""),
+                },
+            )
+            for r in graph_results
+        ]
+
+        weights, _ = self.config_service.get_weights_for_query(query, None, None)
+        fused = self.fusion_engine.fuse(
+            vector_results=vector_retrieval,
+            graph_results=graph_retrieval,
+            vector_weight=weights.vector_weight,
+            graph_weight=weights.graph_weight,
+            top_k=top_k,
+        )
+
+        evidence_units: list[EvidenceUnit] = []
+        for fr in fused:
+            src_type = SourceType.FUSION
+            if fr.source == RetrievalSource.VECTOR:
+                src_type = SourceType.VECTOR
+            elif fr.source == RetrievalSource.GRAPH:
+                src_type = SourceType.GRAPH
+
+            evidence_units.append(
+                EvidenceUnit(
+                    source_type=src_type,
+                    root_id=fr.metadata.get("root_id"),
+                    file_id=fr.metadata.get("file_id"),
+                    content=fr.content,
+                    normalized_score=fr.score,
+                    extraction_confidence=0.8,
+                    supports=[hypothesis.hypothesis_id or ""],
+                    contradicts=[],
+                    provenance=EvidenceProvenance(
+                        lifecycle_status="active",
+                    ),
+                )
+            )
+
+        evidence_set, gaps = self.evidence_analyzer.analyze(
+            evidence_units, hypothesis, request.inquiry_plan
+        )
+        evidence_set.boundary_status = BoundaryStatus.WITHIN_BOUNDARY
+
+        audit = AuditRecord(
+            query=query,
+            hypothesis_id=hypothesis.hypothesis_id,
+            boundary_checked=True,
+            channels_used=channels_used,
+            discarded_candidates=discarded,
+            discard_reasons=discard_reasons,
+            stop_reason=evidence_set.next_step.value if evidence_set.next_step else None,
+            fusion_strategy="rrf_v2",
+            total_time_ms=int((time.time() - start_time) * 1000),
+        )
+
+        from knowledge_agent.hybrid_rag.state_machine import compute_next_state
+        final_state = compute_next_state(
+            boundary_status=evidence_set.boundary_status.value if evidence_set.boundary_status else None,
+            sufficiency=evidence_set.sufficiency.value if evidence_set.sufficiency else None,
+            next_step=evidence_set.next_step.value if evidence_set.next_step else None,
+            has_hypothesis=bool(hypothesis.statement),
+        )
+        audit.stop_reason = final_state.value
+
+        return EvidenceSearchResponse(
+            evidence_set=evidence_set,
+            audit=audit,
         )
 
     # -------------------------------------------------------------------------

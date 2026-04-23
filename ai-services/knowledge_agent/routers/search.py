@@ -1,15 +1,22 @@
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+import os
 from typing import Optional
-import httpx
 
-router = APIRouter(tags=["Knowledge Search"])
+import httpx
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+from shared.security import verify_internal_token
+
+router = APIRouter(
+    tags=["Knowledge Search"],
+    dependencies=[Depends(verify_internal_token)],
+)
 
 OLLAMA_BASE_URL = "http://localhost:11434"
+DEFAULT_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5-coder:7b")
 ARANGO_URL = "http://localhost:8529"
 ARANGO_DB = "abc_desktop"
 ARANGO_USER = "root"
-ARANGO_PASSWORD = "abc_desktop_2026"
+ARANGO_PASSWORD = os.getenv("ARANGO_PASSWORD", "")
 
 
 class KnowledgeRequest(BaseModel):
@@ -60,8 +67,6 @@ async def search_similar(collection: str, limit: int) -> list[dict[str, object]]
 
 
 async def generate_answer(query: str, context: str) -> str:
-    from knowledge_agent.main import DEFAULT_MODEL
-
     prompt = (
         f"Based on the following knowledge base context, "
         f"answer the user's question.\n\n"

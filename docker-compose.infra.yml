@@ -78,30 +78,6 @@ services:
       - seaweedfs-ai-box-master
     restart: unless-stopped
 
-  seaweedfs-datalake-master:
-    image: chrislusf/seaweedfs:latest
-    container_name: seaweedfs-datalake-master
-    ports:
-      - "9335:9333"
-      - "19335:19333"
-    command: master -mdir=/data -port=9333 -defaultReplication=000
-    volumes:
-      - seaweed-datalake-master-data:/data
-    restart: unless-stopped
-
-  seaweedfs-datalake-filer:
-    image: chrislusf/seaweedfs:latest
-    container_name: seaweedfs-datalake-filer
-    ports:
-      - "8889:8889"
-      - "8334:8334"
-    command: filer -port=8889 -s3 -s3.port=8334 -master=seaweedfs-datalake-master:9333
-    volumes:
-      - seaweed-datalake-filer-data:/data
-    depends_on:
-      - seaweedfs-datalake-master
-    restart: unless-stopped
-
 volumes:
   arango-data:
   qdrant-data:
@@ -109,5 +85,3 @@ volumes:
   seaweed-aibox-master-data:
   seaweed-aibox-volume-data:
   seaweed-aibox-filer-data:
-  seaweed-datalake-master-data:
-  seaweed-datalake-filer-data:

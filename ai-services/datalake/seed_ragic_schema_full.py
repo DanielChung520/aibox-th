@@ -1,23 +1,26 @@
 #!/usr/bin/env python3
 """
 @file        seed_ragic_schema_full.py
-@description 全量遷移 Ragic 324 張 sheets 至 ArangoDB
-@lastUpdate  2026-04-02 11:00:00
+@description 全量遷移 Ragic sheets 至 ArangoDB（支援多帳號）
+@lastUpdate  2026-04-19 01:54:35
 @author      Daniel Chung
-@version     1.0.0
+@version     2.0.0
 """
 
+import os
 import re
 import subprocess
 import json
 from datetime import datetime, UTC
 from pathlib import Path
 
-ARANGO_URL = "http://localhost:8529"
-DB = "abc_desktop"
-AUTH = "root:abc_desktop_2026"
+ARANGO_URL = os.environ.get("ARANGODB_URL", "http://localhost:8529")
+DB = os.environ.get("ARANGODB_DATABASE", "abc_desktop")
+_user = os.environ.get("ARANGODB_USERNAME", "root")
+_pass = os.environ.get("ARANGODB_PASSWORD", "")
+AUTH = f"{_user}:{_pass}"
 TS = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
-SCHEMA_FILE = Path(__file__).parent.parent.parent / ".docs/Spec/DB/RagicTableSchema.md"
+SCHEMA_FILE = Path(__file__).parent.parent.parent / ".docs/Ragic/dawnlink/dawnlink202604.md"
 
 TYPE_MAP = {
     "文字": "VARCHAR", "數字": "DECIMAL", "日期": "DATE",
@@ -146,7 +149,7 @@ def build_sheet_map(raw_sheets: list) -> dict:
         name = lines[0].strip()
         tab, sheet_key = "", ""
         for line in lines[:15]:
-            m = re.search(r"ap15\.ragic\.com/twbraun/([^/]+)/(\d+)", line)
+            m = re.search(r"ap15\.ragic\.com/[^/]+/([^/]+)/(\d+)", line)
             if m:
                 tab = normalize_tab(m.group(1))
                 sheet_key = m.group(2)
@@ -216,7 +219,7 @@ def parse_sheet(raw: str, sheet_map: dict) -> dict:
     tab, sheet_key, form_key = "", "", ""
 
     for line in lines[:15]:
-        m = re.search(r"ap15\.ragic\.com/twbraun/([^/]+)/(\d+)", line)
+        m = re.search(r"ap15\.ragic\.com/[^/]+/([^/]+)/(\d+)", line)
         if m:
             tab = normalize_tab(m.group(1))
             sheet_key = m.group(2)
@@ -282,7 +285,7 @@ def parse_sheet(raw: str, sheet_map: dict) -> dict:
 
 def main():
     print("=" * 60)
-    print("Full Ragic Schema Migration — 324 Sheets")
+    print("Full Ragic Schema Migration")
     print("=" * 60)
 
     content = SCHEMA_FILE.read_text(encoding="utf-8")

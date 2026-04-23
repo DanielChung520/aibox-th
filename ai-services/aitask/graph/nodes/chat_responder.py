@@ -1,11 +1,13 @@
 """
 Chat responder node.
 
-# Last Update: 2026-04-11 02:57:52
+# Last Update: 2026-04-14
 # Author: AI Agent
-# Version: 1.0.0
+# Version: 1.1.0
 """
 
+import logging
+import os
 from collections.abc import Sequence
 
 import httpx
@@ -16,6 +18,15 @@ from aitask.graph.state import TopState
 
 DEFAULT_PROVIDER = "ollama"
 TIMEOUT_SECONDS = 120.0
+EMOTION_MODEL = os.environ.get("AITASK_EMOTION_MODEL", "qwen3.5:0.8b")
+
+EMOTION_INTENTS = {"orch_greeting", "orch_thanks", "orch_apology", "orch_blessing"}
+
+EMOTION_PROMPT = """你是一個友善的客服助理。根據用戶的情緒給予溫暖、自然的回應。
+
+用戶輸入：{user_input}
+
+請直接回應一句話就好，簡短、友善、溫暖。不要加任何解釋或說明。"""
 
 
 def _message_role(message: BaseMessage) -> str:
@@ -116,8 +127,48 @@ async def _request_response(messages: list[dict[str, str]]) -> str:
         return str(choices[0].get("message", {}).get("content", ""))
 
 
+def _is_emotion_intent(matched_data: dict | None) -> bool:
+    """Check if matched intent is an emotion response intent."""
+    if not matched_data:
+        return False
+    best = matched_data.get("best_match") or matched_data
+    intent_id = best.get("intent_id", "")
+    return intent_id in EMOTION_INTENTS
+
+
+async def _generate_emotion_response(user_input: str) -> str:
+    """Generate emotion response using tiny LLM."""
+    prompt = EMOTION_PROMPT.format(user_input=user_input)
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        response = await client.post(
+            f"{settings.provider.ollama_base_url.rstrip('/')}/api/generate",
+            json={
+                "model": EMOTION_MODEL,
+                "prompt": prompt,
+                "stream": False,
+                "temperature": 0.8,
+            },
+        )
+        response.raise_for_status()
+        data = response.json()
+        return str(data.get("response", "")).strip()
+
+
 async def chat_responder_node(state: TopState) -> dict[str, object]:
-    response_text = await _request_response(_state_messages(state["messages"]))
+    messages = state["messages"]
+    matched_data = state.get("matched_intent_data")
+
+    if _is_emotion_intent(matched_data) and messages:
+        last_message = messages[-1]
+        user_input = last_message.content if isinstance(last_message.content, str) else str(last_message.content)
+        try:
+            response_text = await _generate_emotion_response(user_input)
+        except Exception:
+            logging.getLogger(__name__).warning("Emotion LLM failed, falling back to chat_responder", exc_info=True)
+            response_text = await _request_response(_state_messages(messages))
+    else:
+        response_text = await _request_response(_state_messages(messages))
+
     return {
         "messages": [AIMessage(content=response_text)],
         "state_version": state["state_version"] + 1,

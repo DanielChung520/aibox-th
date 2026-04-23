@@ -20,12 +20,29 @@ from data_agent.intent_rag.da_intents_sync import router as da_intents_router
 from data_agent.query.router import router as query_router
 from data_agent.ragic.router import router as ragic_router
 from data_agent.ragic.router_import import router as ragic_import_router
+from shared.logging import LoggingMiddleware, setup_logging
+
+setup_logging("data_agent", os.getenv("LOG_LEVEL", "INFO"))
 
 app = FastAPI(
     title="AIBox Data Agent Service",
     description="Unified data query and intent management service.",
     version="2.1.0",
 )
+
+ALLOWED_ORIGINS = os.getenv(
+    "CORS_ORIGINS",
+    "http://localhost:1420,http://localhost:6500",
+).split(",")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+app.add_middleware(LoggingMiddleware, service_name="data_agent")
 
 # CORS configuration
 ALLOWED_ORIGINS = os.getenv(

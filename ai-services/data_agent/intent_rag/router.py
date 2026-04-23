@@ -18,21 +18,22 @@ import os
 from typing import Optional
 
 import httpx
-from fastapi import APIRouter, HTTPException, Path as PathParam
+from fastapi import APIRouter, Depends, HTTPException, Path as PathParam
 from pydantic import BaseModel
+from shared.security import verify_internal_token
 
 from data_agent.config_reader import get_param
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(verify_internal_token)])
 
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
 ARANGO_URL = os.getenv("ARANGO_URL", "http://localhost:8529")
 ARANGO_DB = os.getenv("ARANGO_DATABASE", "abc_desktop")
 ARANGO_USER = os.getenv("ARANGO_USER", "root")
-ARANGO_PASSWORD = os.getenv("ARANGO_PASSWORD", "abc_desktop_2026")
+ARANGO_PASSWORD = os.getenv("ARANGO_PASSWORD", "")
 MATCH_THRESHOLD_DEFAULT = float(os.getenv("MATCH_THRESHOLD", "0.45"))
 
 SCOPE_QDRANT_MAP: dict[str, str] = {

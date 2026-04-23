@@ -1,9 +1,9 @@
 """
 Data Agent Config Reader — ArangoDB system_params with cache + env fallback.
 
-# Last Update: 2026-03-24 11:36:49
+# Last Update: 2026-04-16 17:50:29
 # Author: Daniel Chung
-# Version: 1.0.0
+# Version: 1.1.0
 """
 
 import logging
@@ -36,6 +36,13 @@ _ENV_FALLBACKS: dict[str, tuple[str, str]] = {
     "ragic.api_key": ("RAGIC_API_KEY", ""),
     "ragic.database": ("RAGIC_MASTER_ACCOUNT", "2025shianyong"),
     "ragic.server_prefix": ("RAGIC_MASTER_SERVER", "ap15"),
+    "da.sql_model": ("DA_SQL_MODEL", "duckdb-nsql:latest"),
+    "da.sql_model_provider": ("DA_SQL_MODEL_PROVIDER", "ollama"),
+    "da.sql_fallback_model": ("DA_SQL_FALLBACK_MODEL", "sqlcoder:7b"),
+    "da.sql_fallback_provider": ("DA_SQL_FALLBACK_PROVIDER", "ollama"),
+    "da.sql_temperature": ("DA_SQL_TEMPERATURE", "0.1"),
+    "da.sql_max_retries": ("DA_SQL_MAX_RETRIES", "2"),
+    "da.query_source": ("DA_QUERY_SOURCE", "server_cache"),
 }
 
 

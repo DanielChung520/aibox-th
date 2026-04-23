@@ -41,6 +41,13 @@ logger = logging.getLogger(__name__)
 
 async def _build_config() -> PipelineConfig:
     """Build pipeline config from ArangoDB system_params."""
+    raw_threshold = await get_param("intent.matching_threshold")
+    try:
+        match_threshold = float(raw_threshold) if raw_threshold is not None and raw_threshold != "" else 0.45
+    except (ValueError, TypeError):
+        logger.warning("Invalid intent.matching_threshold value %r, using default 0.45", raw_threshold)
+        match_threshold = 0.45
+
     return PipelineConfig(
         ollama_base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
         small_model=await get_param("da.small_llm_model"),
@@ -51,13 +58,13 @@ async def _build_config() -> PipelineConfig:
         arango_url=os.getenv("ARANGO_URL", "http://localhost:8529"),
         arango_db=os.getenv("ARANGO_DATABASE", "abc_desktop"),
         arango_user=os.getenv("ARANGO_USER", "root"),
-        arango_password=os.getenv("ARANGO_PASSWORD", "abc_desktop_2026"),
+        arango_password=os.getenv("ARANGO_PASSWORD", ""),
         s3_endpoint=os.getenv("S3_ENDPOINT", "http://localhost:8334"),
         s3_bucket=os.getenv("S3_BUCKET", "sap"),
         data_source=await get_param("da.data_source"),
-        s3_access_key=os.getenv("S3_ACCESS_KEY", "admin"),
-        s3_secret_key=os.getenv("S3_SECRET_KEY", "admin123"),
-        match_threshold=float(os.getenv("MATCH_THRESHOLD", "0.56")),
+        s3_access_key=os.getenv("S3_ACCESS_KEY", ""),
+        s3_secret_key=os.getenv("S3_SECRET_KEY", ""),
+        match_threshold=match_threshold,
         max_retries=int(os.getenv("NL2SQL_MAX_RETRIES", "2")),
         generate_timeout=float(os.getenv("NL2SQL_GENERATE_TIMEOUT", "60")),
     )

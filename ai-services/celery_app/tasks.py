@@ -10,7 +10,7 @@ def _notify_session_webhook(session_key: str, file_id: str, arango: Any) -> None
     arango_url = os.getenv("ARANGO_URL", "http://localhost:8529")
     arango_db = os.getenv("ARANGO_DATABASE", "abc_desktop")
     arango_user = os.getenv("ARANGO_USER", "root")
-    arango_password = os.getenv("ARANGO_PASSWORD", "abc_desktop_2026")
+    arango_password = os.getenv("ARANGO_PASSWORD", "")
     api_base = "http://localhost:6500"
 
     graph_stats = None
@@ -91,7 +91,9 @@ def graph_task(
     arango = ArangoOps()
 
     if session_key:
-        result = _extract_5w1h(file_id, local_path, arango)
+        file_doc = arango.get_file(file_id)
+        rid = file_doc.get("knowledge_root_id") if file_doc else None
+        result = _extract_5w1h(file_id, local_path, arango, root_id=rid)
     else:
         from kb_pipeline.pipeline import Pipeline
 
@@ -105,7 +107,7 @@ def graph_task(
         arango_url = os.getenv("ARANGO_URL", "http://localhost:8529")
         arango_db = os.getenv("ARANGO_DATABASE", "abc_desktop")
         arango_user = os.getenv("ARANGO_USER", "root")
-        arango_password = os.getenv("ARANGO_PASSWORD", "abc_desktop_2026")
+        arango_password = os.getenv("ARANGO_PASSWORD", "")
         api_base = "http://localhost:6500"
         graph_stats = None
         graph_status = "completed"
@@ -166,7 +168,7 @@ def graph_task(
     return {"file_id": file_id, **result}
 
 
-def _extract_5w1h(file_id: str, local_path: str, arango: Any) -> dict[str, Any]:
+def _extract_5w1h(file_id: str, local_path: str, arango: Any, root_id: str | None = None) -> dict[str, Any]:
     import json
     import os
 
@@ -236,7 +238,7 @@ def _extract_5w1h(file_id: str, local_path: str, arango: Any) -> dict[str, Any]:
     ]
 
     if nodes:
-        arango.upsert_graph(file_id, nodes, [])
+        arango.upsert_graph(file_id, nodes, [], root_id=root_id)
         arango.update_status(file_id, graph_status="completed")
     else:
         arango.update_status(file_id, graph_status="completed")
