@@ -1,15 +1,16 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Edge Enterprise AI",
-  "version": "1.0.7",
+  "version": "1.0.9",
   "identifier": "com.abc.desktop",
   "build": {
-    "beforeDevCommand": "npm run dev",
+    "beforeDevCommand": "zsh -lc 'lsof -nP -iTCP:1420 -sTCP:LISTEN >/dev/null 2>&1 || npm run dev'",
     "beforeBuildCommand": "npm run build",
     "devUrl": "http://localhost:1420",
     "frontendDist": "../dist"
   },
   "app": {
+    "macOSPrivateApi": true,
     "withGlobalTauri": true,
     "windows": [
       {
@@ -27,7 +28,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self' https://abc.k84.org https://abcapi.k84.org; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://abc.k84.org; style-src 'self' 'unsafe-inline' https://abc.k84.org https://unpkg.com; img-src 'self' data: blob: https://abc.k84.org https://abcapi.k84.org; connect-src 'self' https://abc.k84.org https://abcapi.k84.org wss://abcapi.k84.org ipc://localhost blob: https://unpkg.com; font-src 'self' https://abc.k84.org https://unpkg.com; worker-src 'self' blob:",
+      "csp": "default-src 'self' https://eeaapi.ent4i.com http://localhost:*; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://eeaapi.ent4i.com http://localhost:*; style-src 'self' 'unsafe-inline' https://unpkg.com http://localhost:*; img-src 'self' data: blob: https://eeaapi.ent4i.com; connect-src 'self' https://eeaapi.ent4i.com wss://eeaapi.ent4i.com ipc://localhost blob: https://unpkg.com http://localhost:*; font-src 'self' https://unpkg.com http://localhost:*; worker-src 'self' blob: http://localhost:*; frame-src http://localhost:*",
       "assetProtocol": {
         "enable": true,
         "scope": [

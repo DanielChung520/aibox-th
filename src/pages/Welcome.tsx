@@ -1,9 +1,9 @@
 /**
  * @file        歡迎頁面
  * @description 應用啟動後的歡迎頁，展示 logo、應用名稱，並自動跳轉至登錄頁
- * @lastUpdate  2026-03-24 22:33:13
+ * @lastUpdate  2026-04-23 09:13:04
  * @author      Daniel Chung
- * @version     1.0.0
+ * @version     1.0.1
  * @history
  * - 2026-03-17 23:27:55 | Daniel Chung | 1.0.0 | 初始版本，新增 logo 動畫效果
  */
@@ -12,6 +12,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, Typography, theme } from 'antd';
 import { useContentTokens, useEffectiveTheme } from '../contexts/AppThemeProvider';
+import { authStore } from '../stores/auth';
 import logoDark from '../assets/EDGE-logo-icon.png';
 import logoLight from '../assets/EDGE-logo-dark.png';
 
@@ -26,6 +27,13 @@ export default function Welcome() {
   const effectiveTheme = useEffectiveTheme();
   const { token } = theme.useToken();
   const logoSrc = effectiveTheme === 'dark' ? logoDark : logoLight;
+
+  useEffect(() => {
+    if (authStore.getState().isAuthenticated && !navigatedRef.current) {
+      navigatedRef.current = true;
+      navigate('/app/home', { replace: true });
+    }
+  }, [navigate]);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -44,7 +52,7 @@ export default function Welcome() {
   useEffect(() => {
     if (countdown === 0 && !navigatedRef.current) {
       navigatedRef.current = true;
-      navigate('/login');
+      navigate('/login', { replace: true });
     }
   }, [countdown, navigate]);
 
@@ -111,7 +119,7 @@ export default function Welcome() {
             size="large"
             onClick={() => {
               navigatedRef.current = true;
-              navigate('/login');
+               navigate('/login', { replace: true });
             }}
             style={{ 
               background: `linear-gradient(135deg, ${contentTokens.colorPrimary} 0%, ${contentTokens.colorInfo} 100%)`,

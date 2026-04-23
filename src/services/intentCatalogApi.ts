@@ -34,6 +34,23 @@ export interface IntentCatalogEntry {
   confidence_threshold?: number;
   response_strategy?: 'direct_llm' | 'confirm_then_execute' | 'clarify_first' | 'handoff_bpa';
 
+  // ── TopIntentRAG 行動方案欄位 ──
+  action_type?: 'direct_answer' | 'tool_call' | 'process_orchestration';
+  target_agent?: 'chat' | 'tool' | 'pdca' | 'bpa' | 'ca';
+  tool_category?: 'web_search' | 'data' | 'knowledge' | 'mcp';
+  tool_name?: string;
+  pdca_id?: string;
+  ca_id?: string;
+  requires_approval?: boolean;
+  estimated_complexity?: 'low' | 'medium' | 'high';
+
+  // ── PageAction (浮動助手意圖模板) ──
+  page_type?: string;
+  suggested_text?: string;
+  side_effect?: 'none' | 'reversible' | 'destructive';
+  source?: string;
+  learn_stats?: { confirmed: number; rejected: number; modified: number; ignored: number };
+
   // ── DataAgent (NL→SQL model) ──
   table_id?: string;
   sheet_key?: string;

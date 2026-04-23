@@ -45,7 +45,6 @@ export default function SystemParamsModels() {
   const [editingProvider, setEditingProvider] = useState<ModelProvider | null>(null);
   const [syncingKeys, setSyncingKeys] = useState<Record<string, boolean>>({});
   const [form] = Form.useForm();
-  
   const [modelModalVisible, setModelModalVisible] = useState(false);
   const [editingModel, setEditingModel] = useState<LLMModel | null>(null);
   const [editingProviderKey, setEditingProviderKey] = useState<string | null>(null);
@@ -427,6 +426,7 @@ export default function SystemParamsModels() {
          open={modalVisible}
          onOk={handleModalOk}
          onCancel={handleModalCancel}
+         forceRender
        >
          <Form form={form} layout="vertical">
           <Form.Item
@@ -473,6 +473,7 @@ export default function SystemParamsModels() {
         open={modelModalVisible}
         onOk={handleModelModalOk}
         onCancel={handleModelModalCancel}
+        forceRender
       >
         <Form form={modelForm} layout="vertical">
           <Form.Item

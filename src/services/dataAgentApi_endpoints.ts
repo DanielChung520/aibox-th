@@ -154,6 +154,16 @@ export const dataAgentApi_endpoints = {
       limit: number;
     }>(`/api/v1/da/ragic/proxy/${tableId}/data`, { params: { offset, limit } }),
 
+  ragicCacheRefresh: (tableId: string) =>
+    api.post<{ code: number; data: { table_id: string; row_count: number; cached_at: string } }>(
+      `/api/v1/da/ragic/cache/${tableId}/refresh`
+    ),
+
+  ragicCacheMeta: (tableId: string) =>
+    api.get<{ code: number; data: { table_id: string; row_count: number; cached_at: string } | null }>(
+      `/api/v1/da/ragic/cache/${tableId}/meta`
+    ),
+
   importRagicMd: (data: { account: string; content: string }) =>
     api.post<{ code: number; message: string; data: RagicImportResult | null }>(
       '/api/v1/da/ragic/schema/import-md', data, { timeout: 300000 }

@@ -93,11 +93,18 @@ export default defineConfig(async () => ({
   // 1. prevent Vite from obscuring rust errors
   clearScreen: false,
   // 2. tauri expects a fixed port, fail if that port is not available
+  optimizeDeps: {
+    exclude: ['@duckdb/duckdb-wasm'],
+  },
   server: {
     port: 1420,
     strictPort: true,
     host: host || false,
     allowedHosts: ["dy.ent4i.com", "localhost"],
+    headers: {
+      'Cross-Origin-Opener-Policy': 'same-origin',
+      'Cross-Origin-Embedder-Policy': 'require-corp',
+    },
     hmr: host
       ? {
           protocol: "ws",
@@ -111,6 +118,11 @@ export default defineConfig(async () => ({
     proxy: {
       // Ragic proxy data → Rust Gateway (port 6500)
       '/api/v1/da/ragic/proxy': {
+        target: 'http://localhost:6500',
+        changeOrigin: true,
+      },
+      // Ragic cache endpoints → Rust Gateway (port 6500)
+      '/api/v1/da/ragic/cache': {
         target: 'http://localhost:6500',
         changeOrigin: true,
       },

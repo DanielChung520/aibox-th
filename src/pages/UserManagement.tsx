@@ -13,6 +13,9 @@ import { Table, Button, Space, Modal, Form, Input, Select, Popconfirm, Switch, A
 import type { MessageInstance } from 'antd/es/message/interface';
 import { PlusOutlined, EditOutlined, DeleteOutlined, KeyOutlined } from '@ant-design/icons';
 import { userApi, roleApi, User, Role } from '../services/api';
+import { useEntityPerception } from '../hooks/useEntityPerception';
+import { pageContextManager } from '../services/PageContextManager';
+import { resolvePageContext } from '../components/FloatingAssistant/types';
 
 function StatusSwitch({ userKey, status, onStatusChange, message }: { userKey: string; status: string; onStatusChange: (key: string, newStatus: string) => void; message: MessageInstance }) {
   const handleChange = async (checked: boolean) => {
@@ -45,6 +48,8 @@ export default function UserManagement() {
   const [form] = Form.useForm();
   const [passwordForm] = Form.useForm();
   const { message } = App.useApp();
+  const { dispatchEntity } = useEntityPerception({ defaultEntityType: 'user', defaultAction: 'list' });
+  const pageInfo = resolvePageContext('/app/users');
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
@@ -77,6 +82,65 @@ export default function UserManagement() {
     fetchUsers();
     fetchRoles();
   }, []);
+
+  useEffect(() => {
+    const enabledUsers = users.filter((user) => user.status === 'enabled').length;
+    const disabledUsers = users.length - enabledUsers;
+    const component = modalVisible
+      ? 'UserFormModal'
+      : passwordModalVisible
+        ? 'PasswordResetModal'
+        : 'UserTable';
+    const componentName = modalVisible
+      ? editingUser?.username || '新增用戶'
+      : passwordModalVisible
+        ? editingUser?.username || '重設密碼'
+        : '用戶列表';
+    const action = modalVisible
+      ? (editingUser ? 'edit' : 'create')
+      : passwordModalVisible
+        ? 'edit'
+        : 'list';
+
+    pageContextManager.report({
+      page: '/app/users',
+      pageName: pageInfo.name,
+      component,
+      componentName,
+      entity: editingUser?.username,
+      entityType: editingUser ? 'user' : undefined,
+      action,
+      data: {
+        total_users: users.length,
+        enabled_users: enabledUsers,
+        disabled_users: disabledUsers,
+        role_count: roles.length,
+        loading,
+        editing_user: editingUser
+          ? {
+              username: editingUser.username,
+              name: editingUser.name,
+              status: editingUser.status,
+              tier: editingUser.tier || 'general',
+              role_keys: editingUser.role_keys,
+            }
+          : undefined,
+      },
+    });
+
+    return () => {
+      pageContextManager.report({
+        page: '/app/users',
+        pageName: pageInfo.name,
+        component: undefined,
+        componentName: undefined,
+        entity: undefined,
+        entityType: undefined,
+        action: undefined,
+        data: undefined,
+      });
+    };
+  }, [users, roles, loading, modalVisible, passwordModalVisible, editingUser, pageInfo.name]);
 
   const handleAdd = () => {
     setEditingUser(null);
@@ -239,6 +303,9 @@ export default function UserManagement() {
         rowKey="_key"
         loading={loading}
         pagination={{ pageSize: 10 }}
+        onRow={(record) => ({
+          onClick: () => dispatchEntity(record._key, 'view', { username: record.username, name: record.name }),
+        })}
       />
 
       <Modal

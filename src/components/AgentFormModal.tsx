@@ -7,17 +7,21 @@
  */
 
 import { useEffect, useState } from 'react';
-import { Modal, Form, Input, Select, Switch, InputNumber, Tabs, Button, Space, App, Radio } from 'antd';
+import { Modal, Form, Input, Select, Switch, InputNumber, Tabs, Button, Space, App, Radio, Table, Popconfirm, Tag, Divider } from 'antd';
 import { iconMap } from '../utils/icons';
 import IconPicker from './IconPicker';
-import { roleApi } from '../services/api';
+import { roleApi, knowledgeApi, toolApi, daApi, agentApi } from '../services/api';
+import DemandTab from './DemandTab';
+import { trackModal, trackAgentAction } from '../utils/analytics';
+import { pageContextManager } from '../services/PageContextManager';
 
 interface Agent {
   id: string;
+  _key?: string;
   name: string;
   description: string;
   icon: string;
-  status: 'registering' | 'online' | 'maintenance' | 'deprecated';
+  status: 'registering' | 'online' | 'maintenance' | 'deprecated' | 'developing';
   usageCount: number;
   groupKey?: string;
   agentType?: string;
@@ -107,13 +111,100 @@ export default function AgentFormModal({
   const [iconPickerVisible, setIconPickerVisible] = useState(false);
   const [isThirdParty, setIsThirdParty] = useState(false);
   const [roles, setRoles] = useState<{ value: string; label: string }[]>([]);
+  const [knowledgeBases, setKnowledgeBases] = useState<{ value: string; label: string }[]>([]);
+  const [tools, setTools] = useState<{ value: string; label: string }[]>([]);
+  const [dataSources, setDataSources] = useState<{ value: string; label: string }[]>([]);
   const [visibility, setVisibility] = useState<'public' | 'private' | 'role'>('private');
+  const [intents, setIntents] = useState<any[]>([]);
+  const [intentsLoading, setIntentsLoading] = useState(false);
+  const [editingIntent, setEditingIntent] = useState<any | null>(null);
+  const [intentForm] = Form.useForm();
+  const [demandKey, setDemandKey] = useState<string | null>(null);
+  const [demandStatusColor, setDemandStatusColor] = useState<string>('#fa8c16');
+  const [currentDemand, setCurrentDemand] = useState<any>(null);
+
+  const loadIntents = (agentKey: string) => {
+    setIntentsLoading(true);
+    agentApi.listIntents(agentKey).then((res: any) => {
+      setIntents(res.data.data || []);
+    }).catch(() => {
+      message.error('載好意圖失敗');
+    }).finally(() => setIntentsLoading(false));
+  };
+
   useEffect(() => {
     roleApi.list().then((res: any) => {
       const opts = (res.data.data || []).map((r: any) => ({ value: r._key, label: r.name }));
       setRoles(opts);
     }).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (open) {
+      knowledgeApi.listRoots().then((res: any) => {
+        const opts = (res.data.data || []).map((kb: any) => ({ value: kb._key, label: kb.name }));
+        setKnowledgeBases(opts);
+      }).catch(() => {});
+      toolApi.list().then((res: any) => {
+        const opts = (res.data.data || []).map((t: any) => ({ value: t._key, label: t.name }));
+        setTools(opts);
+      }).catch(() => {});
+      daApi.listSchemaModules().then((res: any) => {
+        const opts = (res.data.data || []).map((m: any) => ({ value: m.key, label: `${m.label} (${m.source})` }));
+        setDataSources(opts);
+      }).catch(() => {});
+    }
+  }, [open]);
+
+  useEffect(() => {
+    if (open) {
+      const detail = {
+        modal: 'AgentFormModal',
+        mode,
+        agent_key: agent?._key || agent?.id,
+        agent_name: agent?.name,
+        demand: currentDemand ? {
+          key: currentDemand._key,
+          goal: currentDemand.goal,
+          expected_effect: currentDemand.expected_effect,
+          problem_description: currentDemand.problem_description,
+          status: currentDemand.status,
+        } : null,
+        action: 'open',
+      };
+      trackModal('AgentFormModal', 'open', { mode, agent_key: agent?._key || agent?.id, agent_name: agent?.name });
+      window.dispatchEvent(new CustomEvent('modal-context-change', { detail }));
+      pageContextManager.report({
+        component: 'AgentFormModal',
+        componentName: agent?.name,
+        entity: currentDemand?.goal,
+        entityType: 'demand',
+        action: 'editing',
+        data: { agent_key: agent?._key || agent?.id, demand: currentDemand },
+      });
+    }
+    return () => {
+      if (open) {
+        const detail = {
+          modal: 'AgentFormModal',
+          mode,
+          agent_key: agent?._key || agent?.id,
+          agent_name: agent?.name,
+          demand: currentDemand ? {
+            key: currentDemand._key,
+            goal: currentDemand.goal,
+            expected_effect: currentDemand.expected_effect,
+            problem_description: currentDemand.problem_description,
+            status: currentDemand.status,
+          } : null,
+          action: 'close',
+        };
+        trackModal('AgentFormModal', 'close', { mode, agent_key: agent?._key || agent?.id, agent_name: agent?.name });
+        window.dispatchEvent(new CustomEvent('modal-context-change', { detail }));
+        pageContextManager.report({ component: undefined, action: undefined });
+      }
+    };
+  }, [open, mode, currentDemand]);
 
   useEffect(() => {
     if (open && agent && mode === 'edit') {
@@ -136,6 +227,25 @@ export default function AgentFormModal({
       });
       setVisibility(agent.visibility || 'private');
       setIsThirdParty(agent.source === 'third_party');
+      loadIntents(agent.id || agent._key || '');
+
+      const agentKey = agent.id || agent._key || '';
+      agentApi.listDemands(agentKey).then((res: any) => {
+        const demands = res.data.data || [];
+        if (demands.length > 0) {
+          const latestDemand = demands[0];
+          setDemandKey(latestDemand._key);
+        } else {
+          agentApi.createDemand(agentKey, {
+            goal: '',
+            expected_effect: '',
+            problem_description: '',
+          }).then((res2: any) => {
+            const newKey = res2.data.data?._key;
+            if (newKey) setDemandKey(newKey);
+          }).catch(() => {});
+        }
+      }).catch(() => {});
     } else if (open && mode === 'create') {
       form.setFieldsValue({
         status: 'online',
@@ -160,6 +270,7 @@ export default function AgentFormModal({
   const handleSubmit = async () => {
     try {
       const values = await form.validateFields();
+      trackAgentAction(mode === 'create' ? 'create' : 'update', agent?._key || agent?.id || '', agent?.name);
       onSubmit(values);
     } catch (err) {
       message.error('請填寫必填欄位');
@@ -174,7 +285,10 @@ export default function AgentFormModal({
         okText: '刪除',
         okType: 'danger',
         cancelText: '取消',
-        onOk: () => onDelete(agent.id),
+        onOk: () => {
+          trackAgentAction('delete', agent.id, agent.name);
+          onDelete(agent.id);
+        },
       });
     }
   };
@@ -278,39 +392,24 @@ export default function AgentFormModal({
         </Form.Item>
       )}
       <Form.Item name="knowledgeBases" label="知識庫權限">
-        <Select 
-          mode="multiple" 
+        <Select
+          mode="multiple"
           placeholder="選擇可存取的知識庫"
-          options={[
-            { value: 'kb-001', label: '產品文檔' },
-            { value: 'kb-002', label: '公司政策' },
-            { value: 'kb-003', label: '技術手冊' },
-            { value: 'kb-004', label: 'FAQ' },
-          ]}
+          options={knowledgeBases}
         />
       </Form.Item>
       <Form.Item name="dataSources" label="資料權限">
-        <Select 
-          mode="multiple" 
+        <Select
+          mode="multiple"
           placeholder="選擇可存取的資料來源"
-          options={[
-            { value: 'db-sales', label: '銷售資料庫' },
-            { value: 'db-finance', label: '財務資料庫' },
-            { value: 'db-hr', label: '人資資料庫' },
-            { value: 'db-inventory', label: '庫存資料庫' },
-          ]}
+          options={dataSources}
         />
       </Form.Item>
       <Form.Item name="tools" label="工具權限">
-        <Select 
-          mode="multiple" 
+        <Select
+          mode="multiple"
           placeholder="選擇可使用的工具"
-          options={[
-            { value: 'tool-web-search', label: '網路搜尋' },
-            { value: 'tool-file-read', label: '檔案讀取' },
-            { value: 'tool-calendar', label: '行事曆' },
-            { value: 'tool-email', label: '郵件發送' },
-          ]}
+          options={tools}
         />
       </Form.Item>
     </>
@@ -336,28 +435,302 @@ export default function AgentFormModal({
   const chatTab = (
     <>
       <Form.Item name="openingLines" label="開場白">
-        <Select 
-          mode="tags" 
+        <Select
+          mode="tags"
           placeholder="輸入開場白，按 Enter 確認"
         />
       </Form.Item>
       <Form.Item name="capabilities" label="能力描述">
-        <Select 
-          mode="tags" 
+        <Select
+          mode="tags"
           placeholder="輸入能力描述，按 Enter 確認"
         />
       </Form.Item>
     </>
   );
 
+  const handleSaveIntent = async () => {
+    if (!editingIntent) return;
+    const key = agent?.id || agent?._key || '';
+    if (!key) return;
+    try {
+      if (editingIntent._key) {
+        await agentApi.updateIntent(key, editingIntent._key, editingIntent);
+        message.success('更新成功');
+      } else {
+        await agentApi.createIntent(key, editingIntent);
+        message.success('新增成功');
+      }
+      setEditingIntent(null);
+      intentForm.resetFields();
+      loadIntents(key);
+    } catch {
+      message.error('儲存失敗');
+    }
+  };
+
+  const handleDeleteIntent = async (intentKey: string) => {
+    const key = agent?.id || agent?._key || '';
+    if (!key) return;
+    try {
+      await agentApi.deleteIntent(key, intentKey);
+      message.success('刪除成功');
+      loadIntents(key);
+    } catch {
+      message.error('刪除失敗');
+    }
+  };
+
+  const handleSyncIntents = async () => {
+    const key = agent?.id || agent?._key || '';
+    if (!key) return;
+    try {
+      await agentApi.syncIntents(key);
+      message.success('同步成功');
+    } catch {
+      message.error('同步失敗');
+    }
+  };
+
+  const handleAISuggestIntents = async () => {
+    const key = agent?.id || agent?._key || '';
+    if (!key) return;
+    if (!demandKey) {
+      message.warning('請先儲存需求後再使用此功能');
+      return;
+    }
+    try {
+      const hide = message.loading('AI 正在分析需求，生成建議意圖...', 0);
+      const response = await agentApi.suggestIntents(key, demandKey);
+      hide();
+      const suggestedIntents = response.data.data || [];
+      if (suggestedIntents.length === 0) {
+        message.info('AI 未生成建議意圖，請確認需求內容是否足夠詳細');
+        return;
+      }
+      const newIntents = [...intents];
+      for (const intent of suggestedIntents) {
+        const exists = newIntents.some(
+          (i) => i.name === intent.name || i.description === intent.description
+        );
+        if (!exists) {
+          newIntents.push({ ...intent, _key: `temp_${Date.now()}_${Math.random()}` });
+        }
+      }
+      setIntents(newIntents);
+      message.success(`已新增 ${suggestedIntents.length} 個建議意圖`);
+    } catch {
+      message.error('生成建議失敗');
+    }
+  };
+
+  const intentColumns = [
+    { title: '名稱', dataIndex: 'name', key: 'name' },
+    { title: '描述', dataIndex: 'description', key: 'description', ellipsis: true },
+    {
+      title: '動作類型',
+      dataIndex: 'action_type',
+      key: 'action_type',
+      width: 120,
+      render: (t: string) => {
+        const map: Record<string, string> = { direct_answer: '直接回答', tool_call: '工具調用', process_orchestration: '流程編排' };
+        return map[t] || '-';
+      },
+    },
+    {
+      title: '目標工具',
+      dataIndex: 'tool_name',
+      key: 'tool_name',
+      width: 120,
+      render: (t: string) => t || '-',
+    },
+    {
+      title: '響應策略',
+      dataIndex: 'response_strategy',
+      key: 'response_strategy',
+      width: 100,
+      render: (t: string) => {
+        const map: Record<string, string> = { direct_llm: '直接回答', confirm_then_execute: '確認後執行', clarify_first: '先釐清', handoff_bpa: '轉交BPA' };
+        return map[t] || '-';
+      },
+    },
+    { title: '優先級', dataIndex: 'priority', key: 'priority', width: 80 },
+    {
+      title: '範例',
+      dataIndex: 'nl_examples',
+      key: 'nl_examples',
+      width: 80,
+      render: (arr: string[]) => arr?.length ? `${arr.length} 個` : '-',
+    },
+    {
+      title: '模式',
+      dataIndex: 'nl_patterns',
+      key: 'nl_patterns',
+      width: 80,
+      render: (arr: string[]) => arr?.length ? `${arr.length} 個` : '-',
+    },
+    {
+      title: '狀態',
+      dataIndex: 'status',
+      key: 'status',
+      width: 80,
+      render: (s: string) => <Tag color={s === 'enabled' ? 'green' : 'default'}>{s === 'enabled' ? '啟用' : '停用'}</Tag>,
+    },
+    {
+      title: '操作',
+      key: 'action',
+      width: 120,
+      render: (_: any, record: any) => (
+        <Space>
+          <Button size="small" onClick={() => { setEditingIntent(record); intentForm.setFieldsValue(record); }}>編輯</Button>
+          <Popconfirm title="確認刪除？" onConfirm={() => handleDeleteIntent(record._key)}>
+            <Button size="small" danger>刪除</Button>
+          </Popconfirm>
+        </Space>
+      ),
+    },
+  ];
+
+  const intentsTab = (
+    <>
+      <div style={{ marginBottom: 16, display: 'flex', gap: 8 }}>
+        <Button
+          type="primary"
+          onClick={() => {
+            setEditingIntent({ name: '', description: '', priority: 0, status: 'enabled', nl_examples: [], nl_patterns: [], action_type: undefined, tool_category: undefined, tool_name: undefined, response_strategy: undefined, target_agent: undefined, requires_approval: false });
+            intentForm.resetFields();
+          }}
+        >
+          新增意圖
+        </Button>
+        <Button onClick={handleSyncIntents}>同步到 Qdrant</Button>
+        <Button onClick={handleAISuggestIntents} disabled={!demandKey}>🤖 AI大神給建議</Button>
+      </div>
+      {editingIntent && (
+        <div style={{ border: '1px solid #d9d9d9', padding: 16, marginBottom: 16, borderRadius: 8 }}>
+          <h4>{editingIntent._key ? '編輯意圖' : '新增意圖'}</h4>
+          <Form form={intentForm} layout="vertical" initialValues={editingIntent} component="div">
+            <Space style={{ width: '100%' }}>
+              <Form.Item name="name" label="名稱" rules={[{ required: true }]} style={{ width: 200 }}>
+                <Input placeholder="例如：查詢庫存" />
+              </Form.Item>
+              <Form.Item name="description" label="描述" style={{ flex: 1 }}>
+                <Input placeholder="描述這個意圖的用途" />
+              </Form.Item>
+              <Form.Item name="priority" label="優先級" style={{ width: 100 }}>
+                <InputNumber min={0} max={100} defaultValue={0} />
+              </Form.Item>
+              <Form.Item name="status" label="狀態" style={{ width: 120 }}>
+                <Select
+                  options={[
+                    { value: 'enabled', label: '啟用' },
+                    { value: 'disabled', label: '停用' },
+                  ]}
+                />
+              </Form.Item>
+            </Space>
+
+            <Divider style={{ margin: '12px 0' }}>匹配配置</Divider>
+
+            <Form.Item name="nl_examples" label="範例語句" style={{ marginBottom: 8 }}>
+              <Input placeholder="每行一個範例，例如：還有多少庫存" />
+            </Form.Item>
+            <Form.Item name="nl_patterns" label="匹配模式" style={{ marginBottom: 8 }}>
+              <Input placeholder="每行一個模式，例如：庫存.*查|.*數量.*" />
+            </Form.Item>
+
+            <Divider style={{ margin: '12px 0' }}>動作配置</Divider>
+
+            <Space style={{ width: '100%' }}>
+              <Form.Item name="action_type" label="動作類型" style={{ width: 180 }}>
+                <Select
+                  allowClear
+                  placeholder="選擇動作類型"
+                  options={[
+                    { value: 'direct_answer', label: '直接回答' },
+                    { value: 'tool_call', label: '工具調用' },
+                    { value: 'process_orchestration', label: '流程編排' },
+                  ]}
+                />
+              </Form.Item>
+              <Form.Item name="tool_category" label="工具類別" style={{ width: 150 }}>
+                <Select
+                  allowClear
+                  placeholder="選擇類別"
+                  options={[
+                    { value: 'web_search', label: '網路搜尋' },
+                    { value: 'data', label: '資料查詢' },
+                    { value: 'knowledge', label: '知識庫' },
+                    { value: 'mcp', label: 'MCP工具' },
+                  ]}
+                />
+              </Form.Item>
+              <Form.Item name="tool_name" label="目標工具" style={{ width: 180 }}>
+                <Input placeholder="工具名稱" />
+              </Form.Item>
+              <Form.Item name="target_agent" label="目標代理" style={{ width: 120 }}>
+                <Select
+                  allowClear
+                  placeholder="選擇代理"
+                  options={[
+                    { value: 'chat', label: 'Chat' },
+                    { value: 'tool', label: 'Tool' },
+                    { value: 'pdca', label: 'PDCA' },
+                    { value: 'bpa', label: 'BPA' },
+                    { value: 'ca', label: 'CA' },
+                  ]}
+                />
+              </Form.Item>
+            </Space>
+
+            <Space style={{ width: '100%' }}>
+              <Form.Item name="response_strategy" label="響應策略" style={{ width: 180 }}>
+                <Select
+                  allowClear
+                  placeholder="選擇策略"
+                  options={[
+                    { value: 'direct_llm', label: '直接回答' },
+                    { value: 'confirm_then_execute', label: '確認後執行' },
+                    { value: 'clarify_first', label: '先釐清' },
+                    { value: 'handoff_bpa', label: '轉交BPA' },
+                  ]}
+                />
+              </Form.Item>
+              <Form.Item name="requires_approval" label="需要審批" valuePropName="checked">
+                <Switch />
+              </Form.Item>
+            </Space>
+
+            <Space style={{ marginTop: 12 }}>
+              <Button type="primary" onClick={handleSaveIntent}>儲存</Button>
+              <Button onClick={() => { setEditingIntent(null); intentForm.resetFields(); }}>取消</Button>
+            </Space>
+          </Form>
+        </div>
+      )}
+      <Table
+        dataSource={intents}
+        columns={intentColumns}
+        rowKey="_key"
+        loading={intentsLoading}
+        pagination={false}
+        size="small"
+      />
+    </>
+  );
+
   return (
     <>
-       <Modal
-         title={mode === 'create' ? '新增 Agent' : '編輯 Agent'}
-         open={open}
+        <Modal
+          title={
+            <span>{mode === 'create' ? '新增 Agent' : `編輯 Agent${agent?.name ? ` — ${agent.name}` : ''}`}</span>
+          }
+          open={open}
          onCancel={onCancel}
-         width={720}
-         forceRender
+width="60vw"
+          style={{ top: 20 }}
+          styles={{ body: { minHeight: '60vh' } }}
+          forceRender
          footer={
            <Space>
              {mode === 'edit' && onDelete && (
@@ -392,6 +765,34 @@ export default function AgentFormModal({
                 label: '對話配置',
                 children: chatTab,
               },
+              {
+                key: 'intents',
+                label: '意圖表',
+                children: intentsTab,
+              },
+              ...(mode === 'edit' && demandKey ? [{
+                key: 'demand',
+                label: (
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    需求
+                    <span style={{
+                      width: 8,
+                      height: 8,
+                      borderRadius: '50%',
+                      background: demandStatusColor,
+                      display: 'inline-block',
+                    }} />
+                  </span>
+                ),
+                children: (
+                  <DemandTab
+                    agentKey={agent?.id || agent?._key || ''}
+                    demandKey={demandKey}
+                    onStatusChange={setDemandStatusColor}
+                    onDemandChange={setCurrentDemand}
+                  />
+                ),
+              }] : []),
             ]}
           />
         </Form>

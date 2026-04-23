@@ -7,7 +7,7 @@
  * @version     1.3.0
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Card, Input, Button, Table, Tag, Space, Typography, Spin, Alert, Row, Col, Statistic, App, Tabs, Descriptions, Result, theme, Collapse } from 'antd';
 import {
   PlayCircleOutlined, ClearOutlined, DatabaseOutlined, TableOutlined,
@@ -16,6 +16,9 @@ import {
 } from '@ant-design/icons';
 import { dataAgentApi, RagicNLQueryResponse } from '../../services/dataAgentApi';
 import { useContentTokens } from '../../contexts/AppThemeProvider';
+import { useEntityPerception } from '../../hooks/useEntityPerception';
+import { pageContextManager } from '../../services/PageContextManager';
+import { resolvePageContext } from '../../components/FloatingAssistant/types';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -117,10 +120,65 @@ export default function QueryPlayground() {
   const { message } = App.useApp();
   const { token } = theme.useToken();
   const contentTokens = useContentTokens();
+  const { dispatch } = useEntityPerception({ defaultEntityType: 'query', defaultAction: 'list' });
+  const pageInfo = resolvePageContext('/app/data-agent/playground');
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<RagicNLQueryResponse | null>(null);
   const [activeTab, setActiveTab] = useState('result');
+
+  useEffect(() => {
+    const sampleRecord = result?.result?.records?.[0];
+    const sampleFields = sampleRecord
+      ? Object.entries(sampleRecord.fields || {})
+        .filter(([key]) => !key.startsWith('_'))
+        .slice(0, 5)
+        .reduce<Record<string, unknown>>((acc, [key, value]) => {
+          acc[key] = value;
+          return acc;
+        }, {})
+      : undefined;
+
+    pageContextManager.report({
+      page: '/app/data-agent/playground',
+      pageName: pageInfo.name,
+      component: result ? 'QueryResultPanel' : 'QueryEditor',
+      componentName: result?.intent?.table_key || '自然語言查詢',
+      entity: result?.intent?.intent_id || query || undefined,
+      entityType: query.trim() ? 'query' : undefined,
+      action: loading ? 'execute' : result ? 'view' : 'list',
+      data: {
+        current_query: query.trim() || undefined,
+        status: result?.status,
+        active_tab: activeTab,
+        record_count: result?.result?.record_count,
+        execution_time_ms: result?.result?.execution_time_ms,
+        matched_intent: result?.intent
+          ? {
+              intent_id: result.intent.intent_id,
+              score: result.intent.score,
+              action: result.intent.action,
+              table_key: result.intent.table_key,
+            }
+          : undefined,
+        translated_filters: result?.metadata?.translated_params?.where?.slice(0, 5),
+        sample_record: sampleFields,
+      },
+    });
+
+    return () => {
+      pageContextManager.report({
+        page: '/app/data-agent/playground',
+        pageName: pageInfo.name,
+        component: undefined,
+        componentName: undefined,
+        entity: undefined,
+        entityType: undefined,
+        action: undefined,
+        data: undefined,
+      });
+    };
+  }, [query, loading, result, activeTab, pageInfo.name]);
 
   const quickTemplates = [
     '查詢所有採購訂單',
@@ -147,7 +205,14 @@ export default function QueryPlayground() {
       });
       const normalized = normalizeResponse(res.data);
       setResult(normalized);
-      if (normalized.status === 'success') setActiveTab('result');
+      if (normalized.status === 'success') {
+        setActiveTab('result');
+        dispatch('query', q, 'execute', {
+          record_count: normalized.result?.record_count ?? 0,
+          execution_time_ms: normalized.result?.execution_time_ms ?? 0,
+          intent_id: normalized.intent?.intent_id,
+        });
+      }
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : '查詢執行失敗';
       setResult({
@@ -166,7 +231,7 @@ export default function QueryPlayground() {
     } finally {
       setLoading(false);
     }
-  }, [query, message]);
+  }, [query, message, dispatch]);
 
   const handleClear = () => {
     setQuery('');

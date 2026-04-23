@@ -10,6 +10,12 @@ html, body, #root {
   overflow: hidden;
 }
 
+html.ai-assistant-window,
+html.ai-assistant-window body,
+html.ai-assistant-window #root {
+  background: transparent !important;
+}
+
 .ant-menu-dark .ant-menu-submenu-title:hover {
   background: rgba(59, 130, 246, 0.3) !important;
 }

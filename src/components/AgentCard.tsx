@@ -24,7 +24,7 @@ interface Agent {
   name: string;
   description: string;
   icon: string;
-  status: 'registering' | 'online' | 'maintenance' | 'deprecated';
+  status: 'registering' | 'online' | 'maintenance' | 'deprecated' | 'developing';
   usageCount: number;
   groupKey: string;
 }
@@ -50,6 +50,7 @@ const statusColors: Record<string, { color: string; text: string }> = {
   online: { color: 'green', text: '在線' },
   maintenance: { color: 'gold', text: '維修中' },
   deprecated: { color: 'red', text: '已作廢' },
+  developing: { color: 'blue', text: '開發中' },
 };
 
 export default function AgentCard({ 
@@ -80,21 +81,28 @@ export default function AgentCard({
   const metaColor = contentTokens.textSecondary;
 
   const statusInfo = statusColors[agent.status] || { color: 'default', text: '未知' };
-  const IconComponent = agent.icon ? iconMap[agent.icon] : null;
+  const isIconUrl = agent.icon?.startsWith('http') || agent.icon?.startsWith('/');
+  const IconComponent = !isIconUrl && agent.icon ? iconMap[agent.icon] : null;
 
   const menuItems = [
     {
       key: 'edit',
       icon: <EditOutlined />,
       label: '編輯',
-      onClick: () => onEdit?.(agent.id),
+      onClick: (e: any) => {
+        e.domEvent?.stopPropagation();
+        onEdit?.(agent.id);
+      },
     },
     {
       key: 'delete',
       icon: <DeleteOutlined />,
       label: '刪除',
       danger: true,
-      onClick: () => onDelete?.(agent.id),
+      onClick: (e: any) => {
+        e.domEvent?.stopPropagation();
+        onDelete?.(agent.id);
+      },
     },
   ];
 
@@ -117,22 +125,32 @@ export default function AgentCard({
       onClick={() => {
         if (isDisabled || actionDisabled) return;
         onCardClick?.(agent.id);
-        (onAction || onChat)?.(agent.id);
       }}
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{ 
-            width: 48, 
-            height: 48, 
-            borderRadius: 8, 
+          <div style={{
+            width: 96,
+            height: 96,
+            borderRadius: 8,
             background: iconBgColor,
-            display: 'flex', 
-            alignItems: 'center', 
+            display: 'flex',
+            alignItems: 'center',
             justifyContent: 'center',
-            fontSize: 24,
+            fontSize: 48,
+            overflow: 'hidden',
           }}>
-            {IconComponent ? <IconComponent style={{ color: iconColor }} /> : '🤖'}
+            {isIconUrl ? (
+              <img
+                src={agent.icon}
+                alt={agent.name}
+                style={{ width: 48, height: 48, objectFit: 'contain' }}
+              />
+            ) : IconComponent ? (
+              <IconComponent style={{ color: iconColor }} />
+            ) : (
+              '🤖'
+            )}
           </div>
           <div>
             <div style={{ 

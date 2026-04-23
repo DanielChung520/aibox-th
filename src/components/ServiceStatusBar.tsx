@@ -11,7 +11,7 @@
 import { useState, useEffect, useCallback, useSyncExternalStore } from 'react';
 import { Popover, message } from 'antd';
 import { CheckCircleOutlined, WarningOutlined, CloseCircleOutlined, ReloadOutlined } from '@ant-design/icons';
-import { servicesApi, healthApi, type ServiceStatus, type HealthServices } from '../services/api';
+import { servicesApi, healthApi, type ServiceStatus, type HealthServices, type ServiceInfo } from '../services/api';
 import { useContentTokens, useShellTokens } from '../contexts/AppThemeProvider';
 import { authStore } from '../stores/auth';
 
@@ -21,13 +21,12 @@ interface ServiceLight {
   name: string;
   displayName: string;
   color: LightColor;
-  latencyMs: number | null;
+  startedAt: string | null;
 }
 
-function svcStatusToColor(status: ServiceStatus, latencyMs: number | null): LightColor {
+function svcStatusToColor(status: ServiceStatus): LightColor {
   if (status === 'stopped' || status === 'error') return 'red';
   if (status === 'starting' || status === 'stopping') return 'yellow';
-  if (latencyMs !== null && latencyMs > 1000) return 'yellow';
   return 'green';
 }
 
@@ -48,7 +47,7 @@ const INFRA_DISPLAY_NAMES: Record<keyof HealthServices, string> = {
   qdrant: 'Qdrant',
 };
 
-const HEARTBEAT_INTERVAL_MS = 30_000;
+const HEARTBEAT_INTERVAL_MS = 5 * 60 * 1000; // 5 分鐘
 
 const COLOR_LABEL: Record<LightColor, string> = {
   green: '正常',
@@ -68,7 +67,6 @@ export default function ServiceStatusBar() {
   const [infraLights, setInfraLights] = useState<ServiceLight[]>([]);
   const [aiLights, setAiLights] = useState<ServiceLight[]>([]);
   const [apiUnreachable, setApiUnreachable] = useState(false);
-  const [lastCheck, setLastCheck] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [restartingSet, setRestartingSet] = useState<Set<string>>(new Set());
 
@@ -77,6 +75,20 @@ export default function ServiceStatusBar() {
     yellow: contentTokens.colorWarning,
     red: contentTokens.colorError,
   };
+
+  function formatUptime(isoString: string | null): string {
+    if (!isoString) return '-';
+    const started = new Date(isoString).getTime();
+    const elapsed = Math.floor((Date.now() - started) / 1000);
+    if (elapsed < 0) return '-';
+    if (elapsed < 60) return `${elapsed}s`;
+    const minutes = Math.floor(elapsed / 60);
+    if (minutes < 60) return `${minutes}m`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h${minutes % 60}m`;
+    const days = Math.floor(hours / 24);
+    return `${days}d${hours % 24}h`;
+  }
 
   const fetchStatuses = useCallback(async () => {
     const TIMEOUT_MS = 8_000;
@@ -101,7 +113,7 @@ export default function ServiceStatusBar() {
           name: key,
           displayName: INFRA_DISPLAY_NAMES[key] ?? key,
           color: 'red' as LightColor,
-          latencyMs: null,
+          startedAt: null,
         }))
       );
     } else if (healthResult.status >= 200 && healthResult.status < 300) {
@@ -113,7 +125,7 @@ export default function ServiceStatusBar() {
           name: key,
           displayName: INFRA_DISPLAY_NAMES[key] ?? key,
           color: boolToColor(ok),
-          latencyMs: null,
+          startedAt: null,
         }))
       );
     } else {
@@ -122,7 +134,7 @@ export default function ServiceStatusBar() {
           name: key,
           displayName: INFRA_DISPLAY_NAMES[key] ?? key,
           color: 'red' as LightColor,
-          latencyMs: null,
+          startedAt: null,
         }))
       );
     }
@@ -133,19 +145,22 @@ export default function ServiceStatusBar() {
           name: 'ai_services',
           displayName: 'AI 服務群組',
           color: 'red' as LightColor,
-          latencyMs: null,
+          startedAt: null,
         },
       ]);
     } else if (servicesResult.status >= 200 && servicesResult.status < 300) {
       reachable = true;
       const services = servicesResult.data.services ?? [];
       setAiLights(
-        services.map((svc: { name: string; display_name: string; status: ServiceStatus; latency_ms: number | null }) => ({
-          name: svc.name,
-          displayName: svc.display_name,
-          color: svcStatusToColor(svc.status, svc.latency_ms ?? null),
-          latencyMs: svc.latency_ms ?? null,
-        }))
+        services.map((svc) => {
+          const service = svc as ServiceInfo & { started_at?: string | null };
+          return {
+            name: service.name,
+            displayName: service.display_name,
+            color: svcStatusToColor(service.status),
+            startedAt: service.started_at ?? null,
+          };
+        })
       );
     } else {
       setAiLights([
@@ -153,7 +168,7 @@ export default function ServiceStatusBar() {
           name: 'ai_services',
           displayName: 'AI 服務群組',
           color: 'red' as LightColor,
-          latencyMs: null,
+          startedAt: null,
         },
       ]);
     }
@@ -163,7 +178,6 @@ export default function ServiceStatusBar() {
     }
 
     setApiUnreachable(!reachable);
-    setLastCheck(new Date().toLocaleTimeString());
     setLoading(false);
   }, []);
 
@@ -234,11 +248,9 @@ export default function ServiceStatusBar() {
       <span style={{ color: colorHex[light.color], fontSize: 12, fontWeight: 500 }}>
         {COLOR_LABEL[light.color]}
       </span>
-      {light.latencyMs !== null && (
-        <span style={{ color: contentTokens.textSecondary, fontSize: 11, minWidth: 50, textAlign: 'right' }}>
-          {light.latencyMs} ms
-        </span>
-      )}
+      <span style={{ color: contentTokens.textSecondary, fontSize: 11, minWidth: 50, textAlign: 'right' }}>
+        {formatUptime(light.startedAt)}
+      </span>
       {isAdmin && restartable && (
         <ReloadOutlined
           spin={restartingSet.has(light.name)}
@@ -294,16 +306,19 @@ export default function ServiceStatusBar() {
         </div>
       )}
 
-      {lastCheck && (
-        <div style={{ marginTop: 6, fontSize: 11, color: contentTokens.textSecondary, textAlign: 'right' }}>
-          最後檢查：{lastCheck}
-        </div>
-      )}
     </div>
   );
 
   return (
-    <Popover content={popoverContent} title="服務狀態" trigger="click" placement="bottomRight">
+    <Popover
+      content={popoverContent}
+      title="服務狀態"
+      trigger="click"
+      placement="bottomRight"
+      onOpenChange={(open) => {
+        if (open) void fetchStatuses();
+      }}
+    >
       <span
         style={{
           display: 'inline-flex',

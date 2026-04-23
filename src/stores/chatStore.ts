@@ -1,9 +1,9 @@
 /**
  * @file        任務聊天狀態管理
  * @description 管理聊天工作階段、訊息列表、模型供應商與 SSE 串流狀態
- * @lastUpdate  2026-03-27 12:12:03
+ * @lastUpdate  2026-04-23 20:09:00
  * @author      Daniel Chung
- * @version     1.0.0
+ * @version     1.5.0
  */
 
 import {
@@ -12,46 +12,24 @@ import {
   FileStatusPayload,
   ModelProvider,
   SendMessageRequest,
-  SessionFile,
   chatApi,
   modelProviderApi,
   paramsApi,
-  sessionFilesApi,
 } from '../services/api';
 import { SSEConnection, sendMessageSSE } from '../services/sseManager';
-
-interface ChatState {
-  sessions: ChatSession[];
-  activeSessionKey: string | null;
-  messages: ChatMessage[];
-  streamingContent: string;
-  streamingThinking: string;
-  isStreaming: boolean;
-  isLoadingSessions: boolean;
-  selectedProvider: string | null;
-  providers: ModelProvider[];
-  greeting: string;
-  chatDefaults: Record<string, string>;
-  uploadedFiles: SessionFile[];
-}
+import { ChatState, INITIAL_CHAT_STATE } from './chatStoreTypes';
+import type { AssistantContextPayload } from '../types/assistantContext';
+import {
+  loadSessionFiles as loadFiles,
+  uploadFile as uploadFileHelper,
+  deleteFile as deleteFileHelper,
+  applyFileStatusUpdate as applyFileUpdate,
+} from './chatStoreFiles';
 
 class ChatStore {
   namespace: string = 'default';
 
-  private state: ChatState = {
-    sessions: [],
-    activeSessionKey: null,
-    messages: [],
-    streamingContent: '',
-    streamingThinking: '',
-    isStreaming: false,
-    isLoadingSessions: false,
-    selectedProvider: null,
-    providers: [],
-    greeting: '',
-    chatDefaults: {},
-    uploadedFiles: [],
-  };
+  private state: ChatState = { ...INITIAL_CHAT_STATE };
 
   private listeners: Set<() => void> = new Set();
 
@@ -71,6 +49,8 @@ class ChatStore {
   }
 
   resetCurrentSession() {
+    this.activeConnection?.abort();
+    this.activeConnection = null;
     this.setState({
       messages: [],
       uploadedFiles: [],
@@ -80,14 +60,31 @@ class ChatStore {
     });
   }
 
+  addLocalMessage(role: 'user' | 'assistant' | 'system', content: string): string {
+    const key = `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const msg: ChatMessage = {
+      _key: key,
+      session_key: this.state.activeSessionKey || '',
+      role,
+      content,
+      thinking: null,
+      tokens: null,
+      created_at: new Date().toISOString(),
+    };
+    this.setState({ messages: [...this.state.messages, msg] });
+    return key;
+  }
+
+  removeMessageByKey(key: string) {
+    this.setState({ messages: this.state.messages.filter((m) => m._key !== key) });
+  }
+
   private lastFinishedContent: string = '';
+
+  private activeConnection: SSEConnection | null = null;
 
   private setState(next: Partial<ChatState>) {
     this.state = { ...this.state, ...next };
-    this.notify();
-  }
-
-  private notify() {
     this.listeners.forEach((listener) => listener());
   }
 
@@ -96,25 +93,69 @@ class ChatStore {
   }
 
   private getDefaultModel(): string | undefined {
-    const model = this.state.chatDefaults['task_chat.default_model'];
-    return model || undefined;
+    return this.state.chatDefaults['task_chat.default_model'] || undefined;
   }
 
-  private getDefaultTemperature(): number | undefined {
-    const raw = this.state.chatDefaults['task_chat.temperature'];
-    const parsed = raw ? Number(raw) : Number.NaN;
-    return Number.isFinite(parsed) ? parsed : undefined;
-  }
-
-  private getDefaultMaxTokens(): number | undefined {
-    const raw = this.state.chatDefaults['task_chat.max_tokens'];
+  private getDefaultNumber(key: string): number | undefined {
+    const raw = this.state.chatDefaults[key];
     const parsed = raw ? Number(raw) : Number.NaN;
     return Number.isFinite(parsed) ? parsed : undefined;
   }
 
   private getProviderByCode(code: string | null): ModelProvider | undefined {
-    if (!code) return undefined;
-    return this.state.providers.find((provider) => provider.code === code);
+    return code ? this.state.providers.find((p) => p.code === code) : undefined;
+  }
+
+  private parseAssistantChatModel(raw: string | undefined): { provider?: string; model?: string } {
+    if (!raw) {
+      return {};
+    }
+
+    const trimmed = raw.trim();
+    if (!trimmed) {
+      return {};
+    }
+
+    const separatorIndex = trimmed.indexOf(':');
+    if (separatorIndex <= 0 || separatorIndex === trimmed.length - 1) {
+      return { model: trimmed };
+    }
+
+    return {
+      provider: trimmed.slice(0, separatorIndex),
+      model: trimmed.slice(separatorIndex + 1),
+    };
+  }
+
+  private async resolveChatTarget(): Promise<{ provider?: string; model?: string }> {
+    let provider = this.state.selectedProvider ?? this.getDefaultProviderCode() ?? undefined;
+    let providerConfig = this.getProviderByCode(provider ?? null);
+    let enabledModel = providerConfig?.models?.find((m) => m.status === 'enabled')?.model_id;
+    let model = this.getDefaultModel() ?? enabledModel ?? providerConfig?.models?.[0]?.model_id;
+
+    if (this.namespace === 'aiq') {
+      try {
+        const response = await paramsApi.get('floating_assistant.chatModel');
+        const raw = response.data?.data?.param_value;
+        const preferred = this.parseAssistantChatModel(raw);
+
+        if (preferred.provider) {
+          provider = preferred.provider;
+          providerConfig = this.getProviderByCode(provider ?? null);
+          enabledModel = providerConfig?.models?.find((m) => m.status === 'enabled')?.model_id;
+        }
+
+        if (preferred.model) {
+          model = preferred.model;
+        } else if (preferred.provider) {
+          model = enabledModel ?? providerConfig?.models?.[0]?.model_id ?? model;
+        }
+      } catch {
+        // fallback to task_chat defaults when assistant-specific param is unavailable
+      }
+    }
+
+    return { provider, model };
   }
 
   async loadProviders(): Promise<void> {
@@ -213,30 +254,16 @@ class ChatStore {
   }
 
   addUserMessage(content: string) {
-    const sessionKey = this.state.activeSessionKey ?? '';
-    const message: ChatMessage = {
-      _key: `local-user-${Date.now()}`,
-      session_key: sessionKey,
-      role: 'user',
-      content,
-      thinking: null,
-      tokens: null,
-      created_at: new Date().toISOString(),
-    };
-    this.setState({ messages: [...this.state.messages, message] });
+    this.addLocalMessage('user', content);
   }
 
   truncateAfter(key: string) {
     const idx = this.state.messages.findIndex((m) => m._key === key);
-    if (idx < 0) return;
-    this.setState({ messages: this.state.messages.slice(0, idx + 1) });
+    if (idx >= 0) this.setState({ messages: this.state.messages.slice(0, idx + 1) });
   }
 
   updateMessage(key: string, content: string) {
-    const messages = this.state.messages.map((m) =>
-      m._key === key ? { ...m, content } : m,
-    );
-    this.setState({ messages });
+    this.setState({ messages: this.state.messages.map((m) => m._key === key ? { ...m, content } : m) });
   }
 
   async retryMessage(key: string): Promise<SSEConnection | null> {
@@ -259,6 +286,8 @@ class ChatStore {
   }
 
   stopStreaming() {
+    this.activeConnection?.abort();
+    this.activeConnection = null;
     this.setState({ isStreaming: false, streamingContent: '', streamingThinking: '' });
   }
 
@@ -277,6 +306,7 @@ class ChatStore {
     this.lastFinishedContent = content;
     const thinking = thinkingContent.trim();
     if (!content) {
+      this.activeConnection = null;
       this.setState({ isStreaming: false, streamingContent: '', streamingThinking: '' });
       return;
     }
@@ -298,6 +328,7 @@ class ChatStore {
       streamingContent: '',
       streamingThinking: '',
     });
+    this.activeConnection = null;
 
     void this.generateSessionTitle();
     void this.loadSessions();
@@ -321,17 +352,16 @@ class ChatStore {
       streamingThinking: '',
       messages: [...this.state.messages, message],
     });
+    this.activeConnection = null;
   }
 
-  async sendMessage(content: string): Promise<SSEConnection | null> {
+  async sendMessage(content: string, assistantContext?: AssistantContextPayload): Promise<SSEConnection | null> {
     const trimmed = content.trim();
     if (!trimmed || this.state.isStreaming) {
       return null;
     }
 
-    const selectedProvider = this.state.selectedProvider ?? this.getDefaultProviderCode() ?? undefined;
-    const providerConfig = this.getProviderByCode(selectedProvider ?? null);
-    const resolvedModel = providerConfig?.models?.[0]?.model_id ?? this.getDefaultModel();
+    const { provider: selectedProvider, model: resolvedModel } = await this.resolveChatTarget();
 
     let activeSessionKey = this.state.activeSessionKey;
     if (!activeSessionKey) {
@@ -346,12 +376,15 @@ class ChatStore {
       content: trimmed,
       provider: selectedProvider,
       model: resolvedModel,
-      temperature: this.getDefaultTemperature(),
-      max_tokens: this.getDefaultMaxTokens(),
+      temperature: this.getDefaultNumber('task_chat.temperature'),
+      max_tokens: this.getDefaultNumber('task_chat.max_tokens'),
+      assistant_context: assistantContext,
     };
 
     let streamedContent = '';
     let streamedThinking = '';
+
+    this.activeConnection?.abort();
 
     const connection = sendMessageSSE(activeSessionKey, request, {
       onChunk: (delta) => {
@@ -370,77 +403,42 @@ class ChatStore {
       },
     });
 
+    this.activeConnection = connection;
+
     return connection;
   }
 
   async updateSessionTitle(sessionKey: string, title: string): Promise<void> {
     const response = await chatApi.updateSession(sessionKey, { title });
     const updated = response.data.data;
-    const sessions = this.state.sessions.map((session) => (session._key === updated._key ? updated : session));
+    const sessions = this.state.sessions.map((s) => (s._key === updated._key ? updated : s));
     this.setState({ sessions });
   }
 
   async generateSessionTitle(): Promise<void> {
     const sessionKey = this.state.activeSessionKey;
-    if (!sessionKey) {
-      return;
-    }
-
-    const targetSession = this.state.sessions.find((session) => session._key === sessionKey);
-    if (targetSession?.title) {
-      return;
-    }
-
-    const firstUserMessage = this.state.messages.find((message) => message.role === 'user' && message.content.trim());
-    if (!firstUserMessage) {
-      return;
-    }
-
-    const rawTitle = firstUserMessage.content.trim();
-    const title = rawTitle.length > 20 ? `${rawTitle.slice(0, 20)}...` : rawTitle;
-    if (!title) {
-      return;
-    }
-
-    await this.updateSessionTitle(sessionKey, title);
+    if (!sessionKey) return;
+    if (this.state.sessions.find((s) => s._key === sessionKey)?.title) return;
+    const first = this.state.messages.find((m) => m.role === 'user' && m.content.trim());
+    if (!first) return;
+    const raw = first.content.trim();
+    await this.updateSessionTitle(sessionKey, raw.length > 20 ? `${raw.slice(0, 20)}...` : raw);
   }
 
   async loadSessionFiles(sessionKey: string): Promise<void> {
-    try {
-      const response = await sessionFilesApi.list(sessionKey);
-      this.setState({ uploadedFiles: response.data.data || [] });
-    } catch {
-      // ignore - file list load failure
-    }
+    await loadFiles(sessionKey, (next) => this.setState(next));
   }
 
   async uploadFile(sessionKey: string, file: File): Promise<void> {
-    const formData = new FormData();
-    formData.append('file', file);
-    const response = await sessionFilesApi.upload(sessionKey, formData);
-    const uploaded = response.data.data;
-    this.setState({ uploadedFiles: [...this.state.uploadedFiles, uploaded] });
+    await uploadFileHelper(sessionKey, file, this.state.uploadedFiles, (next) => this.setState(next));
   }
 
   async deleteFile(sessionKey: string, fileKey: string): Promise<void> {
-    await sessionFilesApi.delete(sessionKey, fileKey);
-    this.setState({
-      uploadedFiles: this.state.uploadedFiles.filter((f) => f.file_key !== fileKey),
-    });
+    await deleteFileHelper(sessionKey, fileKey, this.state.uploadedFiles, (next) => this.setState(next));
   }
 
   applyFileStatusUpdate(payload: FileStatusPayload): void {
-    const files = this.state.uploadedFiles.map((f) => {
-      if (f.file_key !== payload.file_key) return f;
-      return {
-        ...f,
-        ...(payload.vector_status !== undefined && { vector_status: payload.vector_status }),
-        ...(payload.graph_status !== undefined && { graph_status: payload.graph_status }),
-        ...(payload.failed_reason !== undefined && { failed_reason: payload.failed_reason }),
-        ...(payload.graph_stats !== undefined && { graph_stats: payload.graph_stats }),
-      };
-    });
-    this.setState({ uploadedFiles: files });
+    applyFileUpdate(payload, this.state.uploadedFiles, (next) => this.setState(next));
   }
 }
 
@@ -454,7 +452,8 @@ export function createNamespacedChatStore(namespace: string) {
 
 const taskChatStore = createNamespacedChatStore('task');
 const ragicChatStore = createNamespacedChatStore('ragic');
+const aiqChatStore = createNamespacedChatStore('aiq');
 
-export { taskChatStore, ragicChatStore };
+export { taskChatStore, ragicChatStore, aiqChatStore };
 
-export type { ChatState };
+export type { ChatState } from './chatStoreTypes';

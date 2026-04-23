@@ -1,15 +1,15 @@
 /**
  * @file        應用入口
  * @description 路由配置、ConfigProvider、主題供應
- * @lastUpdate  2026-03-28 12:19:04
+ * @lastUpdate  2026-04-23 09:52:39
  * @author      Daniel Chung
- * @version     2.2.0
+ * @version     2.3.2
  */
 
 import { useState, useEffect, ReactNode } from 'react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { paramsApi } from './services/api';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { ConfigProvider, App as AntApp, theme } from 'antd';
 import { AppThemeProvider, useEffectiveTheme, useContentTokens } from './contexts/AppThemeProvider';
 import Login from './pages/Login';
@@ -35,8 +35,52 @@ import KnowledgeBaseManagement from './pages/knowledge/KnowledgeBaseManagement';
 import KnowledgeBaseDetail from './pages/knowledge/KnowledgeBaseDetail';
 import IntentCatalog from './pages/IntentCatalog';
 import MermaidVerification from './pages/MermaidVerification';
+import PlatformLINE from './pages/PlatformLINE';
+import PlatformBotPage from './pages/PlatformBotPage';
+
 import { authStore } from './stores/auth';
 import AppUpdater from './components/AppUpdater';
+import FloatingAssistantButton from './components/FloatingAssistantButton';
+import AIAssistantWindow from './pages/AIAssistantWindow';
+import { setupAssistantBridge } from './services/assistantBridge';
+import { setupPageViewTracking, setupBeforeUnload } from './utils/analytics';
+import { actionTrail } from './services/actionTrail';
+import { resolvePageContext } from './components/FloatingAssistant/types';
+
+function AppPerceptionBridge() {
+  const location = useLocation();
+
+  useEffect(() => {
+    const pageContext = resolvePageContext(location.pathname);
+    const baseMeta: Record<string, unknown> = {
+      path: location.pathname,
+      pageName: pageContext.name,
+      pageDescription: pageContext.description,
+    };
+
+    actionTrail.setCurrentPage(location.pathname);
+    actionTrail.record('page_navigate', baseMeta);
+
+    return undefined;
+  }, [location.pathname]);
+
+  useEffect(() => {
+    actionTrail.startAutoFlush();
+    return () => actionTrail.stopAutoFlush();
+  }, []);
+
+  return null;
+}
+
+function GlobalFloatingAssistantButton() {
+  const location = useLocation();
+
+  if (location.pathname === '/ai-assistant') {
+    return null;
+  }
+
+  return <FloatingAssistantButton />;
+}
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(authStore.getState().isAuthenticated);
@@ -58,6 +102,14 @@ function ProtectedRoute({ children }: { children: ReactNode }) {
 function AppContent() {
   const effectiveTheme = useEffectiveTheme();
   const contentTokens = useContentTokens();
+  const [isAuthenticated, setIsAuthenticated] = useState(authStore.getState().isAuthenticated);
+
+  useEffect(() => {
+    const unsubscribe = authStore.subscribe(() => {
+      setIsAuthenticated(authStore.getState().isAuthenticated);
+    });
+    return unsubscribe;
+  }, []);
 
   useEffect(() => {
     paramsApi.list().then((res: any) => {
@@ -67,11 +119,24 @@ function AppContent() {
         try {
           getCurrentWindow().setTitle(appName.param_value);
         } catch (_) {
-          // non-Tauri environment
         }
       }
     }).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    const cleanup = setupPageViewTracking();
+    setupBeforeUnload();
+    return cleanup;
+  }, []);
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      return undefined;
+    }
+
+    return setupAssistantBridge(() => window.location.pathname);
+  }, [isAuthenticated]);
 
   const algorithm = effectiveTheme === 'dark' ? theme.darkAlgorithm : theme.defaultAlgorithm;
 
@@ -133,10 +198,14 @@ function AppContent() {
     >
       <BrowserRouter>
         <AntApp>
+          <AppPerceptionBridge />
           <AppUpdater />
+          <GlobalFloatingAssistantButton />
           <Routes>
             <Route path="/" element={<Welcome />} />
             <Route path="/login" element={<Login />} />
+            <Route path="/ai-assistant" element={<AIAssistantWindow />} />
+
             <Route
               path="/app"
               element={
@@ -154,6 +223,8 @@ function AppContent() {
             <Route path="lead-management" element={<LeadManagement />} />
               <Route path="browse-agent" element={<BrowseAgent />} />
               <Route path="browse-tools" element={<BrowseTools />} />
+              <Route path="platforms/line" element={<PlatformLINE />} />
+              <Route path="platforms/:platform" element={<PlatformBotPage />} />
               <Route path="task-session/chat/:sessionKey?" element={<TaskSessionChat />} />
               <Route path="task-session/history" element={<TaskSessionHistory />} />
               <Route path="task-session/scheduled" element={<TaskSessionScheduled />} />

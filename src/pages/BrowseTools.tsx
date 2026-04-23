@@ -7,10 +7,11 @@
  */
 
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Tabs, Input, Row, Col, Button, Empty, App, Spin, Table, Tag, Tooltip, Space, Segmented } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { 
-  SearchOutlined, PlusOutlined, ReloadOutlined, 
+  SearchOutlined, PlusOutlined, ReloadOutlined,
   AppstoreOutlined, UnorderedListOutlined,
   SafetyCertificateOutlined, CheckCircleOutlined, StopOutlined,
   EditOutlined, DeleteOutlined, ToolOutlined,
@@ -29,11 +30,13 @@ const groupConfig = [
   { key: 'weather', label: '天氣工具' },
   { key: 'search', label: '搜尋工具' },
   { key: 'data', label: '數據處理' },
+  { key: 'messaging', label: '通信工具' },
   { key: 'utility', label: '實用工具' },
 ];
 
 export default function BrowseTools() {
   const { message } = App.useApp();
+  const navigate = useNavigate();
   const contentTokens = useContentTokens();
   const [currentUser, setCurrentUser] = useState(authStore.getState().user);
   const isAdmin = (currentUser as any)?.role_keys?.includes('admin') || currentUser?.role_key === 'admin';
@@ -341,7 +344,19 @@ export default function BrowseTools() {
                       {...(isAdmin ? {
                         actionLabel: '設置',
                         actionIcon: <SafetyCertificateOutlined />,
-                        onAction: handleAuth,
+                        onAction: (() => {
+                          const platformMap: Record<string, string> = {
+                            line_bot: '/app/platforms/line',
+                            whatsapp_bot: '/app/platforms/whatsapp',
+                            wecom_bot: '/app/platforms/wecom',
+                            dingtalk_bot: '/app/platforms/dingtalk',
+                            xchat_bot: '/app/platforms/xchat',
+                            slack_bot: '/app/platforms/slack',
+                          };
+                          return platformMap[tool.code || '']
+                            ? () => navigate(platformMap[tool.code || ''])
+                            : handleAuth;
+                        })(),
                       } : isAuthorized(tool) ? {
                         actionLabel: '已授權',
                         actionIcon: <CheckCircleOutlined />,

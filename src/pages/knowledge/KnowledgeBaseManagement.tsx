@@ -20,6 +20,7 @@ import {
   KnowledgeRoot, KnowledgeRoleAuth,
   knowledgeApi, ontologyApi, roleApi, Ontology, Role,
 } from '../../services/api';
+import { useEntityPerception } from '../../hooks/useEntityPerception';
 import KBCardGrid from './components/KBCardGrid';
 import KBTableList from './components/KBTableList';
 import KBCreateModal from './components/KBCreateModal';
@@ -33,6 +34,7 @@ export default function KnowledgeBaseManagement() {
   const contentTokens = useContentTokens();
   const navigate = useNavigate();
   const { message } = App.useApp();
+  const { dispatchEntity } = useEntityPerception({ defaultEntityType: 'knowledge_base', defaultAction: 'list' });
 
   const [data, setData] = useState<KnowledgeRoot[]>([]);
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
@@ -130,6 +132,7 @@ export default function KnowledgeBaseManagement() {
     try {
       await knowledgeApi.deleteRoot(id);
       message.success('知識庫已刪除');
+      dispatchEntity(id, 'delete');
       loadData();
     } catch (error: any) {
       message.error(error.response?.data?.message || '刪除失敗');
@@ -160,6 +163,8 @@ export default function KnowledgeBaseManagement() {
   };
 
   const handleEdit = (id: string) => {
+    const kb = data.find((item) => item._key === id);
+    dispatchEntity(id, 'view', { kb_name: kb?.name });
     navigate(`/app/knowledge/management/${id}`);
   };
 
@@ -175,7 +180,8 @@ export default function KnowledgeBaseManagement() {
       ontology_majors: kb.ontology_majors,
     });
     setEditModalVisible(true);
-  }, [data, editForm]);
+    dispatchEntity(id, 'edit', { kb_name: kb.name });
+  }, [data, editForm, dispatchEntity]);
 
   const handleEditMetaOk = useCallback(async () => {
     try {
@@ -211,10 +217,11 @@ export default function KnowledgeBaseManagement() {
         role_keys: res.data.data?.role_keys || [],
       });
       setAuthModalVisible(true);
+      dispatchEntity(id, 'edit', { kb_name: kb.name, action_type: 'authorize' });
     } catch {
       message.error('獲取授權資料失敗');
     }
-  }, [data, authForm, message]);
+  }, [data, authForm, message, dispatchEntity]);
 
   const handleAuthSubmit = useCallback(async () => {
     if (!authKb?._key) return;

@@ -1,9 +1,9 @@
 /**
  * @file        Schema 圖譜共用工具
  * @description 型別定義、色彩常量、G6/3D 資料轉換函式
- * @lastUpdate  2026-04-12 01:16:45
+ * @lastUpdate  2026-04-19 12:31:30
  * @author      Daniel Chung
- * @version     1.4.0
+ * @version     1.5.0
  */
 
 import type { NodeData, EdgeData } from '@antv/g6';
@@ -39,14 +39,17 @@ export const EDGE_COLORS = [
   '#1abc9c', '#e91e63', '#00bcd4', '#ff5722', '#8bc34a',
 ];
 
-export const BASE_MODULE = 'BASE';
-
 export const MODULE_OPTIONS: ModuleOption[] = [
-  { value: 'TRADE', label: '進銷存' },
-  { value: 'MFG', label: '生產製造' },
-  { value: 'QC', label: '品質' },
-  { value: 'CRM_SCM', label: 'CRM/SCM' },
-  { value: 'MGMT', label: '管理' },
+  { value: 'BASE', label: '基礎資料' },
+  { value: 'ERP', label: '進銷存' },
+  { value: 'PRODUCTION', label: '生產製造' },
+  { value: 'ISO', label: '品質/ISO' },
+  { value: 'SALES', label: 'CRM/SCM' },
+  { value: 'INVENTORY', label: '庫存' },
+  { value: 'HR', label: '人資' },
+  { value: 'PURCHASE', label: '採購' },
+  { value: 'PROJECT', label: '專案' },
+  { value: 'MISC', label: '其他' },
 ];
 
 /* =================== 工具函式 =================== */
@@ -102,7 +105,7 @@ export function filterGraphByModules(
   selectedModules: string[],
   tableMeta: Map<string, TableMeta>,
 ): ParsedGraph {
-  const allowed = new Set([BASE_MODULE, ...selectedModules]);
+  const allowed = new Set(selectedModules);
   const nodeModule = (id: string): string => tableMeta.get(id)?.module ?? '';
 
   /* Pass 1: keep nodes whose module is in allowed set */

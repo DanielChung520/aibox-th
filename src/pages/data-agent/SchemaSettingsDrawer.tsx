@@ -1,9 +1,9 @@
 /**
  * @file        SchemaSettingsDrawer.tsx
  * @description Data Agent NL 查詢模型參數設置 Drawer
- * @lastUpdate  2026-04-12 01:06:49
+ * @lastUpdate  2026-04-14 22:58:19
  * @author      Daniel Chung
- * @version     1.0.0
+ * @version     1.0.1
  */
 
 import { useState, useEffect, useCallback } from 'react';
@@ -190,7 +190,7 @@ export default function SchemaSettingsDrawer({ open, onClose }: SchemaSettingsDr
         </Space>
       }
       placement="right"
-      width={480}
+      styles={{ wrapper: { width: 480 } }}
       open={open}
       onClose={onClose}
       extra={

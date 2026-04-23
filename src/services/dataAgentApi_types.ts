@@ -1,7 +1,7 @@
 /**
  * @file        Data Agent API 服務層 - 型別定義
  * @description DA 的 Schema、Intents、Query 等型別介面定義
- * @lastUpdate  2026-04-13 03:08:43
+ * @lastUpdate  2026-04-16 11:12:44
  * @author      Daniel Chung
  */
 
@@ -20,6 +20,7 @@ export interface TableInfo {
   created_at: string;
   updated_at: string;
   updated_by: string;
+  preview_mode?: 'paged' | 'all';
 }
 
 export interface FieldInfo {

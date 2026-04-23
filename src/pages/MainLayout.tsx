@@ -21,6 +21,8 @@ import { iconMap } from '../utils/icons';
 import { useThemeMode, useShellTokens, useContentTokens, useEffectiveTheme } from '../contexts/AppThemeProvider';
 import AppLogo from '../components/AppLogo';
 import HeaderControls from '../components/HeaderControls';
+import { signalCollector } from '../services/signalCollector';
+import { userProfileStore } from '../stores/userProfileStore';
 
 const { Header, Sider, Content } = Layout;
 
@@ -51,13 +53,25 @@ export default function MainLayout() {
     : tooltipBgRaw;
 
   useEffect(() => {
+void signalCollector.start();
+return () => { signalCollector.stop(); };
+  }, []);
+
+  useEffect(() => {
     const unsubscribe = authStore.subscribe(() => {
       setUser(authStore.getState().user);
     });
     if (!authStore.getState().user && authStore.getState().token) {
       authApi.me().then((res: any) => {
-        if (res.data.code === 200) setUser(res.data.data);
+        if (res.data.code === 200) {
+          const userData = res.data.data;
+          authStore.login(userData, authStore.getState().token!);
+          setUser(userData);
+          void userProfileStore.load(userData._key);
+        }
       }).catch(() => {});
+    } else if (authStore.getState().user) {
+      void userProfileStore.load(authStore.getState().user!._key);
     }
     return unsubscribe;
   }, []);
@@ -113,6 +127,7 @@ export default function MainLayout() {
   };
 
   const handleLogout = () => {
+    userProfileStore.clear();
     authStore.logout();
     navigate('/login');
   };

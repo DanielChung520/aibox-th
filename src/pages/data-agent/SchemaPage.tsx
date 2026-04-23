@@ -1,7 +1,7 @@
 /**
  * @file        Data Agent Schema 管理頁面
  * @description 管理 DA 的資料表結構與模組分類
- * @lastUpdate  2026-04-11 18:13:37
+ * @lastUpdate  2026-04-16 11:16:02
  * @author      Daniel Chung
  * @version     1.0.0
  */
@@ -19,6 +19,7 @@ import SchemaImportSection from './SchemaImportSection';
 import SchemaColumnsModal from './SchemaColumnsModal';
 import SchemaEditModal from './SchemaEditModal';
 import SchemaSettingsDrawer from './SchemaSettingsDrawer';
+import { useEntityPerception } from '../../hooks/useEntityPerception';
 
 const { Title, Text } = Typography;
 
@@ -45,7 +46,9 @@ export default function SchemaPage() {
   const [dataModalVisible, setDataModalVisible] = useState(false);
   const [dataModalTitle, setDataModalTitle] = useState('');
   const [dataTableId, setDataTableId] = useState('');
+  const [dataPreviewMode, setDataPreviewMode] = useState<'paged' | 'all'>('paged');
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const { dispatchEntity } = useEntityPerception({ defaultEntityType: 'table', defaultAction: 'list' });
 
   const loadTables = async () => {
     setLoading(true);
@@ -96,12 +99,26 @@ export default function SchemaPage() {
   const openDataModal = (record: TableInfo) => {
     setDataModalTitle(record.table_name);
     setDataTableId(record.table_id);
+    setDataPreviewMode(record.preview_mode ?? 'paged');
     setDataModalVisible(true);
+    dispatchEntity(record.table_id, 'view', { table_name: record.table_name, type: 'data_preview' });
+  };
+
+  const handlePreviewModeChange = async (mode: 'paged' | 'all') => {
+    setDataPreviewMode(mode);
+    if (!dataTableId) return;
+    try {
+      await dataAgentApi.updateTable(dataTableId, { preview_mode: mode } as Partial<TableInfo>);
+      setTables(prev => prev.map(t => t.table_id === dataTableId ? { ...t, preview_mode: mode } : t));
+    } catch {
+      message.error('儲存預覽模式失敗');
+    }
   };
 
   const openColumnsModal = async (record: TableInfo) => {
     setColumnsTableName(`${record.table_name}（${record.table_id}）`);
     setColumnsModalVisible(true);
+    dispatchEntity(record.table_id, 'view', { table_name: record.table_name, action_type: 'view_columns' });
     setColumnsLoading(true);
     try {
       const res = await dataAgentApi.listFields(record.table_id);
@@ -246,7 +263,11 @@ export default function SchemaPage() {
             loading={loading} 
             pagination={{ pageSize: 15 }} 
             size="small"
-            onRow={(record) => ({ onDoubleClick: () => openColumnsModal(record), style: { cursor: 'pointer' } })}
+            onRow={(record) => ({ 
+              onClick: () => dispatchEntity(record.table_id, 'view', { table_name: record.table_name, tab: record.tab }),
+              onDoubleClick: () => openDataModal(record), 
+              style: { cursor: 'pointer' } 
+            })}
           />
         </div>
       </Card>
@@ -271,6 +292,8 @@ export default function SchemaPage() {
         visible={dataModalVisible}
         tableId={dataTableId}
         tableName={dataModalTitle}
+        previewMode={dataPreviewMode}
+        onPreviewModeChange={handlePreviewModeChange}
         onCancel={() => setDataModalVisible(false)}
       />
 

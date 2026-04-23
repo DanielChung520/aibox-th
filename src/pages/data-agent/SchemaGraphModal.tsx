@@ -96,7 +96,12 @@ export default function SchemaGraphModal({ open, onClose, account }: SchemaGraph
         }
         setTableMeta(meta);
 
-        const relations: Record<string, unknown>[] = relRes.data.data || [];
+        // Vite proxy sends directly to Python (port 8003), bypassing Rust Gateway
+        // Python returns: { code: 0, data: [...] }
+        // Rust would return: { code: 200, data: { code: 0, data: [...] } }
+        const relations: Record<string, unknown>[] = Array.isArray(relRes.data)
+          ? relRes.data
+          : (relRes.data?.data || []);
         if (!relations.length) { setLoading(false); return; }
 
         const parsed = parseRelations(relations);
@@ -111,9 +116,12 @@ export default function SchemaGraphModal({ open, onClose, account }: SchemaGraph
         if (bodyRef.current) {
           setBodySize({ w: bodyRef.current.offsetWidth, h: bodyRef.current.offsetHeight });
         }
-        const filtered = filterGraphByModules(parsed, defaultMods, meta);
-        const container = containerRef.current;
-        if (container) initG6(container, filtered);
+        // Defer initG6 to next tick so React can batch state updates first
+        setTimeout(() => {
+          const filtered = filterGraphByModules(parsed, defaultMods, meta);
+          const container = containerRef.current;
+          if (container) initG6(container, filtered);
+        }, 0);
       } catch (err: unknown) {
         const e = err as { response?: { data?: { message?: string } } };
         message.error(e.response?.data?.message || '載入圖譜失敗');

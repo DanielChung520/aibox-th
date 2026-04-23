@@ -13,6 +13,7 @@
  */
 
 import axios from 'axios';
+import type { AssistantContextPayload } from '../types/assistantContext';
 
 function resolveApiBaseUrl(): string {
   const configured = import.meta.env.VITE_API_URL;
@@ -57,9 +58,9 @@ api.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       localStorage.removeItem('token');
-      // Only redirect to /login if not already on a protected page
-      // (avoids race condition where successful login triggers 401 from another API)
-      if (!window.location.pathname.startsWith('/app')) {
+      // Avoid self-reloading on public routes like /login or /
+      // while still forcing a hard reset when a protected route loses auth.
+      if (window.location.pathname.startsWith('/app')) {
         window.location.href = '/login';
       }
     }
@@ -165,7 +166,6 @@ export interface Agent {
   name: string;
   description?: string;
   icon?: string;
-  status?: 'online' | 'maintenance' | 'deprecated' | 'registering';
   usage_count?: number;
   group_key: string;
   agent_type?: 'knowledge' | 'data' | 'bpa' | 'tool';
@@ -184,11 +184,66 @@ export interface Agent {
   capabilities?: string[];
   is_favorite?: boolean;
   visibility?: 'public' | 'private' | 'role';
-  visibility_roles?: string[];
   created_by?: string;
   updated_by?: string;
   created_at?: string;
   updated_at?: string;
+  status?: 'online' | 'maintenance' | 'deprecated' | 'registering' | 'developing';
+  visibility_roles?: string[];
+}
+
+export type DemandStatus = 'draft' | 'submitted' | 'accepted' | 'in_development' | 'pending_acceptance' | 'online' | 'cancelled';
+
+export interface UploadedFile {
+  name: string;
+  url: string;
+  size?: number;
+  mime_type?: string;
+}
+
+export interface AIReview {
+  completeness: string;
+  reasonableness: string;
+  feasibility: string;
+  estimated_hours: number;
+  confidence: string;
+  summary: string;
+  suggestions: string[];
+  score: number;
+}
+
+export interface Demand {
+  _key?: string;
+  agent_key?: string;
+  version?: string;
+  status?: DemandStatus;
+  goal?: string;
+  expected_effect?: string;
+  problem_description?: string;
+  target_users?: string;
+  scope?: string;
+  excluded_scope?: string;
+  conversation_style?: string;
+  conversation_examples?: Array<{ role: string; content: string }>;
+  estimated_hours?: number | null;
+  estimated_confidence?: 'low' | 'medium' | 'high';
+  final_hours?: number | null;
+  rejection_history?: Array<{ rejected_at: string; reason: string }>;
+  references?: string[];
+  input_description?: string;
+  input_format?: string;
+  example_documents?: UploadedFile[];
+  example_images?: UploadedFile[];
+  output_description?: string;
+  output_format?: string;
+  output_examples?: UploadedFile[];
+  ai_review?: AIReview;
+  created_at?: string;
+  updated_at?: string;
+  submitted_at?: string;
+  accepted_at?: string;
+  cancelled_at?: string;
+  online_at?: string;
 }
 
 export const agentApi = {
@@ -201,6 +256,27 @@ export const agentApi = {
   update: (key: string, data: Partial<Agent>) => api.put(`/api/v1/agents/${key}`, data),
   delete: (key: string) => api.delete(`/api/v1/agents/${key}`),
   toggleFavorite: (key: string) => api.patch<{ code: number; data: Agent }>(`/api/v1/agents/${key}/favorite`, {}),
+  listIntents: (key: string) => api.get<{ code: number; data: any[] }>(`/api/v1/agents/${key}/intents`),
+  createIntent: (key: string, data: any) => api.post(`/api/v1/agents/${key}/intents`, data),
+  updateIntent: (key: string, intentKey: string, data: any) => api.put(`/api/v1/agents/${key}/intents/${intentKey}`, data),
+  deleteIntent: (key: string, intentKey: string) => api.delete(`/api/v1/agents/${key}/intents/${intentKey}`),
+  syncIntents: (key: string) => api.post(`/api/v1/agents/${key}/intents/${key}/sync`, {}),
+  listDemands: (key: string) => api.get<{ code: number; data: Demand[] }>(`/api/v1/agents/${key}/demands`),
+  getDemand: (key: string, demandKey: string) => api.get<{ code: number; data: Demand }>(`/api/v1/agents/${key}/demands/${demandKey}`),
+  createDemand: (key: string, data: Partial<Demand>) => api.post(`/api/v1/agents/${key}/demands`, data),
+  updateDemand: (key: string, demandKey: string, data: Partial<Demand>) => api.put(`/api/v1/agents/${key}/demands/${demandKey}`, data),
+  deleteDemand: (key: string, demandKey: string) => api.delete(`/api/v1/agents/${key}/demands/${demandKey}`),
+  updateDemandStatus: (key: string, demandKey: string, data: { status: string; reason?: string; estimated_hours?: number; final_hours?: number; ai_review?: AIReview }) =>
+    api.patch(`/api/v1/agents/${key}/demands/${demandKey}/status`, data),
+  suggestIntents: (key: string, demandKey: string) =>
+    api.post<{ code: number; data: any[] }>(`/api/v1/agents/${key}/demands/${demandKey}/suggest-intents`, {}),
+};
+
+export const demandApi = {
+  estimateHours: (data: { goal: string; expected_effect: string; problem_description: string; target_users?: string; scope?: string; systems_to_integrate?: string[] }) =>
+    api.post<{ code: number; data: { estimated_hours: number; range_min: number; range_max: number; confidence: string; reasoning: string } }>('/api/v1/demands/estimate-hours', data),
+  reviewDemand: (data: Partial<Demand>) =>
+    api.post<{ code: number; data: AIReview }>('/api/v1/demands/review', data),
 };
 
 // ============= Tool Registry =============
@@ -377,6 +453,7 @@ export interface SendMessageRequest {
   model?: string;
   temperature?: number;
   max_tokens?: number;
+  assistant_context?: AssistantContextPayload;
 }
 
 export interface SessionWithMessages {
@@ -752,6 +829,17 @@ export const knowledgeApi = {
     api.put<ApiMessage>(`/api/v1/knowledge/roots/${rootId}/roles`, { role_keys, inherited_role_keys }),
 };
 
+export interface DaSchemaModule {
+  key: string;
+  label: string;
+  source: string;
+}
+
+export const daApi = {
+  listSchemaModules: () =>
+    api.get<ApiResponse<DaSchemaModule[]>>('/api/v1/da/schema/modules'),
+};
+
 export const downloadFile = async (fileId: string): Promise<Blob> => {
   const token = localStorage.getItem('token');
   const resp = await fetch(`/api/v1/knowledge/files/${encodeURIComponent(fileId)}/download`, {
@@ -880,4 +968,139 @@ export const backupApi = {
     api.get<ApiResponse<BackupStatus>>('/api/v1/backup/status'),
 };
 
+// LINE Platform API
+export interface LINEChannel {
+  _key: string;
+  official_account_key: string;
+  channel_name: string;
+  channel_id: string;
+  channel_secret?: string;
+  channel_access_token?: string;
+  webhook_url: string;
+  webhook_enabled: boolean;
+  bot_user_id?: string;
+  publication_status: 'unpublished' | 'published' | 'error';
+  published_bot_key?: string;
+  published_bot_name?: string;
+  last_connected_at?: string;
+  created_at: string;
+  channel_icon?: string;
+  channel_description?: string;
+}
+
+export interface LINEOfficialAccount {
+  _key: string;
+  provider_name: string;
+  name: string;
+  status: 'active' | 'inactive' | 'error';
+  channels: LINEChannel[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateOfficialAccountRequest {
+  provider_name: string;
+  name: string;
+}
+
+export interface CreateChannelRequest {
+  channel_name: string;
+  channel_id: string;
+  channel_secret: string;
+  channel_access_token: string;
+  channel_icon?: string;
+  channel_description?: string;
+}
+
+export interface UpdateChannelRequest {
+  channel_name?: string;
+  channel_id?: string;
+  channel_secret?: string;
+  channel_access_token?: string;
+  webhook_enabled?: boolean;
+  channel_icon?: string;
+  channel_description?: string;
+}
+
+export interface PublishChannelRequest {
+  bot_key: string;
+  greeting?: string;
+  delay?: number;
+}
+
+export interface TestConnectionResult {
+  success: boolean;
+  bot_user_id?: string;
+  error?: string;
+}
+
+export const linePlatformApi = {
+  // Official Accounts
+  listOfficialAccounts: () =>
+    api.get<ApiResponse<LINEOfficialAccount[]>>('/api/v1/platforms/line/official-accounts'),
+  getOfficialAccount: (key: string) =>
+    api.get<ApiResponse<LINEOfficialAccount>>(`/api/v1/platforms/line/official-accounts/${key}`),
+  createOfficialAccount: (data: CreateOfficialAccountRequest) =>
+    api.post<ApiResponse<LINEOfficialAccount>>('/api/v1/platforms/line/official-accounts', data),
+  updateOfficialAccount: (key: string, data: Partial<LINEOfficialAccount>) =>
+    api.put<ApiResponse<LINEOfficialAccount>>(`/api/v1/platforms/line/official-accounts/${key}`, data),
+  deleteOfficialAccount: (key: string) =>
+    api.delete<ApiResponse<{ message: string }>>(`/api/v1/platforms/line/official-accounts/${key}`),
+
+  // Channels
+  createChannel: (officialAccountKey: string, data: CreateChannelRequest) =>
+    api.post<ApiResponse<LINEChannel>>(
+      `/api/v1/platforms/line/official-accounts/${officialAccountKey}/channels`,
+      data,
+    ),
+  getChannel: (channelKey: string) =>
+    api.get<ApiResponse<LINEChannel>>(`/api/v1/platforms/line/channels/${channelKey}`),
+  updateChannel: (channelKey: string, data: UpdateChannelRequest) =>
+    api.put<ApiResponse<LINEChannel>>(`/api/v1/platforms/line/channels/${channelKey}`, data),
+  deleteChannel: (channelKey: string) =>
+    api.delete<ApiResponse<{ message: string }>>(`/api/v1/platforms/line/channels/${channelKey}`),
+
+  // Connection & Publish
+  testConnection: (channelKey: string) =>
+    api.post<ApiResponse<TestConnectionResult>>(
+      `/api/v1/platforms/line/channels/${channelKey}/test-connection`,
+    ),
+  publishChannel: (channelKey: string, data: PublishChannelRequest) =>
+    api.post<ApiResponse<{ success: boolean; message: string }>>(
+      `/api/v1/platforms/line/channels/${channelKey}/publish`,
+      data,
+    ),
+  unpublishChannel: (channelKey: string) =>
+    api.delete<ApiResponse<{ success: boolean; message: string }>>(
+      `/api/v1/platforms/line/channels/${channelKey}/publish`,
+    ),
+};
+
 export default api;
+
+// Ragic Session History
+export interface RagicHistoryMessage {
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp?: string;
+  created_at?: string;
+  metadata?: {
+    media_type?: string;
+    media_url?: string;
+    seaweed_url?: string;
+    file_name?: string;
+    file_url?: string;
+    file_size?: number;
+  };
+}
+
+export interface RagicSessionHistoryResponse {
+  session_id: string;
+  history: RagicHistoryMessage[];
+  count: number;
+}
+
+export const ragicApi = {
+  getChatHistory: (sessionId: string, limit: number = 50) =>
+    api.get<RagicSessionHistoryResponse>(`/api/v1/ragic/session/${sessionId}/history?limit=${limit}`),
+};
