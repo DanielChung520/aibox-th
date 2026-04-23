@@ -113,6 +113,15 @@ function parseSSEEvent(rawEvent: string): { event: string; data: string } {
   return { event, data: dataLines.join('\n') };
 }
 
+function drainSSEEvents(buffer: string): { events: string[]; rest: string } {
+  const normalized = buffer.replace(/\r\n/g, '\n');
+  const parts = normalized.split('\n\n');
+  return {
+    events: parts.slice(0, -1),
+    rest: parts.at(-1) ?? '',
+  };
+}
+
 /** 統一分派 SSE 事件到對應的 callback */
 function dispatchSSEEvent(
   evt: { event: string; data: string },
@@ -219,6 +228,7 @@ export function sendMessageSSE(
   const url = `${baseURL}/api/v1/chat/sessions/${encodeURIComponent(sessionKey)}/messages`;
 
   void (async () => {
+    let completed = false;
     try {
       const response = await fetch(url, {
         method: 'POST',
@@ -250,18 +260,26 @@ export function sendMessageSSE(
         if (done) {
           if (buffer.trim()) {
             const evt = parseSSEEvent(buffer);
-            if (evt.event) dispatchSSEEvent(evt, callbacks);
+            if (evt.event) {
+              if (evt.event === 'chat_done') completed = true;
+              dispatchSSEEvent(evt, callbacks);
+            }
+          }
+          if (!completed) {
+            callbacks.onDone();
           }
           break;
         }
 
         buffer += decoder.decode(value, { stream: true });
-        const events = buffer.split('\n\n');
-        buffer = events.pop() ?? '';
+        const drained = drainSSEEvents(buffer);
+        buffer = drained.rest;
 
-        for (const rawEvent of events) {
+        for (const rawEvent of drained.events) {
           const evt = parseSSEEvent(rawEvent);
-          if (evt.event) dispatchSSEEvent(evt, callbacks);
+          if (!evt.event) continue;
+          if (evt.event === 'chat_done') completed = true;
+          dispatchSSEEvent(evt, callbacks);
         }
       }
     } catch (error) {

@@ -4,7 +4,7 @@ AITask Service - AI Chat Service
 Provides natural language conversation with streaming support,
 and 5W1H tagging for chat sessions.
 
-# Last Update: 2026-04-14
+# Last Update: 2026-04-24 01:53:38
 # Author: Daniel Chung
 # Version: 1.3.0
 """
@@ -209,6 +209,7 @@ async def stream_ollama(
 
 
 async def stream_openai_compatible(
+    provider: str,
     base_url: str,
     model: str,
     messages: list[dict[str, str]],
@@ -227,6 +228,8 @@ async def stream_openai_compatible(
             }
             if max_tokens:
                 payload["max_tokens"] = max_tokens
+            if provider == "minimax":
+                payload["reasoning_split"] = True
 
             headers = {}
             if api_key:
@@ -375,9 +378,9 @@ def get_streaming_generator(
     if provider == "ollama":
         return stream_ollama(base_url, model, messages, temperature)
     elif provider == "openai":
-        return stream_openai_compatible(base_url, model, messages, temperature, max_tokens, api_key or OPENAI_API_KEY)
+        return stream_openai_compatible(provider, base_url, model, messages, temperature, max_tokens, api_key or OPENAI_API_KEY)
     elif provider == "minimax":
-        return stream_openai_compatible(base_url, model, messages, temperature, max_tokens, api_key or MINIMAX_API_KEY)
+        return stream_openai_compatible(provider, base_url, model, messages, temperature, max_tokens, api_key or MINIMAX_API_KEY)
     elif provider == "gemini":
         return stream_gemini(base_url, model, messages, temperature, api_key or GEMINI_API_KEY)
     elif provider == "anthropic":
@@ -421,6 +424,8 @@ async def chat_completions(request: ChatRequest) -> StreamingResponse:
                 }
                 if request.max_tokens:
                     payload["max_tokens"] = request.max_tokens
+                if provider == "minimax":
+                    payload["reasoning_split"] = True
                 headers = {}
                 api_key = request.api_key or (OPENAI_API_KEY if provider == "openai" else MINIMAX_API_KEY)
                 if api_key:
@@ -516,6 +521,8 @@ async def chat(request: ChatRequest) -> dict[str, object]:
                 }
                 if request.max_tokens:
                     payload["max_tokens"] = request.max_tokens
+                if provider == "minimax":
+                    payload["reasoning_split"] = True
                 headers = {}
                 api_key = request.api_key or (OPENAI_API_KEY if provider == "openai" else MINIMAX_API_KEY)
                 if api_key:

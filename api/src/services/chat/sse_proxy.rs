@@ -3,7 +3,7 @@
 //! # Description
 //! 封裝 AITask 上游串流解析、事件轉發、訊息累積持久化與 5W1H 後處理
 //!
-//! # Last Update: 2026-04-11 08:42:17
+//! # Last Update: 2026-04-24 01:53:38
 //! # Author: AI Agent
 //! # Version: 1.0.0
 
@@ -49,6 +49,49 @@ fn next_sse_block(buffer: &mut String) -> Option<String> {
     Some(raw)
 }
 
+fn next_sse_block_bytes(buffer: &mut Vec<u8>) -> Option<Vec<u8>> {
+    let lf_pos = buffer.windows(2).position(|window| window == b"\n\n");
+    let crlf_pos = buffer.windows(4).position(|window| window == b"\r\n\r\n");
+
+    let (pos, step) = match (lf_pos, crlf_pos) {
+        (Some(lf), Some(crlf)) if crlf < lf => (crlf, 4),
+        (Some(lf), _) => (lf, 2),
+        (None, Some(crlf)) => (crlf, 4),
+        (None, None) => return None,
+    };
+
+    let raw = buffer[..pos].to_vec();
+    buffer.drain(..pos + step);
+    Some(raw)
+}
+
+fn extract_reasoning_delta(json: &serde_json::Value) -> Option<String> {
+    let reasoning_content = json
+        .get("choices")
+        .and_then(|choices| choices.get(0))
+        .and_then(|choice| choice.get("delta"))
+        .and_then(|delta| delta.get("reasoning_content"))
+        .and_then(|value| value.as_str())
+        .filter(|value| !value.is_empty())
+        .map(str::to_string);
+
+    let reasoning_details = json
+        .get("choices")
+        .and_then(|choices| choices.get(0))
+        .and_then(|choice| choice.get("delta"))
+        .and_then(|delta| delta.get("reasoning_details"))
+        .and_then(|value| value.as_array())
+        .map(|details| {
+            details
+                .iter()
+                .filter_map(|detail| detail.get("text").and_then(|value| value.as_str()))
+                .collect::<String>()
+        })
+        .filter(|value| !value.is_empty());
+
+    reasoning_content.or(reasoning_details)
+}
+
 pub async fn stream_aitask_response(response: reqwest::Response, session_key: String) -> ChatSse {
     let (content_tx, mut content_rx) = mpsc::unbounded_channel::<String>();
     let session_key_for_persist = session_key.clone();
@@ -81,18 +124,16 @@ pub async fn stream_aitask_response(response: reqwest::Response, session_key: St
     let (event_tx, event_rx) = mpsc::unbounded_channel::<Result<Event, std::convert::Infallible>>();
 
     tokio::spawn(async move {
-        let mut buffer = String::new();
+        let mut buffer = Vec::new();
         let mut body = response.bytes_stream();
 
         while let Some(chunk_result) = body.next().await {
             match chunk_result {
                 Ok(chunk) => {
-                    let text = String::from_utf8_lossy(&chunk);
-                    buffer.push_str(&text);
+                    buffer.extend_from_slice(&chunk);
 
-                    while let Some(pos) = buffer.find("\n\n") {
-                        let raw_event = buffer[..pos].to_string();
-                        buffer.drain(..pos + 2);
+                    while let Some(raw_event_bytes) = next_sse_block_bytes(&mut buffer) {
+                        let raw_event = String::from_utf8_lossy(&raw_event_bytes).into_owned();
 
                         for line in raw_event.lines() {
                             let Some(data) = line
@@ -113,6 +154,15 @@ pub async fn stream_aitask_response(response: reqwest::Response, session_key: St
                             }
 
                             if let Ok(json) = serde_json::from_str::<serde_json::Value>(data) {
+                                if let Some(reasoning) = extract_reasoning_delta(&json) {
+                                    let payload = serde_json::json!({
+                                        "message": { "thinking": reasoning }
+                                    });
+                                    let _ = event_tx.send(Ok(
+                                        Event::default().event("thinking_chunk").data(payload.to_string()),
+                                    ));
+                                }
+
                                 let delta = json
                                     .get("message")
                                     .and_then(|message| message.get("content"))
@@ -127,6 +177,7 @@ pub async fn stream_aitask_response(response: reqwest::Response, session_key: St
 
                                 if let Some(delta) = delta.filter(|value| !value.is_empty()) {
                                     let _ = content_tx.send(delta.to_string());
+                                    let _ = event_tx.send(Ok(Event::default().event("chat_chunk").data(data)));
                                 }
 
                                 let is_done =
@@ -147,7 +198,6 @@ pub async fn stream_aitask_response(response: reqwest::Response, session_key: St
                                     return;
                                 }
 
-                                let _ = event_tx.send(Ok(Event::default().event("chat_chunk").data(data)));
                             }
                         }
                     }
@@ -211,15 +261,16 @@ pub async fn stream_langgraph_response(response: reqwest::Response, session_key:
     let (event_tx, event_rx) = mpsc::unbounded_channel::<Result<Event, std::convert::Infallible>>();
 
     tokio::spawn(async move {
-        let mut buffer = String::new();
+        let mut buffer = Vec::new();
         let mut body = response.bytes_stream();
 
         while let Some(chunk_result) = body.next().await {
             match chunk_result {
                 Ok(chunk) => {
-                    buffer.push_str(&String::from_utf8_lossy(&chunk));
+                    buffer.extend_from_slice(&chunk);
 
-                    while let Some(raw_event) = next_sse_block(&mut buffer) {
+                    while let Some(raw_event_bytes) = next_sse_block_bytes(&mut buffer) {
+                        let raw_event = String::from_utf8_lossy(&raw_event_bytes).into_owned();
                         let Some((event_name, data)) = parse_sse_block(&raw_event) else {
                             continue;
                         };

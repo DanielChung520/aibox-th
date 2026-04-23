@@ -106,6 +106,21 @@ class ChatStore {
     return code ? this.state.providers.find((p) => p.code === code) : undefined;
   }
 
+  private resolveProviderModel(providerConfig: ModelProvider | undefined, preferredModel?: string): string | undefined {
+    const models = providerConfig?.models ?? [];
+    if (!models.length) {
+      return preferredModel;
+    }
+
+    if (preferredModel && models.some((model) => model.model_id === preferredModel)) {
+      return preferredModel;
+    }
+
+    return models.find((model) => model.status === 'enabled')?.model_id
+      ?? models[0]?.model_id
+      ?? preferredModel;
+  }
+
   private parseAssistantChatModel(raw: string | undefined): { provider?: string; model?: string } {
     if (!raw) {
       return {};
@@ -130,8 +145,7 @@ class ChatStore {
   private async resolveChatTarget(): Promise<{ provider?: string; model?: string }> {
     let provider = this.state.selectedProvider ?? this.getDefaultProviderCode() ?? undefined;
     let providerConfig = this.getProviderByCode(provider ?? null);
-    let enabledModel = providerConfig?.models?.find((m) => m.status === 'enabled')?.model_id;
-    let model = this.getDefaultModel() ?? enabledModel ?? providerConfig?.models?.[0]?.model_id;
+    let model = this.resolveProviderModel(providerConfig, this.getDefaultModel());
 
     if (this.namespace === 'aiq') {
       try {
@@ -142,13 +156,13 @@ class ChatStore {
         if (preferred.provider) {
           provider = preferred.provider;
           providerConfig = this.getProviderByCode(provider ?? null);
-          enabledModel = providerConfig?.models?.find((m) => m.status === 'enabled')?.model_id;
+          model = this.resolveProviderModel(providerConfig, preferred.model ?? model);
         }
 
         if (preferred.model) {
-          model = preferred.model;
+          model = this.resolveProviderModel(providerConfig, preferred.model);
         } else if (preferred.provider) {
-          model = enabledModel ?? providerConfig?.models?.[0]?.model_id ?? model;
+          model = this.resolveProviderModel(providerConfig, model);
         }
       } catch {
         // fallback to task_chat defaults when assistant-specific param is unavailable
