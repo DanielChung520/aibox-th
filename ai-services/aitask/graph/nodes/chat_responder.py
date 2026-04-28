@@ -1,9 +1,9 @@
 """
 Chat responder node.
 
-# Last Update: 2026-04-14
+# Last Update: 2026-04-27 13:00:00
 # Author: AI Agent
-# Version: 1.1.0
+# Version: 1.2.0
 """
 
 import logging
@@ -12,6 +12,7 @@ from collections.abc import Sequence
 
 import httpx
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
+from langchain_ollama import ChatOllama
 
 from aitask.config import settings
 from aitask.graph.state import TopState
@@ -70,7 +71,35 @@ def _state_messages(messages: Sequence[BaseMessage]) -> list[dict[str, str]]:
     return [{"role": _message_role(message), "content": _message_text(message)} for message in messages]
 
 
+async def _request_response_streaming(messages: list[dict[str, str]]) -> str:
+    """Call Ollama via ChatOllama with streaming, so astream_events emits on_chat_model_stream."""
+    provider = DEFAULT_PROVIDER
+    base_url, model, _headers = _provider_config(provider)
+    llm = ChatOllama(
+        model=model,
+        base_url=base_url,
+        temperature=0.7,
+        streaming=True,
+        timeout=TIMEOUT_SECONDS,
+    )
+    lc_messages: list[BaseMessage] = []
+    for m in messages:
+        role = m["role"]
+        content = m["content"]
+        if role == "system":
+            lc_messages.append(SystemMessage(content=content))
+        elif role == "assistant":
+            lc_messages.append(AIMessage(content=content))
+        else:
+            lc_messages.append(HumanMessage(content=content))
+
+    response = await llm.ainvoke(lc_messages)
+    content = response.content
+    return content if isinstance(content, str) else str(content)
+
+
 async def _request_response(messages: list[dict[str, str]]) -> str:
+    """Fallback: raw httpx call for non-Ollama providers."""
     provider = DEFAULT_PROVIDER
     base_url, model, headers = _provider_config(provider)
     async with httpx.AsyncClient(timeout=TIMEOUT_SECONDS) as client:
@@ -165,9 +194,9 @@ async def chat_responder_node(state: TopState) -> dict[str, object]:
             response_text = await _generate_emotion_response(user_input)
         except Exception:
             logging.getLogger(__name__).warning("Emotion LLM failed, falling back to chat_responder", exc_info=True)
-            response_text = await _request_response(_state_messages(messages))
+            response_text = await _request_response_streaming(_state_messages(messages))
     else:
-        response_text = await _request_response(_state_messages(messages))
+        response_text = await _request_response_streaming(_state_messages(messages))
 
     return {
         "messages": [AIMessage(content=response_text)],

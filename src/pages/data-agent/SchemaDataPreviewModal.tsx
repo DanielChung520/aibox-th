@@ -1,12 +1,13 @@
 /**
  * @file        Data Agent Schema 資料預覽
  * @description Schema 頁面的資料預覽 Modal — DuckDB-WASM 驅動，本地篩選/排序/翻頁
- * @lastUpdate  2026-04-16 11:36:00
+ * @lastUpdate  2026-04-24 10:20:08
  * @author      Daniel Chung
- * @version     2.2.0
+ * @version     2.3.0
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import type { ReactNode } from 'react';
 import { Modal, Table, App, Input, Button, Space, DatePicker, InputNumber, Select, Tooltip, Segmented } from 'antd';
 import { SearchOutlined, FilterOutlined, ReloadOutlined, DatabaseOutlined, FileOutlined, QuestionCircleOutlined } from '@ant-design/icons';
 import type { InputRef, TableColumnType } from 'antd';
@@ -28,6 +29,25 @@ interface SchemaDataPreviewModalProps {
 
 const PAGE_SIZE_OPTIONS = [20, 50, 100];
 const RAGIC_BATCH_SIZE = 1000;
+
+interface RagicLinkValue {
+  text?: string;
+  href?: string;
+  value?: string;
+}
+
+function isRagicLinkValue(value: unknown): value is RagicLinkValue {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  return 'text' in value || 'href' in value || 'value' in value;
+}
+
+function getSearchableText(value: unknown): string {
+  if (value == null) return '';
+  if (isRagicLinkValue(value)) {
+    return String(value.text ?? value.value ?? value.href ?? '');
+  }
+  return String(value);
+}
 
 export default function SchemaDataPreviewModal({
   visible,
@@ -59,6 +79,40 @@ export default function SchemaDataPreviewModal({
   const [fetchMode, setFetchMode] = useState<'paged' | 'all'>(externalMode ?? 'paged');
   const searchInputRef = useRef<InputRef>(null);
   const tableRef = useRef<HTMLDivElement>(null);
+
+  const renderCellValue = useCallback((field: FieldInfo, value: unknown, record: Record<string, unknown>): ReactNode => {
+    if (value == null) return '-';
+
+    if (isRagicLinkValue(value)) {
+      const href = typeof value.href === 'string' ? value.href : '';
+      const text = typeof value.text === 'string' && value.text.trim()
+        ? value.text.trim()
+        : typeof value.value === 'string' && value.value.trim()
+          ? value.value.trim()
+          : '連結';
+
+      if (href) {
+        return (
+          <a href={href} target="_blank" rel="noopener noreferrer">
+            {text || '連結'}
+          </a>
+        );
+      }
+
+      return text || '-';
+    }
+
+    const recordUrl = typeof record._ragicRecordUrl === 'string' ? record._ragicRecordUrl : '';
+    if (field.linked_to && recordUrl) {
+      return (
+        <a href={recordUrl} target="_blank" rel="noopener noreferrer">
+          連結
+        </a>
+      );
+    }
+
+    return String(value);
+  }, []);
 
   const handleColHover = (colIdx: number | null) => {
     const container = tableRef.current;
@@ -250,7 +304,7 @@ export default function SchemaDataPreviewModal({
   const filteredRows = searchText
     ? displayRows.filter(row =>
       Object.values(row).some(v =>
-        v != null && String(v).toLowerCase().includes(searchText.toLowerCase())
+        getSearchableText(v).toLowerCase().includes(searchText.toLowerCase())
       )
     )
     : displayRows;
@@ -435,7 +489,7 @@ export default function SchemaDataPreviewModal({
       onFilter: (value, record) => {
         const cellVal = record[field.field_id];
         if (cellVal == null) return false;
-        return String(cellVal).toLowerCase().includes(String(value).toLowerCase());
+        return getSearchableText(cellVal).toLowerCase().includes(String(value).toLowerCase());
       },
       onFilterDropdownOpenChange: (open: boolean) => {
         if (open) setTimeout(() => searchInputRef.current?.select(), 100);
@@ -464,9 +518,9 @@ export default function SchemaDataPreviewModal({
       if (va == null && vb == null) return 0;
       if (va == null) return -1;
       if (vb == null) return 1;
-      return String(va).localeCompare(String(vb), 'zh-Hant');
+      return getSearchableText(va).localeCompare(getSearchableText(vb), 'zh-Hant');
     },
-    render: (v: unknown) => v == null ? '-' : String(v),
+    render: (v: unknown, record: Record<string, unknown>) => renderCellValue(f, v, record),
     ...getColumnSearchProps(f),
   }));
 

@@ -7,6 +7,7 @@
  */
 
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Tabs, Input, Row, Col, Button, Empty, App, Spin, Switch } from 'antd';
 import { useContentTokens } from '../contexts/AppThemeProvider';
 import { SearchOutlined, PlusOutlined, ReloadOutlined, HeartOutlined } from '@ant-design/icons';
@@ -26,6 +27,7 @@ const groupConfig = [
 ];
 
 export default function BrowseAgent() {
+  const navigate = useNavigate();
   const { message } = App.useApp();
   const contentTokens = useContentTokens();
   const [activeTab, setActiveTab] = useState('all');
@@ -105,10 +107,9 @@ export default function BrowseAgent() {
     }
   };
 
-  // 處理對話
+  // 處理對話：導航到聊天頁，帶 agent_key 參數
   const handleChat = (agentId: string) => {
-    const agent = agents.find((a) => a._key === agentId);
-    message.info(`啟動與 ${agent?.name} 的對話...`);
+    navigate(`/app/task-session/chat?agent_key=${agentId}`);
   };
 
   // 處理編輯
@@ -143,16 +144,17 @@ export default function BrowseAgent() {
   const handleFormSubmit = async (values: any) => {
     try {
       const currentUser = authStore.getState().user;
+      const isThirdParty = values.source === true || values.source === 'third_party';
       const apiData: Record<string, unknown> = {
         name: values.name,
         description: values.description || '',
         icon: values.icon || '',
         status: values.status || 'online',
         group_key: values.groupKey || activeTab,
-        source: values.source === true ? 'third_party' : (values.source || 'local'),
-        endpoint_url: values.endpointUrl || '',
-        api_key: values.apiKey || '',
-        auth_type: values.authType || 'none',
+        source: isThirdParty ? 'third_party' : 'local',
+        endpoint_url: isThirdParty ? (values.endpointUrl || '') : undefined,
+        api_key: isThirdParty ? (values.apiKey || '') : undefined,
+        auth_type: isThirdParty ? (values.authType || 'none') : undefined,
         llm_model: values.llmModel || '',
         temperature: values.temperature ?? 0.7,
         max_tokens: values.maxTokens ?? 2000,

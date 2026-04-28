@@ -7,20 +7,27 @@
  */
 
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent } from 'react';
-import { Input, Dropdown, Tag, message } from 'antd';
+import { Input, Dropdown, Tag, message, Typography } from 'antd';
 import type { MenuProps } from 'antd';
-import { PlusOutlined, PaperClipOutlined, SmileOutlined, AudioOutlined, SendOutlined, StopOutlined, RobotOutlined, EditOutlined, DeleteOutlined, VerticalAlignBottomOutlined } from '@ant-design/icons';
-import { useParams, useNavigate } from 'react-router-dom';
+import { PlusOutlined, PaperClipOutlined, SmileOutlined, AudioOutlined, SendOutlined, StopOutlined, RobotOutlined, EditOutlined, DeleteOutlined, VerticalAlignBottomOutlined, ArrowLeftOutlined } from '@ant-design/icons';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useContentTokens } from '../contexts/AppThemeProvider';
 import { chatStore } from '../stores/chatStore';
 import { chatOrchestrator } from '../stores/chatOrchestrator';
 import { subscribeSessionFileStatus, type SSEConnection } from '../services/sseManager';
+import { agentApi, Agent, ChatMessage } from '../services/api';
 import MessageBubble from '../components/MessageBubble';
 import ToolCallDisplay from '../components/ToolCallDisplay';
+
+const { Text } = Typography;
 
 export default function TaskSessionChat() {
   const { sessionKey: urlSessionKey } = useParams<{ sessionKey?: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const agentKey = searchParams.get('agent_key');
+  const isAgentMode = !!agentKey;
+
   const contentTokens = useContentTokens();
   const [storeState, setStoreState] = useState(chatStore.getState());
   const [orchState, setOrchState] = useState(chatOrchestrator.getState());
@@ -34,27 +41,43 @@ export default function TaskSessionChat() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const prevStreamingRef = useRef(storeState.isStreaming);
 
+  const [agentInfo, setAgentInfo] = useState<Agent | null>(null);
+  const [agentMessages, setAgentMessages] = useState<ChatMessage[]>([]);
+  const [agentSessionId] = useState(() => `agent_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`);
+  const [agentLoading, setAgentLoading] = useState(false);
+  const [agentLoaded, setAgentLoaded] = useState(false);
+
+  // Load agent info on mount
   useEffect(() => {
+    if (!isAgentMode || agentLoaded) return;
+    setAgentLoaded(true);
+    agentApi.get(agentKey!).then((res) => {
+      setAgentInfo(res.data.data);
+    }).catch(() => {});
+  }, [isAgentMode, agentKey, agentLoaded]);
+
+  useEffect(() => {
+    if (isAgentMode) return;
     const unsubChat = chatStore.subscribe(() => setStoreState(chatStore.getState()));
     const unsubOrch = chatOrchestrator.subscribe(() => setOrchState(chatOrchestrator.getState()));
     return () => { unsubChat(); unsubOrch(); };
-  }, []);
+  }, [isAgentMode]);
 
   useEffect(() => {
+    if (isAgentMode) return;
     void chatStore.loadProviders();
     void chatStore.loadChatDefaults();
     void chatStore.loadSessions();
-  }, []);
+  }, [isAgentMode]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [storeState.messages, storeState.streamingContent, storeState.isStreaming, queue]);
+  }, [storeState.messages, storeState.streamingContent, storeState.isStreaming, queue, agentMessages]);
 
-  // 根據 URL sessionKey 載入對話與訂閱檔案狀態
   const loadedSessionKeyRef = useRef<string | undefined>(undefined);
   useEffect(() => {
+    if (isAgentMode) return;
     const sessionKey = urlSessionKey;
-    // 避免重複載入同一個 session
     if (sessionKey === loadedSessionKeyRef.current) return;
     loadedSessionKeyRef.current = sessionKey;
 
@@ -62,7 +85,6 @@ export default function TaskSessionChat() {
     fileSSEConnectionRef.current = null;
 
     if (!sessionKey) {
-      // 沒有指定 sessionKey 時，嘗試導航到最近的 session
       chatStore.setActiveSessionKey(null);
       chatStore.resetCurrentSession();
       void chatStore.loadSessions().then(() => {
@@ -88,7 +110,7 @@ export default function TaskSessionChat() {
     return () => {
       conn.abort();
     };
-  }, [urlSessionKey]);
+  }, [urlSessionKey, isAgentMode, navigate]);
 
   const handleAttachClick = () => {
     fileInputRef.current?.click();
@@ -168,11 +190,37 @@ export default function TaskSessionChat() {
     }
   };
 
-  const greetingVisible = storeState.messages.length === 0 && !storeState.isStreaming && Boolean(storeState.greeting);
+  const greetingVisible = !isAgentMode && storeState.messages.length === 0 && !storeState.isStreaming && Boolean(storeState.greeting);
 
-  const displayMessages = storeState.messages;
+  const displayMessages = isAgentMode ? agentMessages : storeState.messages;
+
+  const makeAgentMsg = (role: string, content: string, key: string): ChatMessage => ({
+    _key: key, session_key: '', role, content, thinking: null, tokens: null, created_at: new Date().toISOString(),
+  });
+
+  const handleAgentSend = async (text: string) => {
+    if (!agentKey || !agentInfo) return;
+    const userKey = `agent_user_${Date.now().toString(36)}`;
+    setAgentMessages((prev) => [...prev, makeAgentMsg('user', text, userKey)]);
+    setAgentLoading(true);
+    try {
+      const res = await agentApi.chat(agentKey, {
+        session_id: agentSessionId,
+        message: text,
+      });
+      setAgentMessages((prev) => [...prev, makeAgentMsg('assistant', res.data.reply, `agent_asst_${Date.now().toString(36)}`)]);
+    } catch (err: any) {
+      message.error(err?.response?.data?.message || '發送失敗');
+    } finally {
+      setAgentLoading(false);
+    }
+  };
 
   const sendNow = async (text: string) => {
+    if (isAgentMode) {
+      await handleAgentSend(text);
+      return;
+    }
     chatOrchestrator.handleSendStart();
     const connection = await chatStore.sendMessage(text);
     connectionRef.current = connection;
@@ -181,9 +229,15 @@ export default function TaskSessionChat() {
   const handleSend = async (queuedText?: string) => {
     const text = (queuedText ?? inputValue).trim();
     if (!text) return;
+    if (!queuedText) setInputValue('');
+
+    if (isAgentMode) {
+      await sendNow(text);
+      return;
+    }
+
     if (storeState.isStreaming) {
       setQueue((prev) => [...prev, text]);
-      if (!queuedText) setInputValue('');
       return;
     }
 
@@ -195,7 +249,6 @@ export default function TaskSessionChat() {
       return;
     }
 
-    if (!queuedText) setInputValue('');
     await sendNow(text);
   };
 
@@ -237,6 +290,10 @@ export default function TaskSessionChat() {
     chatStore.stopStreaming();
   };
 
+  const handleBack = () => {
+    navigate('/app/browse-agent');
+  };
+
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
@@ -246,6 +303,41 @@ export default function TaskSessionChat() {
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: contentTokens.colorBgBase, color: contentTokens.colorTextBase, fontFamily: 'Inter, "PingFang SC", -apple-system, sans-serif', overflow: 'hidden' }}>
+      {/* Agent mode header */}
+      {isAgentMode && (
+        <div style={{
+          padding: '12px 16px',
+          borderBottom: `1px solid ${contentTokens.chatInputBg}`,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+          flexShrink: 0,
+        }}>
+          <span
+            onClick={handleBack}
+            style={{ fontSize: 16, color: contentTokens.iconDefault, cursor: 'pointer', padding: '4px' }}
+          >
+            <ArrowLeftOutlined />
+          </span>
+          <div style={{
+            width: 32, height: 32, borderRadius: 6,
+            background: `${contentTokens.colorPrimary}1a`,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 18,
+          }}>
+            {agentInfo?.icon ? '🤖' : '🤖'}
+          </div>
+          <div>
+            <Text strong style={{ fontSize: 15, color: contentTokens.colorTextBase }}>
+              {agentInfo?.name || '智能體'}
+            </Text>
+            <Text type="secondary" style={{ fontSize: 12, display: 'block' }}>
+              {agentInfo?.description || ''}
+            </Text>
+          </div>
+        </div>
+      )}
+
       <div style={{ flex: 1, overflowY: 'auto', padding: '24px 16px', scrollbarWidth: 'thin', scrollbarColor: `${contentTokens.textSecondary} transparent` }}>
         {greetingVisible && (
           <div style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: 24 }}>
@@ -264,7 +356,7 @@ export default function TaskSessionChat() {
           </div>
         ))}
 
-        {storeState.isStreaming && (
+        {!isAgentMode && storeState.isStreaming && (
           <div style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: 16 }}>
             {storeState.streamingContent ? (
               <MessageBubble
@@ -282,6 +374,17 @@ export default function TaskSessionChat() {
           </div>
         )}
 
+        {/* Agent loading indicator */}
+        {isAgentMode && agentLoading && (
+          <div style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: 16 }}>
+            <div style={{ display: 'flex', gap: 4, padding: '10px 12px' }}>
+              {[0, 1, 2].map((i) => (
+                <span key={i} style={{ width: 8, height: 8, borderRadius: '50%', background: contentTokens.textSecondary, animation: 'dotBounce 1.4s ease-in-out infinite', animationDelay: `${i * 0.16}s` }} />
+              ))}
+            </div>
+          </div>
+        )}
+
         {orchState.currentToolCalls.length > 0 && (
           <div style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: 8, paddingLeft: 8 }}>
             <ToolCallDisplay toolCalls={orchState.currentToolCalls} />
@@ -291,7 +394,7 @@ export default function TaskSessionChat() {
         <div ref={chatEndRef} />
       </div>
 
-      {(storeState.uploadedFiles.length > 0 || uploadingFiles.size > 0) && (
+      {!isAgentMode && (storeState.uploadedFiles.length > 0 || uploadingFiles.size > 0) && (
         <div style={{
           padding: '0 16px 8px',
           flexShrink: 0,
@@ -374,37 +477,41 @@ export default function TaskSessionChat() {
             style={{ width: '100%', background: contentTokens.chatInputBg, border: `1px solid ${editingKey ? contentTokens.colorPrimary : contentTokens.chatInputBg}`, borderRadius: 8, color: contentTokens.colorTextBase, fontSize: 14, padding: '8px 120px 8px 12px', resize: 'none' }}
           />
           <div style={{ position: 'absolute', top: 6, right: 8, display: 'flex', gap: 4, alignItems: 'center' }}>
-            <span
-              onClick={handleNewSession}
-              style={{ fontSize: 14, color: contentTokens.iconDefault, cursor: 'pointer', transition: 'color 0.2s', padding: '2px 4px' }}
-              onMouseEnter={(e) => { e.currentTarget.style.color = contentTokens.iconHover; }}
-              onMouseLeave={(e) => { e.currentTarget.style.color = contentTokens.iconDefault; }}
-            >
-              <PlusOutlined />
-            </span>
-            <Dropdown menu={{ items: providerItems, onClick: handleProviderSelect }} trigger={['click']}>
+            {!isAgentMode && (
               <span
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 4,
-                  padding: '2px 8px',
-                  borderRadius: 4,
-                  background: `${contentTokens.colorPrimary}18`,
-                  color: contentTokens.colorPrimary,
-                  fontSize: 11,
-                  cursor: 'pointer',
-                  whiteSpace: 'nowrap',
-                  maxWidth: 120,
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  border: `1px solid ${contentTokens.colorPrimary}40`,
-                }}
+                onClick={handleNewSession}
+                style={{ fontSize: 14, color: contentTokens.iconDefault, cursor: 'pointer', transition: 'color 0.2s', padding: '2px 4px' }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = contentTokens.iconHover; }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = contentTokens.iconDefault; }}
               >
-                <RobotOutlined style={{ fontSize: 10, flexShrink: 0 }} />
-                {providerDisplayName}
+                <PlusOutlined />
               </span>
-            </Dropdown>
+            )}
+            {!isAgentMode && (
+              <Dropdown menu={{ items: providerItems, onClick: handleProviderSelect }} trigger={['click']}>
+                <span
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 4,
+                    padding: '2px 8px',
+                    borderRadius: 4,
+                    background: `${contentTokens.colorPrimary}18`,
+                    color: contentTokens.colorPrimary,
+                    fontSize: 11,
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap',
+                    maxWidth: 120,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    border: `1px solid ${contentTokens.colorPrimary}40`,
+                  }}
+                >
+                  <RobotOutlined style={{ fontSize: 10, flexShrink: 0 }} />
+                  {providerDisplayName}
+                </span>
+              </Dropdown>
+            )}
             {inputBarIcons.map((item) => (
               <span
                 key={item.key}
@@ -415,14 +522,16 @@ export default function TaskSessionChat() {
                 {item.icon}
               </span>
             ))}
-            <span
-              onClick={handleAttachClick}
-              style={{ fontSize: 14, color: contentTokens.iconDefault, cursor: 'pointer', transition: 'color 0.2s', padding: '2px 4px' }}
-              onMouseEnter={(e) => { e.currentTarget.style.color = contentTokens.iconHover; }}
-              onMouseLeave={(e) => { e.currentTarget.style.color = contentTokens.iconDefault; }}
-            >
-              <PaperClipOutlined />
-            </span>
+            {!isAgentMode && (
+              <span
+                onClick={handleAttachClick}
+                style={{ fontSize: 14, color: contentTokens.iconDefault, cursor: 'pointer', transition: 'color 0.2s', padding: '2px 4px' }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = contentTokens.iconHover; }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = contentTokens.iconDefault; }}
+              >
+                <PaperClipOutlined />
+              </span>
+            )}
             <span
               onClick={handleScrollToLastUserMsg}
               title="定位到最後發問"
@@ -433,18 +542,25 @@ export default function TaskSessionChat() {
               <VerticalAlignBottomOutlined />
             </span>
             <span
-              onClick={storeState.isStreaming ? handleStop : () => void handleSend()}
-              style={{ fontSize: 16, color: storeState.isStreaming ? contentTokens.btnClear : (inputValue.trim() ? contentTokens.btnSend : contentTokens.iconDefault), cursor: storeState.isStreaming || inputValue.trim() ? 'pointer' : 'not-allowed', transition: 'color 0.2s', padding: '2px 4px' }}
+              onClick={isAgentMode ? () => void handleSend() : (storeState.isStreaming ? handleStop : () => void handleSend())}
+              style={{
+                fontSize: 16,
+                color: isAgentMode ? (inputValue.trim() ? contentTokens.btnSend : contentTokens.iconDefault)
+                  : (storeState.isStreaming ? contentTokens.btnClear : (inputValue.trim() ? contentTokens.btnSend : contentTokens.iconDefault)),
+                cursor: isAgentMode ? (inputValue.trim() ? 'pointer' : 'not-allowed')
+                  : (storeState.isStreaming || inputValue.trim() ? 'pointer' : 'not-allowed'),
+                transition: 'color 0.2s', padding: '2px 4px',
+              }}
               onMouseEnter={(e) => {
-                if (storeState.isStreaming) e.currentTarget.style.color = contentTokens.btnClearHover;
+                if (!isAgentMode && storeState.isStreaming) e.currentTarget.style.color = contentTokens.btnClearHover;
                 else if (inputValue.trim()) e.currentTarget.style.color = contentTokens.btnSendHover;
               }}
               onMouseLeave={(e) => {
-                if (storeState.isStreaming) e.currentTarget.style.color = contentTokens.btnClear;
+                if (!isAgentMode && storeState.isStreaming) e.currentTarget.style.color = contentTokens.btnClear;
                 else if (inputValue.trim()) e.currentTarget.style.color = contentTokens.btnSend;
               }}
             >
-              {storeState.isStreaming ? <StopOutlined /> : <SendOutlined />}
+              {isAgentMode ? <SendOutlined /> : (storeState.isStreaming ? <StopOutlined /> : <SendOutlined />)}
             </span>
           </div>
         </div>

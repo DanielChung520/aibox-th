@@ -1,0 +1,6 @@
+# Optional local TTS dependencies
+# Install with: pip install -r requirements-local-tts.txt
+
+ChatTTS
+torch
+numpy

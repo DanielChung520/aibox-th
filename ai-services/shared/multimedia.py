@@ -30,12 +30,13 @@ async def upload_to_seaweedfs(
     return f"{SEAWEEDFS_URL}{full_path}"
 
 
-async def analyze_image(content: bytes, prompt: str = "請詳細描述這張圖片的內容") -> str:
+async def analyze_image(content: bytes, prompt: str = "請詳細描述這張圖片的內容", model: str | None = None) -> str:
     import base64
     image_b64 = base64.b64encode(content).decode("utf-8")
+    vision_model = model or os.getenv("VISION_MODEL", "qwen3-vl:latest")
 
     payload = {
-        "model": VISION_MODEL,
+        "model": vision_model,
         "messages": [
             {
                 "role": "user",
@@ -55,12 +56,13 @@ async def analyze_image(content: bytes, prompt: str = "請詳細描述這張圖�
         return data.get("message", {}).get("content", "")
 
 
-async def analyze_video(content: bytes, prompt: str = "請詳細描述這段影片的內容") -> str:
+async def analyze_video(content: bytes, prompt: str = "請詳細描述這段影片的內容", model: str | None = None) -> str:
     import base64
     video_b64 = base64.b64encode(content).decode("utf-8")
+    vision_model = model or os.getenv("VISION_MODEL", "qwen3-vl:latest")
 
     payload = {
-        "model": VISION_MODEL,
+        "model": vision_model,
         "messages": [
             {
                 "role": "user",
@@ -130,15 +132,16 @@ async def process_multimedia(
     platform: str,
     user_id: str,
     mime_type: str = "application/octet-stream",
+    vision_model: str | None = None,
 ) -> MultimediaResult:
     seaweed_url = await upload_to_seaweedfs(content, filename, mime_type, platform, user_id)
 
     description = ""
 
     if media_type == "image":
-        description = await analyze_image(content)
+        description = await analyze_image(content, model=vision_model)
     elif media_type == "video":
-        description = await analyze_video(content)
+        description = await analyze_video(content, model=vision_model)
     elif media_type == "audio":
         description = await transcribe_audio(content)
     elif media_type == "file":

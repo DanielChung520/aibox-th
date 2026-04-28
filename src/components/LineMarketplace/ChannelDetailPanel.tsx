@@ -6,7 +6,7 @@
  * @version     1.0.0
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Drawer,
   Form,
@@ -18,6 +18,8 @@ import {
   Tag,
   App,
   Popconfirm,
+  Select,
+  Spin,
 } from 'antd';
 import {
   CloseOutlined,
@@ -27,8 +29,8 @@ import {
   DeleteOutlined,
   LinkOutlined,
 } from '@ant-design/icons';
-import type { LINEChannel } from '../../services/api';
-import { linePlatformApi } from '../../services/api';
+import type { LINEChannel, Agent } from '../../services/api';
+import { linePlatformApi, agentApi } from '../../services/api';
 import AvatarPicker from '../AvatarPicker';
 import { resolveChannelIconSrc } from '../../utils/avatarUtils';
 
@@ -49,6 +51,7 @@ interface ChannelFormValues {
   channel_access_token: string;
   channel_icon?: string;
   channel_description?: string;
+  linked_agent_key?: string;
 }
 
 export default function ChannelDetailPanel({
@@ -64,6 +67,32 @@ export default function ChannelDetailPanel({
   const [testing, setTesting] = useState(false);
   const [revealToken, setRevealToken] = useState(false);
   const [revealSecret, setRevealSecret] = useState(false);
+  const [lineAgents, setLineAgents] = useState<{ value: string; label: string }[]>([]);
+  const [agentsLoading, setAgentsLoading] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    setAgentsLoading(true);
+    // 先載入所有工具，找出 line_bot 的 tool key
+    Promise.all([
+      agentApi.list('bpa'),
+      import('../../services/api').then(m => m.toolApi.list()),
+    ]).then(([agentRes, toolRes]) => {
+      const toolsList = toolRes.data.data || [];
+      const lineBotKey = toolsList.find((t: any) => t.code === 'line_bot')?._key;
+      if (!lineBotKey) { setAgentsLoading(false); return; }
+
+      const items = agentRes.data.data || [];
+      const opts: { value: string; label: string }[] = [];
+      items.forEach((a: Agent) => {
+        const atools = a.tools || [];
+        if (atools.includes(lineBotKey)) {
+          opts.push({ value: a._key || '', label: a.name });
+        }
+      });
+      setLineAgents(opts);
+    }).catch(() => {}).finally(() => setAgentsLoading(false));
+  }, [open]);
 
   if (channel) {
     form.setFieldsValue({
@@ -73,6 +102,7 @@ export default function ChannelDetailPanel({
       channel_access_token: channel.channel_access_token || '',
       channel_icon: channel.channel_icon || '',
       channel_description: channel.channel_description || '',
+      linked_agent_key: channel.linked_agent_key || undefined,
     });
   } else {
     form.resetFields();
@@ -90,6 +120,7 @@ export default function ChannelDetailPanel({
         channel_access_token: values.channel_access_token,
         channel_icon: values.channel_icon || '',
         channel_description: values.channel_description || '',
+        linked_agent_key: values.linked_agent_key || '',
       });
       antMessage.success('Channel 已儲存');
       onUpdated();
@@ -297,6 +328,22 @@ export default function ChannelDetailPanel({
               extra="描述這個 Channel 的用途"
             >
               <Input.TextArea placeholder="簡短描述 Channel" rows={2} />
+            </Form.Item>
+
+            <Divider style={{ margin: '8px 0' }} />
+
+            <Form.Item
+              label="關聯 Agent"
+              name="linked_agent_key"
+              extra="選擇有 LINE Bot 工具權限的 Agent，Webhook 訊息將自動路由到該 Agent"
+            >
+              <Select
+                allowClear
+                placeholder={agentsLoading ? '載入中...' : '請選擇 Agent'}
+                loading={agentsLoading}
+                options={lineAgents}
+                notFoundContent={agentsLoading ? <Spin size="small" /> : '無符合條件的 Agent（需在工具權限設定 LINE Bot）'}
+              />
             </Form.Item>
 
           </Form>

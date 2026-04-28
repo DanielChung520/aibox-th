@@ -173,6 +173,16 @@ async def delete_channel(key: str) -> bool:
         return True
 
 
+async def get_agent(key: str) -> dict[str, Any] | None:
+    async with httpx.AsyncClient() as client:
+        url = f"{ARANGO_URL}/_db/{ARANGO_DB}/_api/document/agents/{key}"
+        resp = await client.get(url, headers=await _arango_headers())
+        if resp.status_code == 404:
+            return None
+        resp.raise_for_status()
+        return resp.json()
+
+
 async def delete_channels_by_account(official_account_key: str) -> None:
     async with httpx.AsyncClient() as client:
         url = f"{ARANGO_URL}/_db/{ARANGO_DB}/_api/cursor"

@@ -1,6 +1,6 @@
 [package]
 name = "abc-desktop"
-version = "1.0.9"
+version = "1.0.10"
 description = "ABC Desktop Management Application"
 authors = ["ABC Team"]
 edition = "2021"

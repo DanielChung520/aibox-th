@@ -32,12 +32,12 @@ pub fn create_da_expressions_router() -> Router {
 }
 
 fn get_data_agent_url() -> String {
-    CONFIG.ai_services.data_agent_url.clone()
+    format!("{}/da/intent-rag", CONFIG.ai_services.unified_agents_url)
 }
 
 async fn sync_expression_to_qdrant(key: &str) -> Result<(), StatusCode> {
     let url = format!(
-        "{}/intent-rag/data_agent/upsert-expression/{}",
+        "{}/data_agent/upsert-expression/{}",
         get_data_agent_url(),
         key
     );
@@ -60,7 +60,7 @@ async fn sync_expression_to_qdrant(key: &str) -> Result<(), StatusCode> {
 
 async fn delete_expression_from_qdrant(key: &str) -> Result<(), StatusCode> {
     let url = format!(
-        "{}/intent-rag/data_agent/delete-expression/{}",
+        "{}/data_agent/delete-expression/{}",
         get_data_agent_url(),
         key
     );
@@ -353,14 +353,14 @@ async fn delete_expression(Path(key): Path<String>) -> Result<impl IntoResponse,
 }
 
 // ---------------------------------------------------------------------------
-// PROXY: sync da_expressions to Qdrant via Python Data Agent
+// PROXY: sync da_expressions to Qdrant via unified_agents
 // ---------------------------------------------------------------------------
 
 async fn proxy_sync_da_expressions(
     Json(payload): Json<Value>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    let base_url = &CONFIG.ai_services.data_agent_url;
-    let url = format!("{base_url}/intent-rag/data_agent/sync-da-expressions");
+    let base_url = format!("{}/da/intent-rag", CONFIG.ai_services.unified_agents_url);
+    let url = format!("{base_url}/data_agent/sync-da-expressions");
 
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(300))

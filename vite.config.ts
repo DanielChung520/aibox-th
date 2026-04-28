@@ -116,21 +116,11 @@ export default defineConfig(async () => ({
       ignored: ["**/src-tauri/**"],
     },
     proxy: {
-      // Ragic proxy data → Rust Gateway (port 6500)
-      '/api/v1/da/ragic/proxy': {
-        target: 'http://localhost:6500',
-        changeOrigin: true,
-      },
-      // Ragic cache endpoints → Rust Gateway (port 6500)
-      '/api/v1/da/ragic/cache': {
-        target: 'http://localhost:6500',
-        changeOrigin: true,
-      },
-      // Other Ragic endpoints → Python Data Agent (port 8003)
+      // All Data Agent Ragic endpoints → Rust Gateway (port 6500)
+      // The gateway proxies unified_agents so frontend never talks to Python services directly.
       '/api/v1/da/ragic': {
-        target: 'http://localhost:8003',
+        target: 'http://localhost:6500',
         changeOrigin: true,
-        rewrite: (path: string) => path.replace('/api/v1/da/ragic', '/ragic'),
       },
       // All other API → Rust Gateway (port 6500)
       '/api': {

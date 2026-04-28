@@ -178,6 +178,53 @@ class ToolRegistry:
                 category="builtin",
             )
         )
+        self._register(
+            ToolDefinition(
+                name="local_tts",
+                description="將逐字稿或文字內容轉為本地 WAV 語音，支援多聲線樣本輸出。",
+                source=ToolSource.BUILTIN,
+                parameters=_json_schema(
+                    {
+                        "text": {"type": "string", "description": "要轉語音的文字內容"},
+                        "file_path": {"type": "string", "description": "輸入文字檔或逐字稿路徑"},
+                        "output_path": {"type": "string", "description": "單一語音輸出路徑，或 sample_voices 模式下的輸出目錄"},
+                        "voice_seed": {"type": "integer", "description": "固定音色的 speaker seed"},
+                        "sample_voices": {"type": "boolean", "description": "是否輸出多個聲線樣本"},
+                        "sample_text": {"type": "string", "description": "多聲線樣本專用文字，未填則沿用 text 或 file_path 內容"},
+                        "voice_seeds": {
+                            "type": "array",
+                            "items": {"type": "integer"},
+                            "description": "sample_voices 模式使用的 speaker seed 清單",
+                        },
+                        "paragraph_pause_ms": {"type": "integer", "description": "段落間預設停頓毫秒數"},
+                        "max_chars_per_chunk": {"type": "integer", "description": "單段最大字數，超過會自動切段"},
+                    },
+                    ["output_path"],
+                ),
+                category="builtin",
+            )
+        )
+
+        self._register(
+            ToolDefinition(
+                name="multimedia_analyzer",
+                description="Upload and analyze image/video using AI vision models, transcribe audio. Backs up original to SeaweedFS.",
+                source=ToolSource.BUILTIN,
+                parameters=_json_schema(
+                    {
+                        "content_b64": {"type": "string", "description": "Base64-encoded media content"},
+                        "media_type": {"type": "string", "enum": ["image", "video", "audio"], "description": "Type of media to analyze"},
+                        "filename": {"type": "string", "description": "Original filename"},
+                        "platform": {"type": "string", "description": "Source platform (line, whatsapp, etc.)"},
+                        "user_id": {"type": "string", "description": "User identifier for storage path"},
+                        "mime_type": {"type": "string", "description": "MIME type of the content"},
+                        "prompt": {"type": "string", "description": "Custom prompt for analysis (optional)"},
+                    },
+                    ["content_b64", "media_type"],
+                ),
+                category="builtin",
+            )
+        )
 
     def get_tools_for_llm(self) -> list[dict[str, Any]]:
         return [

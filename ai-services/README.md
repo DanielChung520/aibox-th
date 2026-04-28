@@ -1,7 +1,7 @@
 ---
-lastUpdate: 2026-03-23 19:05:37
+lastUpdate: 2026-04-24 10:07:45
 author: Daniel Chung
-version: 2.0.0
+version: 2.1.0
 ---
 
 # AI Services
@@ -13,7 +13,7 @@ AIBox Python FastAPI 微服務集群，提供 AI Agent 系統的後端能力。
 | 服務 | 端口 | 模組路徑 | 說明 |
 |------|------|----------|------|
 | AITask | 8001 | `aitask/` | AI 任務調度服務 |
-| Data Agent | 8003 | `data_agent/` | 資料查詢意圖 RAG + NL→SQL Pipeline |
+| unified_agents | 8011 | `unified_agents/` | 統一入口，承載 Data Agent `/da/*`、Knowledge `/ka/*` 等路由 |
 | MCP Tools | 8004 | `mcp_tools/` | MCP 工具集成服務 |
 | BPA MM Agent | 8005 | `bpa/mm_agent/` | 物料管理業務流程自動化 |
 | Knowledge Agent | 8007 | `knowledge_agent/` | 知識庫 RAG 管理服務 |
@@ -26,7 +26,7 @@ ai-services/
 ├── requirements.txt          # 共用 Python 依賴
 ├── aitask/                   # AI Task 服務 (port 8001)
 │   └── main.py
-├── data_agent/               # Data Agent 服務 (port 8003)
+├── data_agent/               # Data Agent 實作模組（由 unified_agents 掛載 /da/*）
 │   ├── __init__.py
 │   ├── main.py               # FastAPI 入口，掛載子路由
 │   ├── intent_rag/           # 資料查詢意圖 RAG 子模組
@@ -99,7 +99,7 @@ source .venv/bin/activate
 pip install -r requirements.txt
 
 # 啟動各服務
-uvicorn data_agent.main:app --port 8003 --reload
+uvicorn unified_agents.main:app --port 8011 --reload
 uvicorn knowledge_agent.main:app --port 8007 --reload
 uvicorn bpa.mm_agent.main:app --port 8005 --reload
 uvicorn aitask.main:app --port 8001 --reload
@@ -153,5 +153,6 @@ mypy ai-services/ --ignore-missing-imports
 
 | 日期 | 版本 | 更新者 | 變更內容 |
 |------|------|--------|----------|
+| 2026-04-24 | 2.1.0 | Daniel Chung | 補充 unified_agents(8011) 為 Data Agent 對外整合入口，釐清 data_agent/ 為實作模組 |
 | 2026-03-23 | 2.0.0 | Daniel Chung | 重構目錄：data_agent(8003), knowledge_agent(8007), bpa/mm_agent(8005), datalake; 新增 NL→SQL Pipeline |
 | 2026-03-18 | 1.0.0 | Daniel Chung | 初始化 ai-services FastAPI 模板與服務目錄 |

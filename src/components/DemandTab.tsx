@@ -10,6 +10,7 @@ import { useState, useEffect } from 'react';
 import { Button, Space, Form, Input, Tag, Divider, App, InputNumber, Upload, Image, Modal, Alert } from 'antd';
 import type { Demand, DemandStatus, UploadedFile, AIReview } from '../services/api';
 import { agentApi, demandApi } from '../services/api';
+import { authStore } from '../stores/auth';
 import { InboxOutlined, FileOutlined } from '@ant-design/icons';
 import type { UploadProps, UploadFile } from 'antd/es/upload/interface';
 import { trackDemandAction } from '../utils/analytics';
@@ -45,6 +46,7 @@ export default function DemandTab({ agentKey, demandKey, onStatusChange, onDeman
   const [aiReview, setAiReview] = useState<AIReview | null>(null);
   const [reviewModalVisible, setReviewModalVisible] = useState(false);
   const [form] = Form.useForm();
+  const user = authStore.getState().user;
 
   useEffect(() => {
     if (demandKey) {
@@ -118,6 +120,30 @@ export default function DemandTab({ agentKey, demandKey, onStatusChange, onDeman
       const values = await form.getFieldsValue();
       await agentApi.updateDemand(agentKey, demandKey, values);
       await agentApi.updateDemandStatus(agentKey, demandKey, { status: 'submitted', ai_review: aiReview });
+      
+      // 建立 agent_requirements 記錄
+      try {
+        const agentRes = await agentApi.get(agentKey);
+        const agentName = (agentRes.data as any)?.data?.name || (agentRes.data as any)?.name || agentKey;
+        await fetch('/api/v1/agent-requirements', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authStore.getState().token}` },
+          body: JSON.stringify({
+            agent_key: agentKey,
+            demand_key: demandKey,
+            agent_name: agentName,
+            account: user?.username || 'anonymous',
+            version: demand?.version || 'v1.0',
+            status: 'pending_accept',
+            goal: values.goal,
+            expected_effect: values.expected_effect,
+            problem_description: values.problem_description,
+            ai_review: aiReview,
+            submitted_at: new Date().toISOString(),
+          }),
+        });
+      } catch (e) { console.warn('Failed to create requirement record:', e); }
+      
       trackDemandAction('submit', demandKey, demand?.goal);
       antMessage.success('需求已提交，等待團隊接單');
       setAiReview(null);
@@ -409,6 +435,14 @@ export default function DemandTab({ agentKey, demandKey, onStatusChange, onDeman
                 <Tag color={aiReview.confidence === 'high' ? 'green' : aiReview.confidence === 'medium' ? 'orange' : 'red'} style={{ marginLeft: 8 }}>
                   信心度：{aiReview.confidence}
                 </Tag>
+                {aiReview.hour_breakdown && (
+                  <div style={{ marginTop: 8, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4, fontSize: 12 }}>
+                    <span>🔍 顧問：{aiReview.hour_breakdown.consulting}h</span>
+                    <span>💻 開發：{aiReview.hour_breakdown.development}h</span>
+                    <span>🧪 測試：{aiReview.hour_breakdown.testing}h</span>
+                    <span>✅ 審查：{aiReview.hour_breakdown.review}h</span>
+                  </div>
+                )}
               </div>
 
               {aiReview.suggestions && aiReview.suggestions.length > 0 && (

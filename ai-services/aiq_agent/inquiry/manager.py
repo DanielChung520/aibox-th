@@ -43,8 +43,14 @@ class InquiryManager:
         self._states: dict[str, InquiryState] = {}
         self._timestamps: dict[str, float] = {}
         self._lock = threading.Lock()
-        self._llm_client = InquiryLLMClient()
+        self._llm_client: InquiryLLMClient | None = None  # lazy init
         self._gap_threshold = gap_threshold
+
+    def _get_llm_client(self) -> InquiryLLMClient:
+        """Lazy-initialize the LLM client on first use (avoids import-time event loop issues)."""
+        if self._llm_client is None:
+            self._llm_client = InquiryLLMClient()
+        return self._llm_client
 
     async def process_inquiry(
         self,
@@ -63,7 +69,7 @@ class InquiryManager:
             query=request.query,
             candidate_seeds=_candidate_seeds_from_context(working_context),
         )
-        llm_response = await self._llm_client.analyze(llm_request)
+        llm_response = await self._get_llm_client().analyze(llm_request)
 
         merged_hypotheses = self._merge_hypotheses(state.hypotheses, llm_response.hypotheses)
         boundary = evaluate_boundary(merged_hypotheses, working_context)

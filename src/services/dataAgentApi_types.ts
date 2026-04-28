@@ -1,9 +1,20 @@
 /**
  * @file        Data Agent API 服務層 - 型別定義
  * @description DA 的 Schema、Intents、Query 等型別介面定義
- * @lastUpdate  2026-04-16 11:12:44
+ * @lastUpdate  2026-04-24 10:18:00
  * @author      Daniel Chung
  */
+
+export interface LinkedFieldRef {
+  target_form: string;
+  target_field: string;
+}
+
+export interface LoadedFieldRef {
+  source_form: string;
+  source_field: string;
+  sync_mode: string;
+}
 
 export interface TableInfo {
   table_id: string;
@@ -32,6 +43,8 @@ export interface FieldInfo {
   writable_raw: string;
   write_format: string;
   memo: string;
+  linked_to?: LinkedFieldRef | null;
+  loaded_from?: LoadedFieldRef | null;
   status: string;
 }
 
@@ -249,7 +262,7 @@ export interface RagicIntentItem {
 }
 
 // ---------------------------------------------------------------------------
-// NL → Ragic Query (POST /ragic/query) — Standard Response Protocol
+// NL → Ragic Query (POST /api/v1/da/ragic/query) — Standard Response Protocol
 // ---------------------------------------------------------------------------
 
 export interface RagicNLQueryOptions {

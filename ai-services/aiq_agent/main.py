@@ -25,8 +25,15 @@ from aiq_agent.routers.signals import router as signals_router
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     """Manage startup/shutdown lifecycle."""
     yield
-    await inquiry_manager._llm_client.close()
-    await learning_manager.close()
+    try:
+        if inquiry_manager._llm_client is not None:
+            await inquiry_manager._llm_client.close()
+    except Exception:
+        pass
+    try:
+        await learning_manager.close()
+    except Exception:
+        pass
 
 
 app = FastAPI(

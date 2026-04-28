@@ -5,6 +5,7 @@ import httpx
 
 
 LINE_API_BASE = "https://api.line.me"
+LINE_DATA_API_BASE = "https://api-data.line.me"
 
 
 def verify_line_signature(body: str, signature: str, channel_secret: str) -> bool:
@@ -115,6 +116,54 @@ async def push_message(channel_access_token: str, to_user_id: str, messages: lis
             return {"status_code": 500, "body": {"message": str(e)}}
 
 
+async def get_group_summary(group_id: str, channel_access_token: str) -> dict:
+    async with httpx.AsyncClient() as client:
+        try:
+            resp = await client.get(
+                f"{LINE_API_BASE}/v2/bot/group/{group_id}/summary",
+                headers={"Authorization": f"Bearer {channel_access_token}"},
+                timeout=10.0,
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                return {"group_name": data.get("groupName", group_id)}
+            return {"group_name": group_id}
+        except Exception:
+            return {"group_name": group_id}
+
+
+async def get_room_summary(room_id: str, channel_access_token: str) -> dict:
+    async with httpx.AsyncClient() as client:
+        try:
+            resp = await client.get(
+                f"{LINE_API_BASE}/v2/bot/room/{room_id}/summary",
+                headers={"Authorization": f"Bearer {channel_access_token}"},
+                timeout=10.0,
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                return {"room_name": data.get("roomName", room_id)}
+            return {"room_name": room_id}
+        except Exception:
+            return {"room_name": room_id}
+
+
+async def get_user_profile(user_id: str, channel_access_token: str) -> dict:
+    async with httpx.AsyncClient() as client:
+        try:
+            resp = await client.get(
+                f"{LINE_API_BASE}/v2/bot/profile/{user_id}",
+                headers={"Authorization": f"Bearer {channel_access_token}"},
+                timeout=10.0,
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                return {"display_name": data.get("displayName", user_id)}
+            return {"display_name": user_id}
+        except Exception:
+            return {"display_name": user_id}
+
+
 async def get_message_content(content_id: str, channel_access_token: str) -> bytes:
     """
     下載 LINE 訊息內容（圖片、影片、音頻、檔案）。
@@ -128,7 +177,7 @@ async def get_message_content(content_id: str, channel_access_token: str) -> byt
     """
     async with httpx.AsyncClient() as client:
         resp = await client.get(
-            f"{LINE_API_BASE}/v2/bot/message/{content_id}/content",
+            f"{LINE_DATA_API_BASE}/v2/bot/message/{content_id}/content",
             headers={"Authorization": f"Bearer {channel_access_token}"},
             timeout=30.0,
         )

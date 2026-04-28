@@ -1,4 +1,6 @@
 from datetime import datetime
+
+import httpx
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
@@ -120,16 +122,70 @@ async def test_connection(channel_key: str):
     channel = await db.get_channel(channel_key)
     if not channel:
         raise HTTPException(status_code=404, detail="Channel 不存在")
+
+    # Phase 1: 驗證 LINE Channel 連線
     token = channel.get("channel_access_token")
     if not token:
         return {"code": 200, "data": TestConnectionResult(success=False, error="未設定 Access Token")}
-    result = await test_channel_connection(token)
-    if result["success"]:
-        await db.update_channel(channel_key, {
-            "bot_user_id": result.get("bot_user_id"),
-            "last_connected_at": datetime.utcnow().isoformat(),
-        })
-    return {"code": 200, "data": TestConnectionResult(**result)}
+    line_result = await test_channel_connection(token)
+    if not line_result["success"]:
+        return {"code": 200, "data": TestConnectionResult(**line_result)}
+
+    # 更新 LINE 連線資訊
+    await db.update_channel(channel_key, {
+        "bot_user_id": line_result.get("bot_user_id"),
+        "last_connected_at": datetime.utcnow().isoformat(),
+    })
+
+    # Phase 2: 若有 linked_agent_key，驗證 Agent 端點
+    agent_key = channel.get("linked_agent_key")
+    agent_result = None
+    if agent_key:
+        agent = await db.get_agent(agent_key)
+        if not agent:
+            agent_result = {"success": False, "error": f"Agent ({agent_key}) 不存在"}
+        else:
+            endpoint_url = agent.get("endpoint_url", "")
+            if not endpoint_url:
+                agent_result = {"success": False, "error": f"Agent「{agent.get('name','')}」未設定 endpoint_url"}
+            else:
+                try:
+                    async with httpx.AsyncClient(timeout=30.0) as client:
+                        resp = await client.post(
+                            endpoint_url,
+                            json={
+                                "session_id": f"test_{channel_key}",
+                                "message": "你好，這是一則連線測試訊息",
+                                "user_id": "tester",
+                                "agent_key": agent_key,
+                            },
+                        )
+                        if resp.status_code == 200:
+                            data = resp.json()
+                            reply = data.get("reply") or data.get("response", "")
+                            agent_result = {
+                                "success": True,
+                                "bot_user_id": line_result.get("bot_user_id"),
+                                "agent_name": agent.get("name"),
+                                "agent_reply": reply[:100],
+                            }
+                        else:
+                            agent_result = {"success": False, "error": f"Agent 回應異常 (HTTP {resp.status_code})"}
+                except httpx.TimeoutException:
+                    agent_result = {"success": False, "error": "Agent 端點連線逾時"}
+                except httpx.RequestError as e:
+                    agent_result = {"success": False, "error": f"Agent 端點無法連線: {e}"}
+
+    merged = {
+        "success": line_result["success"] and (agent_result is None or agent_result["success"]),
+        "bot_user_id": line_result.get("bot_user_id"),
+    }
+    if agent_result:
+        merged["agent_name"] = agent_result.get("agent_name")
+        merged["agent_reply"] = agent_result.get("agent_reply")
+        if not agent_result["success"]:
+            merged["error"] = agent_result["error"]
+    return {"code": 200, "data": merged}
 
 
 class PublishResponse(BaseModel):

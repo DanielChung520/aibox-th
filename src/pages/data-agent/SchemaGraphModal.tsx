@@ -1,22 +1,24 @@
 /**
  * @file        Ragic 跨表關聯圖譜 Modal
  * @description 支援 2D（G6 v5）與 3D（react-force-graph-3d）雙模式圖譜，含模組篩選、搜尋定位與高亮清除
- * @lastUpdate  2026-04-12 01:16:45
+ * @lastUpdate  2026-04-24 12:59:34
  * @author      Daniel Chung
- * @version     2.6.0
+ * @version     3.0.0
  */
 
-import { useRef, useState, useCallback, useMemo } from 'react';
+import { useRef, useState, useCallback, useMemo, useEffect } from 'react';
 import { Modal, Spin, Empty, Typography, Segmented, Button, Space, App, Input, AutoComplete, Select } from 'antd';
 import { ZoomInOutlined, ZoomOutOutlined, ReloadOutlined, SearchOutlined, CloseCircleOutlined } from '@ant-design/icons';
 import { Graph } from '@antv/g6';
 import { dataAgentApi } from '../../services/dataAgentApi';
+import type { TableInfo } from '../../services/dataAgentApi_types';
 import { paramsApi } from '../../services/api';
 import SchemaGraph3D, { type SchemaGraph3DHandle } from './SchemaGraph3D';
 import {
   getLayout, parseRelations, filterGraphByModules, getHighlightSet, buildG6NodeConfig, buildG6EdgeConfig,
-  MODULE_OPTIONS,
-  type LayoutMode, type ViewMode, type ParsedGraph, type TableMeta, type HighlightSet,
+  getDefaultGraphModules,
+  MODULE_OPTIONS, mergeGraphWithTableIds,
+  type LayoutMode, type ViewMode, type ParsedGraph, type TableMeta, type HighlightSet, type HighlightMode,
 } from './schemaGraphUtils';
 const { Text } = Typography;
 
@@ -39,7 +41,19 @@ export default function SchemaGraphModal({ open, onClose, account }: SchemaGraph
   const [tableMeta, setTableMeta] = useState<Map<string, TableMeta>>(new Map());
   const [searchValue, setSearchValue] = useState('');
   const [selectedModules, setSelectedModules] = useState<string[]>(MODULE_OPTIONS.map(m => m.value));
+  const [defaultModules, setDefaultModules] = useState<string[]>(MODULE_OPTIONS.map(m => m.value));
+  const [highlightMode, setHighlightMode] = useState<HighlightMode>('both');
+  const [activeNodeId, setActiveNodeId] = useState<string | null>(null);
   const [highlightSet, setHighlightSet] = useState<HighlightSet | null>(null);
+
+  const isUsingDefaultModules = useMemo(() => {
+    if (selectedModules.length !== defaultModules.length) {
+      return false;
+    }
+
+    const selectedSet = new Set(selectedModules);
+    return defaultModules.every(module => selectedSet.has(module));
+  }, [defaultModules, selectedModules]);
 
   const visibleData = useMemo<ParsedGraph | null>(
     () => fullGraph ? filterGraphByModules(fullGraph, selectedModules, tableMeta) : null,
@@ -48,6 +62,7 @@ export default function SchemaGraphModal({ open, onClose, account }: SchemaGraph
 
   const destroyG6 = useCallback(() => { graphRef.current?.destroy(); graphRef.current = null; }, []);
   const clearHighlight = useCallback(() => {
+    setActiveNodeId(null);
     setHighlightSet(null);
     const g = graphRef.current;
     if (!g) return;
@@ -56,6 +71,52 @@ export default function SchemaGraphModal({ open, onClose, account }: SchemaGraph
     for (const e of (visibleData?.g6Edges ?? [])) { if (e.id) stateMap[e.id] = []; }
     g.setElementState(stateMap);
   }, [visibleData]);
+
+  const handleGraphNodeSelect = useCallback((nodeId: string) => {
+    setActiveNodeId(nodeId);
+    if (viewMode === '3D') {
+      fg3dRef.current?.focusNode(nodeId);
+    }
+  }, [viewMode]);
+
+  useEffect(() => {
+    if (!visibleData || !activeNodeId) {
+      setHighlightSet(null);
+      const g = graphRef.current;
+      if (!g) return;
+      const stateMap: Record<string, string[]> = {};
+      for (const n of (visibleData?.g6Nodes ?? [])) stateMap[n.id] = [];
+      for (const e of (visibleData?.g6Edges ?? [])) {
+        if (e.id) stateMap[e.id] = [];
+      }
+      g.setElementState(stateMap);
+      return;
+    }
+
+    const nodeExists = visibleData.g6Nodes.some(node => node.id === activeNodeId);
+    if (!nodeExists) {
+      setActiveNodeId(null);
+      setHighlightSet(null);
+      return;
+    }
+
+    const hs = getHighlightSet(visibleData, activeNodeId, highlightMode);
+    setHighlightSet(hs);
+
+    if (viewMode !== '2D') return;
+
+    const g = graphRef.current;
+    if (!g) return;
+    const stateMap: Record<string, string[]> = {};
+    for (const n of visibleData.g6Nodes) stateMap[n.id] = hs.nodes.has(n.id) ? ['highlight'] : ['inactive'];
+    for (const e of visibleData.g6Edges) {
+      if (e.id) stateMap[e.id] = hs.edges.has(e.id) ? ['highlight'] : ['inactive'];
+    }
+    g.setElementState(stateMap);
+    g.focusElement(activeNodeId, true);
+    zoomRef.current = 1.8;
+    g.zoomTo(1.8, undefined);
+  }, [activeNodeId, highlightMode, viewMode, visibleData]);
 
   const initG6 = useCallback((container: HTMLDivElement, parsed: ParsedGraph) => {
     destroyG6();
@@ -69,13 +130,21 @@ export default function SchemaGraphModal({ open, onClose, account }: SchemaGraph
     });
     graphRef.current = graph;
     graph.render().catch(() => {});
+    graph.on('node:click', (event) => {
+      const target = 'target' in event ? event.target : null;
+      const nodeId = target && typeof target === 'object' && 'id' in target ? String(target.id ?? '') : '';
+      if (!nodeId) return;
+      handleGraphNodeSelect(nodeId);
+    });
     graph.on('canvas:click', () => { clearHighlight(); });
-  }, [destroyG6, clearHighlight]);
+  }, [destroyG6, clearHighlight, handleGraphNodeSelect]);
 
   const handleAfterOpenChange = useCallback((visible: boolean) => {
     if (!visible) {
       destroyG6(); setHasData(false); setLayoutMode('force'); setViewMode('2D');
-      setFullGraph(null); setTableMeta(new Map()); setSearchValue(''); setHighlightSet(null);
+      setFullGraph(null); setTableMeta(new Map()); setSearchValue(''); setHighlightSet(null); setActiveNodeId(null);
+      setHighlightMode('both');
+      setDefaultModules(MODULE_OPTIONS.map(m => m.value));
       setSelectedModules(MODULE_OPTIONS.map(m => m.value));
       return;
     }
@@ -83,35 +152,35 @@ export default function SchemaGraphModal({ open, onClose, account }: SchemaGraph
 
     const fetchAndRender = async () => {
       try {
-        const [relRes, tableRes, paramRes] = await Promise.all([
+        const [relRes, tableRes, defaultGraphModulesRes] = await Promise.all([
           dataAgentApi.ragicAllRelations(account),
           dataAgentApi.listTables().catch(() => ({ data: { data: [] } })),
-          paramsApi.get('ragic.default_graph_modules').catch(() => null),
+          paramsApi.get('ragic.default_graph_modules').catch(() => ({ data: { data: { param_value: '' } } })),
         ]);
 
         const meta = new Map<string, TableMeta>();
-        const tables = tableRes.data.data || [];
+        const tables: TableInfo[] = (tableRes.data.data || []).filter((t: TableInfo) => t.data_source === 'ragic');
         for (const t of tables) {
           meta.set(t.table_id, { name: t.table_name, sheetKey: t.sheet_key, module: t.module });
         }
         setTableMeta(meta);
 
-        // Vite proxy sends directly to Python (port 8003), bypassing Rust Gateway
-        // Python returns: { code: 0, data: [...] }
-        // Rust would return: { code: 200, data: { code: 0, data: [...] } }
+        // Graph endpoints are routed through the Rust Gateway in dev/prod.
+        // The gateway proxies downstream services and wraps the payload.
         const relations: Record<string, unknown>[] = Array.isArray(relRes.data)
           ? relRes.data
           : (relRes.data?.data || []);
         if (!relations.length) { setLoading(false); return; }
 
-        const parsed = parseRelations(relations);
+        const parsed = mergeGraphWithTableIds(
+          parseRelations(relations),
+          tables.map(t => t.table_id),
+        );
         setFullGraph(parsed);
         setHasData(true);
 
-        const pv = paramRes?.data?.data?.param_value ?? '';
-        const defaultMods = pv
-          ? pv.split(',').map((s: string) => s.trim()).filter(Boolean)
-          : MODULE_OPTIONS.map(m => m.value);
+        const defaultMods = getDefaultGraphModules(defaultGraphModulesRes.data.data?.param_value || '');
+        setDefaultModules(defaultMods);
         setSelectedModules(defaultMods);
         if (bodyRef.current) {
           setBodySize({ w: bodyRef.current.offsetWidth, h: bodyRef.current.offsetHeight });
@@ -142,6 +211,10 @@ export default function SchemaGraphModal({ open, onClose, account }: SchemaGraph
       }
     }, 30);
   }, [fullGraph, tableMeta, viewMode, initG6]);
+
+  const handleResetToDefaultModules = useCallback(() => {
+    handleModuleChange(defaultModules);
+  }, [defaultModules, handleModuleChange]);
 
   const handleViewModeChange = useCallback((mode: ViewMode) => {
     if (mode === '3D') {
@@ -192,19 +265,8 @@ export default function SchemaGraphModal({ open, onClose, account }: SchemaGraph
 
   const handleSearchSelect = useCallback((nodeId: string) => {
     setSearchValue('');
-    if (!visibleData) return;
-    const hs = getHighlightSet(visibleData, nodeId);
-    setHighlightSet(hs);
-
-    if (viewMode === '2D') {
-      const g = graphRef.current; if (!g) return;
-      const stateMap: Record<string, string[]> = {};
-      for (const n of visibleData.g6Nodes) stateMap[n.id] = hs.nodes.has(n.id) ? ['highlight'] : ['inactive'];
-      for (const e of visibleData.g6Edges) { if (e.id) stateMap[e.id] = hs.edges.has(e.id) ? ['highlight'] : ['inactive']; }
-      g.setElementState(stateMap);
-      g.focusElement(nodeId, true); zoomRef.current = 1.8; g.zoomTo(1.8, undefined);
-    } else { fg3dRef.current?.focusNode(nodeId); }
-  }, [viewMode, visibleData]);
+    handleGraphNodeSelect(nodeId);
+  }, [handleGraphNodeSelect]);
 
   const abs: React.CSSProperties = { position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' };
 
@@ -217,8 +279,13 @@ export default function SchemaGraphModal({ open, onClose, account }: SchemaGraph
           <Segmented value={viewMode} onChange={v => handleViewModeChange(v as ViewMode)} size="small"
             options={[{ label: '2D', value: '2D' }, { label: '3D', value: '3D' }]} />
           {hasData && (
-            <Select mode="multiple" size="small" value={selectedModules} onChange={handleModuleChange}
-              options={MODULE_OPTIONS} maxTagCount={2} style={{ minWidth: 200 }} placeholder="選擇模組" />
+            <>
+              <Select mode="multiple" size="small" value={selectedModules} onChange={handleModuleChange}
+                options={MODULE_OPTIONS} maxTagCount={2} style={{ minWidth: 200 }} placeholder="選擇模組" />
+              <Button size="small" onClick={handleResetToDefaultModules} disabled={isUsingDefaultModules}>回到預設模組</Button>
+              <Segmented value={highlightMode} onChange={v => setHighlightMode(v as HighlightMode)} size="small"
+                options={[{ label: '雙向', value: 'both' }, { label: '上游', value: 'upstream' }, { label: '下游', value: 'downstream' }]} />
+            </>
           )}
           {viewMode === '2D' && (
             <>
@@ -249,7 +316,8 @@ export default function SchemaGraphModal({ open, onClose, account }: SchemaGraph
         {viewMode === '3D' && hasData && visibleData && (
           <div style={{ position: 'relative', zIndex: 0, width: '100%', height: '100%' }}>
             <SchemaGraph3D ref={fg3dRef} nodes={visibleData.fgNodes} links={visibleData.fgLinks}
-              width={bodySize.w} height={bodySize.h} highlightSet={highlightSet} onBackgroundClick={clearHighlight} />
+              width={bodySize.w} height={bodySize.h} highlightSet={highlightSet}
+              onNodeClick={handleGraphNodeSelect} onBackgroundClick={clearHighlight} />
           </div>
         )}
       </div>

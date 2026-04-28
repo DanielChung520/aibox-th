@@ -1,9 +1,9 @@
 /**
  * @file        Ragic 3D 關聯圖譜元件
  * @description 使用 react-force-graph-3d 渲染 3D 力導向圖
- * @lastUpdate  2026-04-12 00:58:49
+ * @lastUpdate  2026-04-24 12:31:06
  * @author      Daniel Chung
- * @version     1.3.0
+ * @version     1.4.0
  */
 
 import { useRef, useCallback, useEffect, useMemo, forwardRef, useImperativeHandle } from 'react';
@@ -23,6 +23,7 @@ interface GraphNode {
 }
 
 interface GraphLink {
+  id?: string;
   source: string;
   target: string;
   label: string;
@@ -35,6 +36,7 @@ interface SchemaGraph3DProps {
   width: number;
   height: number;
   highlightSet?: HighlightSet | null;
+  onNodeClick?: (nodeId: string) => void;
   onBackgroundClick?: () => void;
 }
 
@@ -45,7 +47,7 @@ interface SchemaGraph3DHandle {
 export type { GraphNode, GraphLink, SchemaGraph3DHandle };
 
 const SchemaGraph3D = forwardRef<SchemaGraph3DHandle, SchemaGraph3DProps>(
-  function SchemaGraph3D({ nodes, links, width, height, highlightSet, onBackgroundClick }, ref) {
+  function SchemaGraph3D({ nodes, links, width, height, highlightSet, onNodeClick, onBackgroundClick }, ref) {
     const fgRef = useRef<ForceGraphMethods<GraphNode, GraphLink>>(undefined);
 
     useImperativeHandle(ref, () => ({
@@ -96,18 +98,19 @@ const SchemaGraph3D = forwardRef<SchemaGraph3DHandle, SchemaGraph3DProps>(
 
     const handleLinkColor = useCallback((link: GraphLink) => {
       if (!highlightSet) return link.color ?? '#999';
-      const srcId = typeof link.source === 'object' ? (link.source as GraphNode).id : link.source;
-      const tgtId = typeof link.target === 'object' ? (link.target as GraphNode).id : link.target;
-      const connected = highlightSet.nodes.has(srcId) && highlightSet.nodes.has(tgtId);
-      return connected ? (link.color ?? '#999') : 'rgba(100,100,100,0.04)';
+      return link.id && highlightSet.edges.has(link.id)
+        ? (link.color ?? '#999')
+        : 'rgba(100,100,100,0.04)';
     }, [highlightSet]);
 
     const handleLinkWidth = useCallback((link: GraphLink) => {
       if (!highlightSet) return 1.2;
-      const srcId = typeof link.source === 'object' ? (link.source as GraphNode).id : link.source;
-      const tgtId = typeof link.target === 'object' ? (link.target as GraphNode).id : link.target;
-      return (highlightSet.nodes.has(srcId) && highlightSet.nodes.has(tgtId)) ? 2.5 : 0.3;
+      return link.id && highlightSet.edges.has(link.id) ? 2.5 : 0.3;
     }, [highlightSet]);
+
+    const handleNodeClick = useCallback((node: GraphNode) => {
+      onNodeClick?.(node.id);
+    }, [onNodeClick]);
 
     const handleBackgroundClick = useCallback(() => { onBackgroundClick?.(); }, [onBackgroundClick]);
 
@@ -134,6 +137,7 @@ const SchemaGraph3D = forwardRef<SchemaGraph3DHandle, SchemaGraph3DProps>(
         enableNodeDrag
         enableNavigationControls
         showNavInfo={false}
+        onNodeClick={handleNodeClick}
         onBackgroundClick={handleBackgroundClick}
       />
     );

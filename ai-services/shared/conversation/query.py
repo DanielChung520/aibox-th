@@ -86,8 +86,9 @@ class QueryEngine:
 
             messages = []
             for m in results:
+                stored_role = m.get("role", "assistant")
                 msg = {
-                    "role": "user" if m.get("role") == "user" else "assistant",
+                    "role": stored_role,
                     "content": m.get("message", ""),
                 }
                 if include_metadata:
@@ -176,8 +177,8 @@ class QueryEngine:
         aql = """
         FOR doc IN {collection}
         FILTER doc.platform == @platform
-        COLLECT session_id = doc.session_id, created_at = doc.created_at
-        AGGREGATE message_count = COUNT(doc), first_msg = MIN(doc.created_at), last_msg = MAX(doc.created_at)
+        COLLECT session_id = doc.session_id
+        AGGREGATE message_count = LENGTH(doc), first_msg = MIN(doc.created_at), last_msg = MAX(doc.created_at)
         SORT last_msg DESC
         LIMIT @limit
         RETURN {{

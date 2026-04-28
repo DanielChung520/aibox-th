@@ -11,12 +11,14 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from datetime import UTC, datetime
+from pathlib import Path
 from time import perf_counter
 from typing import Any
 
 import httpx
 
 from shared.tools.registry import ToolExecutionContext, ToolResult, ToolSource
+from tools.local_tts.local_tts_tool import LocalTTSInput, LocalTTSTool
 
 
 def _auth_headers(context: ToolExecutionContext) -> dict[str, str]:
@@ -181,13 +183,23 @@ class KnowledgeAgentExecutor(BaseExecutor):
 
 
 class BuiltinExecutor(BaseExecutor):
+    def __init__(self, base_url: str = "", timeout_seconds: int = 30) -> None:
+        super().__init__(base_url=base_url, timeout_seconds=timeout_seconds)
+        self._local_tts_tool = LocalTTSTool()
+        self._multimedia_tool: Any = None
+
+    def _get_multimedia_tool(self):
+        if self._multimedia_tool is None:
+            from tools.multimedia_analyzer import MultimediaAnalyzerTool
+            self._multimedia_tool = MultimediaAnalyzerTool()
+        return self._multimedia_tool
+
     async def execute(
         self,
         tool_name: str,
         arguments: dict[str, Any],
         context: ToolExecutionContext,
     ) -> ToolResult:
-        del arguments
         start = perf_counter()
         try:
             result: object
@@ -198,6 +210,28 @@ class BuiltinExecutor(BaseExecutor):
                     "session_id": context.session_id,
                     "summary": "Session summary 尚未實作，後續版本補齊。",
                 }
+            elif tool_name == "local_tts":
+                payload = self._normalize_local_tts_arguments(arguments, context)
+                tool_output = await self._local_tts_tool.execute(LocalTTSInput(**payload))
+                result = tool_output.model_dump()
+            elif tool_name == "multimedia_analyzer":
+                from tools.multimedia_analyzer import MultimediaAnalyzerInput
+                vision_model = arguments.get("vision_model") or None
+                if not vision_model:
+                    vision_model = await self._lookup_tool_model("multimedia-analyzer")
+                inp = MultimediaAnalyzerInput(
+                    content_b64=arguments.get("content_b64", ""),
+                    media_type=arguments.get("media_type", "image"),
+                    filename=arguments.get("filename", "unnamed"),
+                    platform=arguments.get("platform", context.session_id),
+                    user_id=arguments.get("user_id", context.user_id or "agent"),
+                    mime_type=arguments.get("mime_type", "application/octet-stream"),
+                    prompt=arguments.get("prompt"),
+                    vision_model=vision_model,
+                )
+                tool = self._get_multimedia_tool()
+                output = await tool.execute(inp)
+                result = output.model_dump()
             else:
                 raise ValueError(f"Unknown builtin tool: {tool_name}")
             return ToolResult(
@@ -220,3 +254,53 @@ class BuiltinExecutor(BaseExecutor):
                 source=ToolSource.BUILTIN,
                 trace_id=context.trace_id,
             )
+
+    async def _lookup_tool_endpoint(self, tool_code: str) -> str | None:
+        try:
+            import os, base64
+            cred = f"{os.getenv('ARANGO_USER','root')}:{os.getenv('ARANGO_PASSWORD','')}"
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                resp = await client.post(
+                    f"{os.getenv('ARANGO_URL','http://localhost:8529')}/_db/{os.getenv('ARANGO_DATABASE','abc_desktop')}/_api/cursor",
+                    json={"query": "FOR t IN tools FILTER t.code == @code LIMIT 1 RETURN t.endpoint_url", "bindVars": {"code": tool_code}},
+                    headers={"Content-Type": "application/json", "Authorization": f"Basic {base64.b64encode(cred.encode()).decode()}"},
+                )
+                if resp.status_code in (200, 201):
+                    rows = resp.json().get("result", [])
+                    if rows and rows[0]:
+                        return rows[0]
+        except Exception:
+            pass
+        return None
+
+    async def _lookup_tool_model(self, tool_code: str) -> str | None:
+        try:
+            import os, base64
+            cred = f"{os.getenv('ARANGO_USER','root')}:{os.getenv('ARANGO_PASSWORD','')}"
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                resp = await client.post(
+                    f"{os.getenv('ARANGO_URL','http://localhost:8529')}/_db/{os.getenv('ARANGO_DATABASE','abc_desktop')}/_api/cursor",
+                    json={"query": "FOR t IN tools FILTER t.code == @code LIMIT 1 RETURN t.llm_model", "bindVars": {"code": tool_code}},
+                    headers={"Content-Type": "application/json", "Authorization": f"Basic {base64.b64encode(cred.encode()).decode()}"},
+                )
+                if resp.status_code in (200, 201):
+                    rows = resp.json().get("result", [])
+                    if rows and rows[0]:
+                        return rows[0]
+        except Exception:
+            pass
+        return None
+
+    def _normalize_local_tts_arguments(
+        self,
+        arguments: dict[str, Any],
+        context: ToolExecutionContext,
+    ) -> dict[str, Any]:
+        payload = dict(arguments)
+        output_path = payload.get("output_path")
+        if not output_path:
+            output_dir = Path("/Users/daniel/GitHub/AIBox/ai-services/.tmp/tts")
+            output_dir.mkdir(parents=True, exist_ok=True)
+            suffix = "samples" if payload.get("sample_voices") else f"{context.session_id}_{context.correlation_id}.wav"
+            payload["output_path"] = str(output_dir / suffix)
+        return payload

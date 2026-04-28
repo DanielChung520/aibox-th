@@ -210,6 +210,12 @@ export interface AIReview {
   summary: string;
   suggestions: string[];
   score: number;
+  hour_breakdown?: {
+    consulting: number;
+    development: number;
+    testing: number;
+    review: number;
+  };
 }
 
 export interface Demand {
@@ -246,6 +252,18 @@ export interface Demand {
   online_at?: string;
 }
 
+export interface AgentChatRequest {
+  session_id: string;
+  message: string;
+  user_id?: string;
+}
+
+export interface AgentChatResponse {
+  session_id: string;
+  reply: string;
+  sources?: string[];
+}
+
 export const agentApi = {
   list: (agentType?: string) => {
     const url = agentType ? `/api/v1/agents?agent_type=${agentType}` : '/api/v1/agents';
@@ -256,6 +274,7 @@ export const agentApi = {
   update: (key: string, data: Partial<Agent>) => api.put(`/api/v1/agents/${key}`, data),
   delete: (key: string) => api.delete(`/api/v1/agents/${key}`),
   toggleFavorite: (key: string) => api.patch<{ code: number; data: Agent }>(`/api/v1/agents/${key}/favorite`, {}),
+  chat: (key: string, data: AgentChatRequest) => api.post<AgentChatResponse>(`/api/v1/agents/${key}/chat`, data),
   listIntents: (key: string) => api.get<{ code: number; data: any[] }>(`/api/v1/agents/${key}/intents`),
   createIntent: (key: string, data: any) => api.post(`/api/v1/agents/${key}/intents`, data),
   updateIntent: (key: string, intentKey: string, data: any) => api.put(`/api/v1/agents/${key}/intents/${intentKey}`, data),
@@ -982,6 +1001,7 @@ export interface LINEChannel {
   publication_status: 'unpublished' | 'published' | 'error';
   published_bot_key?: string;
   published_bot_name?: string;
+  linked_agent_key?: string;
   last_connected_at?: string;
   created_at: string;
   channel_icon?: string;
@@ -1020,6 +1040,7 @@ export interface UpdateChannelRequest {
   webhook_enabled?: boolean;
   channel_icon?: string;
   channel_description?: string;
+  linked_agent_key?: string;
 }
 
 export interface PublishChannelRequest {
@@ -1080,7 +1101,7 @@ export default api;
 
 // Ragic Session History
 export interface RagicHistoryMessage {
-  role: 'user' | 'assistant';
+  role: 'user' | 'assistant' | 'system';
   content: string;
   timestamp?: string;
   created_at?: string;
@@ -1103,4 +1124,8 @@ export interface RagicSessionHistoryResponse {
 export const ragicApi = {
   getChatHistory: (sessionId: string, limit: number = 50) =>
     api.get<RagicSessionHistoryResponse>(`/api/v1/ragic/session/${sessionId}/history?limit=${limit}`),
+  listSessions: (platform: string = 'line', channelId?: string) =>
+    api.get<{ sessions: any[]; count: number }>(
+      `/api/v1/ragic/sessions?platform=${platform}&channel_id=${channelId || ''}`
+    ),
 };

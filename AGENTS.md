@@ -5,6 +5,14 @@ version: 1.12.0
 ---
 # AGENTS.md - Daniel Chung Guide for ABC Desktop
 
+## 開發觸發指令 @dev
+
+當使用者輸入 `@dev {需求編號}` 時，AI Coder 必須參照 `agent-tool-dev-guide.md` 進行開發工作。
+
+詳見：[agent-tool-dev-guide.md](./agent-tool-dev-guide.md)
+
+---
+
 ## Project Overview
 
 - **Name**: ABC Desktop (abc-desktop)
@@ -656,8 +664,8 @@ source .venv/bin/activate
 # AITask (port 8001) - AI 任務編排
 .venv/bin/python -m uvicorn aitask.main:app --port 8001 --host 127.0.0.1
 
-# Data Agent (port 8003) - NL→SQL 查詢
-.venv/bin/python -m uvicorn data_agent.main:app --port 8003 --host 127.0.0.1
+# unified_agents (port 8011) - Data Agent / Knowledge / Memory 統一入口
+.venv/bin/python -m uvicorn unified_agents.main:app --port 8011 --host 127.0.0.1
 
 # MCP Tools (port 8004) - MCP 工具執行
 .venv/bin/python -m uvicorn mcp_tools.main:app --port 8004 --host 127.0.0.1
@@ -733,7 +741,7 @@ JWT_EXPIRATION_HOURS=24
 # AI Services
 # ===================
 AITASK_URL=http://localhost:8001
-DATA_AGENT_URL=http://localhost:8003
+UNIFIED_AGENTS_URL=http://localhost:8011
 KNOWLEDGE_AGENT_URL=http://localhost:8007
 MCP_TOOLS_URL=http://localhost:8004
 BPA_MM_AGENT_URL=http://localhost:8005
@@ -769,7 +777,7 @@ curl http://localhost:6500/health
 
 # Python AI Services
 curl http://localhost:8001/health  # AITask
-curl http://localhost:8003/health  # Data Agent
+curl http://localhost:8011/health  # unified_agents
 ```
 
 ---
@@ -1627,7 +1635,7 @@ import uuid, json
 registry = ToolRegistry()
 await registry.initialize(
     mcp_tools_url="http://localhost:8004",
-    data_agent_url="http://localhost:8003",
+    data_agent_url="http://localhost:8011/da",
     knowledge_agent_url="http://localhost:8007",
 )
 
@@ -1954,7 +1962,7 @@ OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 INTENT_RAG_URL = os.getenv("INTENT_RAG_URL", "http://localhost:8011/da/intent-rag")
 HYBRID_RAG_URL = os.getenv("HYBRID_RAG_URL", "http://localhost:8011/ka/hybrid")
 MCP_TOOLS_URL = os.getenv("MCP_TOOLS_URL", "http://localhost:8004")
-DATA_AGENT_URL = os.getenv("DATA_AGENT_URL", "http://localhost:8003")
+DATA_AGENT_URL = os.getenv("DATA_AGENT_URL", "http://localhost:8011/da")
 KNOWLEDGE_AGENT_URL = os.getenv("KNOWLEDGE_AGENT_URL", "http://localhost:8007")
 ```
 

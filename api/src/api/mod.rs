@@ -57,6 +57,7 @@ use reqwest::Client;
 static HTTP_CLIENT: Lazy<Client> = Lazy::new(Client::new);
 pub mod intent_logs;
 pub mod platforms;
+pub mod agent_chat;
 pub mod ragic;
 
 async fn sync_tool_intents(
@@ -133,10 +134,18 @@ pub fn create_router() -> Router {
         .route("/api/v1/agents/{key}/demands/{demand_key}/status", patch(update_demand_status))
         .route("/api/v1/demands/estimate-hours", post(estimate_demand_hours))
         .route("/api/v1/demands/review", post(review_demand))
+        .route("/api/v1/agent-requirements", get(list_all_agent_requirements).post(create_agent_requirement))
+        .route("/api/v1/agent-requirements/{req_key}", get(get_agent_requirement))
+        .route("/api/v1/agent-requirements/{req_key}/accept", patch(accept_agent_requirement))
+        .route("/api/v1/agent-requirements/{req_key}/analyze", post(analyze_agent_requirement))
+        .route("/api/v1/agent-requirements/{req_key}/start-dev", post(start_dev_workspace))
+        .route("/api/v1/agent-requirements/{req_key}/spec.md", get(get_agent_requirement_spec_md))
+        .route("/api/v1/agent-requirements/by-req-no/{req_no}", get(get_agent_requirement_by_no))
         .route("/api/v1/tools", get(list_tools).post(create_tool))
         .route("/api/v1/tools/{key}", get(get_tool).put(update_tool).delete(delete_tool))
         .route("/api/v1/tools/{key}/intents", post(sync_tool_intents))
         .route("/api/v1/agents/{key}/favorite", patch(toggle_agent_favorite))
+        .merge(agent_chat::create_agent_chat_router())
         .route("/api/v1/model-providers", get(list_model_providers).post(create_model_provider))
         .route("/api/v1/model-providers/{key}", get(get_model_provider).put(update_model_provider).delete(delete_model_provider))
         .route("/api/v1/model-providers/{key}/sync", post(sync_model_provider))
@@ -1464,6 +1473,18 @@ struct CreateDemandRequest {
     ai_review: Option<AIReview>,
 }
 
+#[derive(serde::Deserialize, serde::Serialize, Clone, Default)]
+struct HourBreakdown {
+    #[serde(default)]
+    consulting: i32,
+    #[serde(default)]
+    development: i32,
+    #[serde(default)]
+    testing: i32,
+    #[serde(default)]
+    review: i32,
+}
+
 #[derive(serde::Deserialize, serde::Serialize, Clone)]
 struct AIReview {
     completeness: String,
@@ -1474,6 +1495,8 @@ struct AIReview {
     summary: String,
     suggestions: Vec<String>,
     score: i32,
+    #[serde(default)]
+    hour_breakdown: Option<HourBreakdown>,
 }
 
 #[derive(serde::Deserialize, serde::Serialize, Clone)]
@@ -1879,16 +1902,17 @@ async fn review_demand(
             parse_ai_review_response(response_text)
         }
         _ => {
-            AIReview {
-                completeness: "無法完成 AI 審查".to_string(),
-                reasonableness: "無法完成 AI 審查".to_string(),
-                feasibility: "無法完成 AI 審查".to_string(),
-                estimated_hours: 0,
-                confidence: "low".to_string(),
-                summary: "AI 審查服務暫時無法使用".to_string(),
-                suggestions: vec![],
-                score: 0,
-            }
+                AIReview {
+                    completeness: "無法完成 AI 審查".to_string(),
+                    reasonableness: "無法完成 AI 審查".to_string(),
+                    feasibility: "無法完成 AI 審查".to_string(),
+                    estimated_hours: 0,
+                    confidence: "low".to_string(),
+                    summary: "AI 審查服務暫時無法使用".to_string(),
+                    suggestions: vec![],
+                    score: 0,
+                    hour_breakdown: None,
+                }
         }
     };
 
@@ -1917,7 +1941,12 @@ fn build_review_prompt(req: &CreateDemandRequest) -> String {
 - completeness: 需求完整性評估（是否清楚定義了需求目標、範圍、輸入輸出）
 - reasonableness: 合理性評估（需求是否合理、是否符合業務邏輯）
 - feasibility: 可行性評估（技術上是否可行、是否有明顯障礙）
-- estimated_hours: 預估工時（小時，整數，僅估算建立新 Agent 的增量工作，不含基礎建設）
+- estimated_hours: 預估總工時（小時，整數，僅估算建立新 Agent 的增量工作，不含基礎建設）
+- hour_breakdown: 工時明細（物件，包含以下欄位，皆為整數小時）：
+    - consulting: 顧問訪談與需求釐清
+    - development: 核心開發與整合
+    - testing: 測試與品質保證
+    - review: 審查與上線準備
 - confidence: 估計信心（low/medium/high）
 - summary: 總結（一句話概括這個需求）
 - suggestions: 改進建議（陣列，每項一字元串，若無建議則回空陣列）
@@ -1976,6 +2005,14 @@ fn parse_ai_review_response(response: &str) -> AIReview {
                     score: parsed.get("score")
                         .and_then(|v| v.as_i64())
                         .unwrap_or(0) as i32,
+                    hour_breakdown: parsed.get("hour_breakdown").and_then(|v| {
+                        Some(HourBreakdown {
+                            consulting: v.get("consulting").and_then(|x| x.as_i64()).unwrap_or(0) as i32,
+                            development: v.get("development").and_then(|x| x.as_i64()).unwrap_or(0) as i32,
+                            testing: v.get("testing").and_then(|x| x.as_i64()).unwrap_or(0) as i32,
+                            review: v.get("review").and_then(|x| x.as_i64()).unwrap_or(0) as i32,
+                        })
+                    }),
                 };
             }
         }
@@ -1990,6 +2027,7 @@ fn parse_ai_review_response(response: &str) -> AIReview {
         summary: "AI 回應格式不符預期".to_string(),
         suggestions: vec![],
         score: 0,
+        hour_breakdown: None,
     }
 }
 
@@ -2383,8 +2421,412 @@ async fn create_model_provider(Json(payload): Json<serde_json::Value>) -> Result
         .into_iter()
         .filter_map(|v| serde_json::from_value(v).ok())
         .collect();
-    let p = providers.into_iter().next().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let p = providers.into_iter().next().ok_or(StatusCode::NOT_FOUND)?;
     Ok(Json(ApiResponse::success(p)))
+}
+
+// ==================== Agent Requirements ====================
+
+async fn generate_req_no(payload: &serde_json::Value) -> String {
+    use chrono::Datelike;
+    let db = get_db();
+
+    let now = chrono::Utc::now();
+    let iso_week = now.iso_week();
+    let week_str = format!("{:02}", iso_week.week());
+    let year_str = format!("{:02}", now.year() % 100);
+
+    let agent_type = payload.get("agent_type").and_then(|v| v.as_str()).unwrap_or("A");
+    let tab_code = payload.get("tab_code").and_then(|v| v.as_str()).unwrap_or("01");
+    let prefix = format!("{}{}-{}{}", agent_type, tab_code, year_str, week_str);
+
+    // Count existing docs with same prefix this week
+    let pattern = format!("{}%", prefix);
+    let count: f64 = db
+        .aql_bind_vars(
+            "FOR r IN agent_requirements FILTER r.req_no LIKE @pattern RETURN 1",
+            [("pattern", serde_json::json!(pattern))].into(),
+        )
+        .await
+        .ok()
+        .map(|v: Vec<serde_json::Value>| v.len() as f64)
+        .unwrap_or(0.0);
+
+    format!("{}-{:03}", prefix, count as i32 + 1)
+}
+
+async fn list_all_agent_requirements() -> Result<impl IntoResponse, StatusCode> {
+    let db = get_db();
+    let docs: Vec<serde_json::Value> = db
+        .aql_str("FOR r IN agent_requirements SORT r.submitted_at DESC RETURN r")
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(Json(ApiResponse::success(docs)))
+}
+
+async fn create_agent_requirement(
+    Json(payload): Json<serde_json::Value>,
+) -> Result<impl IntoResponse, StatusCode> {
+    let db = get_db();
+    let col = db.collection("agent_requirements").await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // Auto-increment requirement number
+    let req_no = generate_req_no(&payload).await;
+
+    let doc_key = format!(
+        "{}_{}",
+        payload.get("agent_key").and_then(|v| v.as_str()).unwrap_or("unknown"),
+        payload.get("version").and_then(|v| v.as_str()).unwrap_or("v1.0")
+    );
+    let now = chrono::Utc::now().to_rfc3339();
+    let mut doc = payload.clone();
+    if let Some(obj) = doc.as_object_mut() {
+        obj.insert("_key".to_string(), serde_json::json!(doc_key));
+        obj.insert("req_no".to_string(), serde_json::json!(req_no));
+        obj.insert("created_at".to_string(), serde_json::json!(now));
+        obj.insert("updated_at".to_string(), serde_json::json!(now));
+    }
+    col.create_document(doc, Default::default())
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(Json(ApiResponse::success(doc_key)))
+}
+
+async fn get_agent_requirement(
+    Path(req_key): Path<String>,
+) -> Result<impl IntoResponse, StatusCode> {
+    let db = get_db();
+    let docs: Vec<serde_json::Value> = db
+        .aql_bind_vars(
+            "FOR r IN agent_requirements FILTER r._key == @key LIMIT 1 RETURN r",
+            [("key", serde_json::json!(req_key))].into(),
+        )
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let doc = docs.into_iter().next().ok_or(StatusCode::NOT_FOUND)?;
+    Ok(Json(ApiResponse::success(doc)))
+}
+
+async fn accept_agent_requirement(
+    Path(req_key): Path<String>,
+    Json(payload): Json<serde_json::Value>,
+) -> Result<impl IntoResponse, StatusCode> {
+    let db = get_db();
+    let col = db.collection("agent_requirements").await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let developer = payload.get("developer").and_then(|v| v.as_str()).unwrap_or("unknown");
+    col.update_document(
+        &req_key,
+        serde_json::json!({
+            "status": "accepted",
+            "developer": developer,
+            "accepted_at": chrono::Utc::now().to_rfc3339(),
+            "updated_at": chrono::Utc::now().to_rfc3339(),
+        }),
+        Default::default(),
+    )
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(Json(ApiResponse::success("accepted".to_string())))
+}
+
+async fn analyze_agent_requirement(
+    Path(req_key): Path<String>,
+    Json(payload): Json<serde_json::Value>,
+) -> Result<impl IntoResponse, StatusCode> {
+    let db = get_db();
+    let docs: Vec<serde_json::Value> = db
+        .aql_bind_vars(
+            "FOR r IN agent_requirements FILTER r._key == @key LIMIT 1 RETURN r",
+            [("key", serde_json::json!(req_key))].into(),
+        )
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let doc = docs.into_iter().next().ok_or(StatusCode::NOT_FOUND)?;
+
+    let goal = doc.get("goal").and_then(|v| v.as_str()).unwrap_or("");
+    let expected = doc.get("expected_effect").and_then(|v| v.as_str()).unwrap_or("");
+    let problem = doc.get("problem_description").and_then(|v| v.as_str()).unwrap_or("");
+    let agent_name = doc.get("agent_name").and_then(|v| v.as_str()).unwrap_or("");
+
+    let ollama_url = std::env::var("OLLAMA_BASE_URL").unwrap_or_else(|_| "http://localhost:11434".to_string());
+    let ollama_url = ollama_url.trim_end_matches('/');
+
+    // Read model from system_params, fallback to qwen3-coder:30b
+    let model: String = db
+        .aql_bind_vars(
+            "FOR p IN system_params FILTER p.param_key == @key LIMIT 1 RETURN p.param_value",
+            [("key", serde_json::json!("dev.requirement_spec_model"))].into(),
+        )
+        .await
+        .ok()
+        .and_then(|mut v: Vec<String>| v.pop())
+        .unwrap_or_else(|| "qwen3-coder:30b".to_string());
+
+    let revision = payload.get("revision").and_then(|v| v.as_str()).unwrap_or("");
+    let revision_hint = if revision.is_empty() {
+        String::new()
+    } else {
+        format!("\n\n⚠️ 修改指示：請根據以下反饋調整規格書內容：\n{revision}\n")
+    };
+
+    let ai_review = doc.get("ai_review");
+    let ref_consulting = ai_review.and_then(|v| v.get("hour_breakdown")).and_then(|v| v.get("consulting")).and_then(|v| v.as_i64()).unwrap_or(0);
+    let ref_dev = ai_review.and_then(|v| v.get("hour_breakdown")).and_then(|v| v.get("development")).and_then(|v| v.as_i64()).unwrap_or(0);
+    let ref_test = ai_review.and_then(|v| v.get("hour_breakdown")).and_then(|v| v.get("testing")).and_then(|v| v.as_i64()).unwrap_or(0);
+    let ref_review = ai_review.and_then(|v| v.get("hour_breakdown")).and_then(|v| v.get("review")).and_then(|v| v.as_i64()).unwrap_or(0);
+    let ref_hours = if ref_consulting + ref_dev + ref_test + ref_review > 0 {
+        format!("\n\n📊 原始工時參考（請根據修改指示合理調整）：顧問 {ref_consulting}h / 開發 {ref_dev}h / 測試 {ref_test}h / 審查 {ref_review}h")
+    } else {
+        String::new()
+    };
+
+    let spec_index: String = db
+        .aql_bind_vars(
+            "FOR p IN system_params FILTER p.param_key == @key LIMIT 1 RETURN p.param_value",
+            [("key", serde_json::json!("dev.spec_context"))].into(),
+        )
+        .await
+        .ok()
+        .and_then(|mut v: Vec<String>| v.pop())
+        .unwrap_or_default();
+
+    let prompt = format!(
+        r#"你是 AIBox / ABC Desktop 系統的資深開發架構師。請根據以下需求與系統規格，產生一份開發建議規格書（JSON 格式）。
+
+## 系統規格索引（請根據需求主題，參考對應文件的設計模式與慣例）
+
+{spec_index}
+
+## 需求
+Agent 名稱：{agent_name}
+需求目標：{goal}
+預期效果：{expected}
+問題描述：{problem}{revision_hint}{ref_hours}
+
+## 約束
+- 技術棧必須在本系統範圍內：Tauri/Rust/React/TypeScript/Ant Design 6/Python FastAPI/ArangoDB/Qdrant/Ollama
+- 服務間通訊必須透過 Rust API Gateway (port 6500) 轉發
+- 新 Agent 應使用 shared/orchestration/ + shared/tools/ 框架
+- 配置須存 ArangoDB system_params，禁止 hardcode
+- 前端須遵循 AGENTS.md 的 Store 模式與元件結構
+- API 格式須符合 .docs/Spec/API Specification.md
+
+## 輸出 JSON（只輸出 JSON）
+{{
+  "summary": "需求摘要（一段話）",
+  "tech_stack": ["基於本系統的具體技術選擇"],
+  "modules": [
+    {{ "name": "模組名", "description": "功能說明", "priority": "high|medium|low", "depends_on": ["依賴模組"] }}
+  ],
+  "data_sources": ["ArangoDB 集合或外部 API"],
+  "integration_points": ["需整合的內部服務"],
+  "hour_breakdown": {{
+    "consulting": 顧問訪談與需求釐清（整數小時）,
+    "development": Rust/Python/React 開發與整合（整數小時）,
+    "testing": 測試與品質保證（整數小時）,
+    "review": 審查與上線準備（整數小時）
+  }},
+  "mermaid_architecture": "Mermaid graph，展示本 Agent 與現有系統組件關係",
+  "mermaid_flow": "Mermaid flowchart，展示請求處理流程",
+  "risks": ["風險"],
+  "suggestions": ["開發建議"]
+}}"#,
+        spec_index = spec_index,
+        agent_name = agent_name,
+        goal = goal,
+        expected = expected,
+        problem = problem,
+        revision_hint = revision_hint,
+        ref_hours = ref_hours,
+    );
+
+    let mut spec_json = serde_json::json!({
+        "summary": "LLM 分析中...",
+        "tech_stack": [],
+        "modules": [],
+        "data_sources": [],
+        "integration_points": [],
+        "risks": [],
+        "suggestions": [],
+    });
+
+    if let Ok(client) = reqwest::Client::builder().timeout(std::time::Duration::from_secs(120)).build() {
+        if let Ok(resp) = client
+            .post(format!("{ollama_url}/api/chat"))
+            .json(&serde_json::json!({
+                "model": model,
+                "messages": [{"role": "user", "content": prompt}],
+                "stream": false,
+                "format": "json",
+            }))
+            .send()
+            .await
+        {
+            if let Ok(body) = resp.json::<serde_json::Value>().await {
+                if let Some(content) = body.get("message").and_then(|m| m.get("content")).and_then(|c| c.as_str()) {
+                    if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(content) {
+                        spec_json = parsed;
+                    } else if let Some(start) = content.find('{') {
+                        if let Some(end) = content.rfind('}') {
+                            if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&content[start..=end]) {
+                                spec_json = parsed;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    let col = db.collection("agent_requirements").await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    col.update_document(
+        &req_key,
+        serde_json::json!({
+            "status": "spec_ready",
+            "dev_spec": spec_json,
+            "analyzed_at": chrono::Utc::now().to_rfc3339(),
+            "updated_at": chrono::Utc::now().to_rfc3339(),
+        }),
+        Default::default(),
+    )
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(Json(ApiResponse::success("spec_generated".to_string())))
+}
+
+async fn start_dev_workspace(
+    Path(req_key): Path<String>,
+) -> Result<impl IntoResponse, StatusCode> {
+    let db = get_db();
+    let docs: Vec<serde_json::Value> = db
+        .aql_bind_vars(
+            "FOR r IN agent_requirements FILTER r._key == @key LIMIT 1 RETURN r",
+            [("key", serde_json::json!(req_key))].into(),
+        )
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let doc = docs.into_iter().next().ok_or(StatusCode::NOT_FOUND)?;
+
+    let col = db.collection("agent_requirements").await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    col.update_document(
+        &req_key,
+        serde_json::json!({
+            "status": "in_development",
+            "dev_started_at": chrono::Utc::now().to_rfc3339(),
+            "updated_at": chrono::Utc::now().to_rfc3339(),
+        }),
+        Default::default(),
+    )
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(Json(ApiResponse::success(doc)))
+}
+
+async fn get_agent_requirement_by_no(
+    Path(req_no): Path<String>,
+) -> Result<impl IntoResponse, StatusCode> {
+    let db = get_db();
+    let docs: Vec<serde_json::Value> = db
+        .aql_bind_vars(
+            "FOR r IN agent_requirements FILTER r.req_no == @no LIMIT 1 RETURN r",
+            [("no", serde_json::json!(req_no))].into(),
+        )
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let doc = docs.into_iter().next().ok_or(StatusCode::NOT_FOUND)?;
+    Ok(Json(ApiResponse::success(doc)))
+}
+
+async fn get_agent_requirement_spec_md(
+    Path(req_key): Path<String>,
+) -> Result<impl IntoResponse, StatusCode> {
+    let db = get_db();
+    let docs: Vec<serde_json::Value> = db
+        .aql_bind_vars(
+            "FOR r IN agent_requirements FILTER r._key == @key LIMIT 1 RETURN r",
+            [("key", serde_json::json!(req_key))].into(),
+        )
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let doc = docs.into_iter().next().ok_or(StatusCode::NOT_FOUND)?;
+
+    let agent_name = doc.get("agent_name").and_then(|v| v.as_str()).unwrap_or("");
+    let goal = doc.get("goal").and_then(|v| v.as_str()).unwrap_or("");
+    let expected = doc.get("expected_effect").and_then(|v| v.as_str()).unwrap_or("");
+    let problem = doc.get("problem_description").and_then(|v| v.as_str()).unwrap_or("");
+    let spec = doc.get("dev_spec");
+    let ai_review = doc.get("ai_review");
+
+    let mut md = String::new();
+    md.push_str(&format!("# 開發規格書：{agent_name}\n\n"));
+    md.push_str("> 本規格書由 AIBox 系統開發區自動生成，可供 AI 開發工具參照。\n\n");
+    md.push_str("## 需求概要\n\n");
+    md.push_str(&format!("- **目標**：{goal}\n"));
+    md.push_str(&format!("- **預期效果**：{expected}\n"));
+    md.push_str(&format!("- **問題描述**：{problem}\n\n"));
+
+    if let Some(review) = ai_review {
+        md.push_str("## AI 審查\n\n");
+        if let Some(s) = review.get("score").and_then(|v| v.as_i64()) { md.push_str(&format!("- 評分：{s}\n")); }
+        if let Some(s) = review.get("summary").and_then(|v| v.as_str()) { md.push_str(&format!("- 摘要：{s}\n")); }
+        if let Some(bd) = review.get("hour_breakdown") {
+            md.push_str("- 工時明細：\n");
+            if let Some(v) = bd.get("consulting").and_then(|v| v.as_i64()) { md.push_str(&format!("  - 顧問：{v}h\n")); }
+            if let Some(v) = bd.get("development").and_then(|v| v.as_i64()) { md.push_str(&format!("  - 開發：{v}h\n")); }
+            if let Some(v) = bd.get("testing").and_then(|v| v.as_i64()) { md.push_str(&format!("  - 測試：{v}h\n")); }
+            if let Some(v) = bd.get("review").and_then(|v| v.as_i64()) { md.push_str(&format!("  - 審查：{v}h\n")); }
+        }
+        md.push_str("\n");
+    }
+
+    if let Some(s) = spec {
+        if let Some(v) = s.get("summary").and_then(|v| v.as_str()) { md.push_str(&format!("## 摘要\n\n{v}\n\n")); }
+        if let Some(arr) = s.get("tech_stack").and_then(|v| v.as_array()) {
+            md.push_str("## 技術棧\n\n");
+            for t in arr { if let Some(v) = t.as_str() { md.push_str(&format!("- {v}\n")); } }
+            md.push_str("\n");
+        }
+        if let Some(arr) = s.get("modules").and_then(|v| v.as_array()) {
+            md.push_str("## 模組規劃\n\n");
+            md.push_str("| 模組 | 說明 | 優先級 |\n|------|------|--------|\n");
+            for m in arr {
+                let name = m.get("name").and_then(|v| v.as_str()).unwrap_or("-");
+                let desc = m.get("description").and_then(|v| v.as_str()).unwrap_or("-");
+                let pri = m.get("priority").and_then(|v| v.as_str()).unwrap_or("-");
+                md.push_str(&format!("| {name} | {desc} | {pri} |\n"));
+            }
+            md.push_str("\n");
+        }
+        if let Some(v) = s.get("mermaid_architecture").and_then(|v| v.as_str()) {
+            md.push_str("## 系統架構圖\n\n```mermaid\n");
+            md.push_str(v);
+            md.push_str("\n```\n\n");
+        }
+        if let Some(v) = s.get("mermaid_flow").and_then(|v| v.as_str()) {
+            md.push_str("## 資料流程圖\n\n```mermaid\n");
+            md.push_str(v);
+            md.push_str("\n```\n\n");
+        }
+        if let Some(arr) = s.get("risks").and_then(|v| v.as_array()) {
+            md.push_str("## 風險\n\n");
+            for r in arr { if let Some(v) = r.as_str() { md.push_str(&format!("- {v}\n")); } }
+            md.push_str("\n");
+        }
+        if let Some(arr) = s.get("suggestions").and_then(|v| v.as_array()) {
+            md.push_str("## 建議\n\n");
+            for sg in arr { if let Some(v) = sg.as_str() { md.push_str(&format!("- {v}\n")); } }
+            md.push_str("\n");
+        }
+    }
+
+    md.push_str("---\n*本規格書由 AIBox 系統自動生成。*\n");
+
+    Ok(axum::response::Response::builder()
+        .header("content-type", "text/markdown; charset=utf-8")
+        .body(axum::body::Body::from(md))
+        .unwrap())
 }
 
 async fn update_model_provider(Path(key): Path<String>, Json(payload): Json<serde_json::Value>) -> Result<impl IntoResponse, StatusCode> {

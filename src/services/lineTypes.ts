@@ -11,6 +11,7 @@ export interface LINEChannel {
   publication_status: 'unpublished' | 'published' | 'error';
   published_bot_key?: string;
   published_bot_name?: string;
+  linked_agent_key?: string;
   last_connected_at?: string;
   created_at: string;
   status?: 'connected' | 'error' | 'default';

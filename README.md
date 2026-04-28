@@ -1,7 +1,7 @@
 ---
-lastUpdate: 2026-03-25 23:16:31
+lastUpdate: 2026-04-24 10:07:45
 author: Daniel Chung
-version: 1.3.0
+version: 1.4.0
 ---
 
 # ABC Desktop 管理系统
@@ -66,7 +66,7 @@ aibox/
 │   └── .env
 ├── ai-services/               # Python AI Services
 │   ├── aitask/               # AI Task 服務 (port 8001)
-│   ├── data_agent/           # Data Agent 服務 (port 8003) — 意圖 RAG + NL→SQL
+│   ├── data_agent/           # Data Agent 實作模組（整合入口由 unified_agents:8011 /da/* 提供）
 │   ├── mcp_tools/            # MCP Tools 服務 (port 8004)
 │   ├── bpa/mm_agent/         # BPA 物料管理 Agent (port 8005)
 │   ├── knowledge_agent/      # Knowledge Agent 服務 (port 8007)
@@ -128,7 +128,7 @@ cd api && cargo watch -x run
 # 启动 Python AI Services (分开终端)
 cd ai-services && source .venv/bin/activate
 uvicorn aitask.main:app --port 8001 --reload
-uvicorn data_agent.main:app --port 8003 --reload
+uvicorn unified_agents.main:app --port 8011 --reload
 uvicorn mcp_tools.main:app --port 8004 --reload
 uvicorn bpa.mm_agent.main:app --port 8005 --reload
 uvicorn knowledge_agent.main:app --port 8007 --reload
@@ -243,7 +243,7 @@ curl -sL https://raw.githubusercontent.com/your-repo/main/install.sh | bash
 |------|------|-----------|------|
 | API Gateway | 6500 | — | Rust Axum |
 | AITask | 8001 | — | Python FastAPI |
-| Data Agent | 8003 | — | Python FastAPI (意圖 RAG + NL→SQL) |
+| unified_agents | 8011 | — | Python FastAPI 統一入口（含 Data Agent `/da/*`） |
 | MCP Tools | 8004 | — | Python FastAPI |
 | BPA MM Agent | 8005 | — | Python FastAPI (物料管理) |
 | Knowledge Agent | 8007 | — | Python FastAPI (知識庫 RAG) |
@@ -285,7 +285,7 @@ JWT_EXPIRATION_HOURS=24
 # AI Services
 # ===================
 AITASK_URL=http://localhost:8001
-DATA_AGENT_URL=http://localhost:8003
+UNIFIED_AGENTS_URL=http://localhost:8011
 MCP_TOOLS_URL=http://localhost:8004
 BPA_MM_AGENT_URL=http://localhost:8005
 KNOWLEDGE_AGENT_URL=http://localhost:8007
@@ -394,7 +394,7 @@ lsof -i :6500
 # 启动 AI 服务 (需要先启动 Rust API Gateway)
 cd ai-services && source .venv/bin/activate
 uvicorn aitask.main:app --port 8001
-uvicorn data_agent.main:app --port 8003
+uvicorn unified_agents.main:app --port 8011
 uvicorn mcp_tools.main:app --port 8004
 uvicorn bpa.mm_agent.main:app --port 8005
 uvicorn knowledge_agent.main:app --port 8007

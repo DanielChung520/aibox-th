@@ -29,17 +29,23 @@ manager = InquiryManager()
 
 
 @router.post("/inquiry/analyze", response_model=InquiryResult)
-async def analyze_inquiry(
+def analyze_inquiry(
     request: InquiryRequest,
     x_user_key: str = Header(..., alias="X-User-Key"),
 ) -> InquiryResult:
     """Analyze an inquiry request using the current perception context."""
+    import asyncio
     working_context = engine.get_context(user_key=x_user_key)
-    return await manager.process_inquiry(
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    return loop.run_until_complete(manager.process_inquiry(
         user_key=x_user_key,
         working_context=working_context,
         request=request,
-    )
+    ))
 
 
 @router.get("/inquiry/state", response_model=InquiryState)

@@ -7,10 +7,10 @@
  */
 
 import { useEffect, useState } from 'react';
-import { Modal, Form, Input, Select, Switch, InputNumber, Tabs, Button, Space, App, Radio, Table, Popconfirm, Tag, Divider } from 'antd';
+import { Modal, Form, Input, Select, Switch, InputNumber, Tabs, Button, Space, App, Radio, Table, Popconfirm, Tag, Divider, Slider } from 'antd';
 import { iconMap } from '../utils/icons';
 import IconPicker from './IconPicker';
-import { roleApi, knowledgeApi, toolApi, daApi, agentApi } from '../services/api';
+import { roleApi, knowledgeApi, toolApi, daApi, agentApi, modelProviderApi } from '../services/api';
 import DemandTab from './DemandTab';
 import { trackModal, trackAgentAction } from '../utils/analytics';
 import { pageContextManager } from '../services/PageContextManager';
@@ -75,16 +75,6 @@ const authTypeOptions = [
   { value: 'oauth2', label: 'OAuth 2.0' },
 ];
 
-const llmModelOptions = [
-  { value: 'gpt-4', label: 'GPT-4' },
-  { value: 'gpt-4-turbo', label: 'GPT-4 Turbo' },
-  { value: 'gpt-3.5-turbo', label: 'GPT-3.5 Turbo' },
-  { value: 'llama3', label: 'Llama 3' },
-  { value: 'llama2', label: 'Llama 2' },
-  { value: 'mistral', label: 'Mistral' },
-  { value: 'claude-3', label: 'Claude 3' },
-];
-
 interface AgentFormModalProps {
   open: boolean;
   agent?: Agent | null;
@@ -114,6 +104,7 @@ export default function AgentFormModal({
   const [knowledgeBases, setKnowledgeBases] = useState<{ value: string; label: string }[]>([]);
   const [tools, setTools] = useState<{ value: string; label: string }[]>([]);
   const [dataSources, setDataSources] = useState<{ value: string; label: string }[]>([]);
+  const [modelOptions, setModelOptions] = useState<{ value: string; label: string }[]>([]);
   const [visibility, setVisibility] = useState<'public' | 'private' | 'role'>('private');
   const [intents, setIntents] = useState<any[]>([]);
   const [intentsLoading, setIntentsLoading] = useState(false);
@@ -152,6 +143,19 @@ export default function AgentFormModal({
       daApi.listSchemaModules().then((res: any) => {
         const opts = (res.data.data || []).map((m: any) => ({ value: m.key, label: `${m.label} (${m.source})` }));
         setDataSources(opts);
+      }).catch(() => {});
+      modelProviderApi.list().then((res: any) => {
+        const providers = res.data.data || [];
+        const opts: { value: string; label: string }[] = [];
+        providers.forEach((p: any) => {
+          if (p.status !== 'enabled') return;
+          (p.models || []).forEach((m: any) => {
+            if (m.status === 'enabled' || !m.status) {
+              opts.push({ value: m.model_id, label: `${m.display_name || m.name} (${p.name})` });
+            }
+          });
+        });
+        setModelOptions(opts);
       }).catch(() => {});
     }
   }, [open]);
@@ -418,10 +422,14 @@ export default function AgentFormModal({
   const modelTab = (
     <>
       <Form.Item name="llmModel" label="LLM 模型">
-        <Select options={llmModelOptions} placeholder="選擇模型" />
+        <Select
+          showSearch
+          options={modelOptions}
+          placeholder="選擇模型（從已啟用 Provider 載入）"
+        />
       </Form.Item>
       <Form.Item name="temperature" label="Temperature" initialValue={0.7}>
-        <InputNumber min={0} max={2} step={0.1} style={{ width: '100%' }} />
+        <Slider min={0} max={2} step={0.1} marks={{ 0: '0', 0.7: '0.7', 1: '1', 2: '2' }} />
       </Form.Item>
       <Form.Item name="maxTokens" label="最大 Tokens" initialValue={2000}>
         <InputNumber min={100} max={32000} step={100} style={{ width: '100%' }} />
@@ -454,11 +462,13 @@ export default function AgentFormModal({
     const key = agent?.id || agent?._key || '';
     if (!key) return;
     try {
-      if (editingIntent._key) {
-        await agentApi.updateIntent(key, editingIntent._key, editingIntent);
+      const values = await intentForm.validateFields();
+      const merged = { ...editingIntent, ...values };
+      if (merged._key && !String(merged._key).startsWith('temp_')) {
+        await agentApi.updateIntent(key, merged._key, merged);
         message.success('更新成功');
       } else {
-        await agentApi.createIntent(key, editingIntent);
+        await agentApi.createIntent(key, merged);
         message.success('新增成功');
       }
       setEditingIntent(null);
@@ -509,16 +519,21 @@ export default function AgentFormModal({
         return;
       }
       const newIntents = [...intents];
+      let savedCount = 0;
       for (const intent of suggestedIntents) {
         const exists = newIntents.some(
           (i) => i.name === intent.name || i.description === intent.description
         );
         if (!exists) {
-          newIntents.push({ ...intent, _key: `temp_${Date.now()}_${Math.random()}` });
+          try {
+            await agentApi.createIntent(key, intent);
+            newIntents.push(intent);
+            savedCount += 1;
+          } catch { /* skip duplicate */ }
         }
       }
       setIntents(newIntents);
-      message.success(`已新增 ${suggestedIntents.length} 個建議意圖`);
+      message.success(`已儲存 ${savedCount} 個建議意圖`);
     } catch {
       message.error('生成建議失敗');
     }

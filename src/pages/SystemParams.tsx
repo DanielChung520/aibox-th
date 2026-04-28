@@ -1,9 +1,9 @@
 /**
  * @file        系統參數頁面
  * @description 系統參數配置，包含基本資訊、主題、窗口、備份等參數管理
- * @lastUpdate  2026-04-14 21:31:26
+ * @lastUpdate  2026-04-24 12:40:27
  * @author      Daniel Chung
- * @version     1.1.0
+ * @version     1.2.0
  */
 
 import { useState, useEffect, useMemo } from 'react';
@@ -17,6 +17,7 @@ import SystemParamsIntent from './SystemParamsIntent';
 import DatabaseBackupPanel from './backup/DatabaseBackupPanel';
 import FloatingAssistantSettings from './FloatingAssistantSettings';
 import SystemParamsDataAgent from './SystemParamsDataAgent';
+import { MODULE_OPTIONS, normalizeGraphModuleSelection } from './data-agent/schemaGraphUtils';
 
 const avatarModules = import.meta.glob<{ default: string }>(
   '../assets/avatar/*.png',
@@ -63,6 +64,8 @@ export default function SystemParams() {
           value = parseInt(param.param_value, 10);
         } else if (param.param_type === 'boolean') {
           value = param.param_value === 'true';
+        } else if (param.param_key === 'ragic.default_graph_modules') {
+          value = normalizeGraphModuleSelection(param.param_value.split(','));
         }
         values[param.param_key] = value;
       });
@@ -107,6 +110,8 @@ export default function SystemParams() {
           paramValue = paramValue ? 'true' : 'false';
         } else if (param.param_type === 'number') {
           paramValue = String(paramValue);
+        } else if (param.param_key === 'ragic.default_graph_modules') {
+          paramValue = normalizeGraphModuleSelection(Array.isArray(paramValue) ? paramValue : []).join(',');
         }
 
         await paramsApi.update(param.param_key, paramValue);
@@ -185,7 +190,7 @@ export default function SystemParams() {
     'ragic.database': '資料庫名稱 (如 2025shianyong)',
     'ragic.service_account': '服務帳號',
     'ragic.api_key': 'API Key',
-    'ragic.default_graph_modules': '圖譜預設模組（逗號分隔，如 TRADE,MFG,QC,CRM_SCM,MGMT）',
+    'ragic.default_graph_modules': '圖譜預設模組',
   };
 
   const renderParamInput = (param: SystemParam) => {
@@ -204,6 +209,19 @@ export default function SystemParams() {
 
     if (param.param_key === 'ragic.api_key') {
       return <Input.Password {...commonProps} style={{ width: '100%' }} />;
+    }
+
+    if (param.param_key === 'ragic.default_graph_modules') {
+      return (
+        <Select
+          {...commonProps}
+          mode="multiple"
+          style={{ width: '100%' }}
+          options={MODULE_OPTIONS}
+          placeholder="選擇圖譜預設模組"
+          maxTagCount={3}
+        />
+      );
     }
 
     switch (param.param_type) {

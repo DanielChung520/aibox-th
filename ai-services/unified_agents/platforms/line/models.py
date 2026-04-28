@@ -51,6 +51,7 @@ class UpdateChannelRequest(BaseModel):
     webhook_enabled: Optional[bool] = None
     channel_icon: Optional[str] = None
     channel_description: Optional[str] = None
+    linked_agent_key: Optional[str] = None
 
 
 class PublishChannelRequest(BaseModel):

@@ -17,7 +17,7 @@ import {
   paramsApi,
 } from '../services/api';
 import { SSEConnection, sendMessageSSE } from '../services/sseManager';
-import { ChatState, INITIAL_CHAT_STATE } from './chatStoreTypes';
+import { ChatState, INITIAL_CHAT_STATE, type DataSourceRecord } from './chatStoreTypes';
 import type { AssistantContextPayload } from '../types/assistantContext';
 import {
   loadSessionFiles as loadFiles,
@@ -46,17 +46,35 @@ class ChatStore {
 
   setActiveSessionKey(key: string | null) {
     this.setState({ activeSessionKey: key });
+    try {
+      if (key) {
+        localStorage.setItem(`chat_active_session_${this.namespace}`, key);
+      } else {
+        localStorage.removeItem(`chat_active_session_${this.namespace}`);
+      }
+    } catch { /* localStorage unavailable */ }
+  }
+
+  /** 取得上次持久化的 session key（reload 後恢復） */
+  getLastSessionKey(): string | null {
+    try {
+      return localStorage.getItem(`chat_active_session_${this.namespace}`);
+    } catch {
+      return null;
+    }
   }
 
   resetCurrentSession() {
     this.activeConnection?.abort();
     this.activeConnection = null;
+    try { localStorage.removeItem(`chat_active_session_${this.namespace}`); } catch { /* noop */ }
     this.setState({
       messages: [],
       uploadedFiles: [],
       streamingContent: '',
       streamingThinking: '',
       isStreaming: false,
+      activeSessionKey: null,
     });
   }
 
@@ -73,6 +91,14 @@ class ChatStore {
     };
     this.setState({ messages: [...this.state.messages, msg] });
     return key;
+  }
+
+  addDataSource(record: DataSourceRecord) {
+    this.setState({ dataSources: [...this.state.dataSources, record] });
+  }
+
+  clearDataSources() {
+    this.setState({ dataSources: [] });
   }
 
   removeMessageByKey(key: string) {
@@ -136,9 +162,17 @@ class ChatStore {
       return { model: trimmed };
     }
 
+    const providerCandidate = trimmed.slice(0, separatorIndex);
+    const modelCandidate = trimmed.slice(separatorIndex + 1);
+    const hasMatchingProvider = this.state.providers.some((provider) => provider.code === providerCandidate);
+
+    if (!hasMatchingProvider) {
+      return { model: trimmed };
+    }
+
     return {
-      provider: trimmed.slice(0, separatorIndex),
-      model: trimmed.slice(separatorIndex + 1),
+      provider: providerCandidate,
+      model: modelCandidate,
     };
   }
 
@@ -217,7 +251,8 @@ class ChatStore {
       sessions: this.state.sessions.filter((s) => s._key !== sessionKey),
     });
     if (this.state.activeSessionKey === sessionKey) {
-      this.setState({ activeSessionKey: null, messages: [], uploadedFiles: [] });
+      this.setActiveSessionKey(null);
+      this.setState({ messages: [], uploadedFiles: [] });
     }
   }
 
@@ -228,7 +263,8 @@ class ChatStore {
       sessions: this.state.sessions.filter((s) => !keySet.has(s._key)),
     });
     if (keySet.has(this.state.activeSessionKey ?? '')) {
-      this.setState({ activeSessionKey: null, messages: [], uploadedFiles: [] });
+      this.setActiveSessionKey(null);
+      this.setState({ messages: [], uploadedFiles: [] });
     }
   }
 
@@ -240,7 +276,7 @@ class ChatStore {
     };
     const response = await chatApi.createSession(payload);
     const session = response.data.data;
-    this.setState({ activeSessionKey: session._key });
+    this.setActiveSessionKey(session._key);
     await this.loadSessions();
     return session;
   }
@@ -258,8 +294,8 @@ class ChatStore {
   async loadSessionMessages(sessionKey: string): Promise<void> {
     const response = await chatApi.getSession(sessionKey);
     const payload = response.data.data;
+    this.setActiveSessionKey(payload.session._key);
     this.setState({
-      activeSessionKey: payload.session._key,
       messages: payload.messages || [],
       streamingContent: '',
       streamingThinking: '',
@@ -384,6 +420,7 @@ class ChatStore {
     }
 
     this.addUserMessage(trimmed);
+    this.clearDataSources();
     this.startStreaming();
 
     const request: SendMessageRequest = {
@@ -414,6 +451,23 @@ class ChatStore {
       },
       onError: (error) => {
         this.handleStreamError(error);
+      },
+      onToolCallStart: (data) => {
+        this.addDataSource({ type: 'tool', label: data.tool, detail: JSON.stringify(data.parameters), success: true, timestamp: Date.now() });
+      },
+      onToolCallResult: (data) => {
+        this.addDataSource({ type: 'tool', label: data.tool, detail: data.success ? '完成' : '失敗', success: data.success, duration_ms: data.duration_ms, timestamp: Date.now() });
+      },
+      onDaQueryStart: (data) => {
+        this.addDataSource({ type: 'database', label: 'Data Agent 查詢', detail: data.query.slice(0, 100), success: true, timestamp: Date.now() });
+      },
+      onDaQueryResult: (data) => {
+        this.addDataSource({ type: 'database', label: '查詢結果', detail: data.sql ? `SQL: ${data.sql.slice(0, 80)}` : `回傳 ${data.row_count ?? '?'} 筆`, success: data.success, row_count: data.row_count, timestamp: Date.now() });
+      },
+      onKaSearchResult: (data) => {
+        for (const r of data.results.slice(0, 3)) {
+          this.addDataSource({ type: 'knowledge', label: r.source, detail: r.content.slice(0, 100), success: true, timestamp: Date.now() });
+        }
       },
     });
 

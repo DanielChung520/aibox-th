@@ -8,6 +8,26 @@ import dayjs from 'dayjs';
 
 const { Text } = Typography;
 
+interface ChatSession {
+  session_id: string;
+  platform: string;
+  message_count: number;
+  first_message_at: string;
+  last_message_at: string;
+  group_name?: string;
+  user_name?: string;
+}
+
+function sessionLabel(s: ChatSession): string {
+  const sid = s.session_id;
+  if (sid.includes(':group:')) {
+    if (s.group_name) return `👥 ${s.group_name}`;
+    return `👥 群組 ${sid.split(':')[3]?.slice(0, 8) || '?'}`;
+  }
+  if (s.user_name) return `💬 ${s.user_name}`;
+  return `💬 ${sid.split(':')[2]?.slice(0, 10) || '?'}`;
+}
+
 interface ChatHistoryDrawerProps {
   visible: boolean;
   onClose: () => void;
@@ -22,24 +42,56 @@ export default function ChatHistoryDrawer({ visible, onClose, channel }: ChatHis
   const [activeTab, setActiveTab] = useState('chat');
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  // Sessions
+  const [sessions, setSessions] = useState<ChatSession[]>([]);
+  const [sessionsLoading, setSessionsLoading] = useState(false);
+  const [activeSessionId, setActiveSessionId] = useState<string>('');
 
   useEffect(() => {
     if (visible && channel._key) {
-      fetchHistory();
+      loadSessions();
     } else {
       setMessages([]);
+      setSessions([]);
+      setActiveSessionId('');
       setSearchText('');
       setActiveTab('chat');
     }
   }, [visible, channel._key]);
 
-  const fetchHistory = async () => {
+  const loadSessions = async () => {
+    setSessionsLoading(true);
+    try {
+      const res = await ragicApi.listSessions('line', channel._key);
+      const items = (res.data.sessions || []) as ChatSession[];
+      setSessions(items);
+      if (items.length > 0 && !activeSessionId) {
+        setActiveSessionId(items[0].session_id);
+      }
+    } catch {
+      setSessions([]);
+    } finally {
+      setSessionsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!activeSessionId) return;
+    fetchHistory(activeSessionId);
+  }, [activeSessionId]);
+
+  const fetchHistory = async (sessionId: string) => {
     setLoading(true);
     try {
-      const response = await ragicApi.getChatHistory(channel._key, 100);
+      const response = await ragicApi.getChatHistory(sessionId, 100);
       setMessages(response.data.history || []);
-    } catch (error) {
-      console.error('Failed to fetch chat history:', error);
+    } catch {
       setMessages([]);
     } finally {
       setLoading(false);
@@ -123,8 +175,8 @@ export default function ChatHistoryDrawer({ visible, onClose, channel }: ChatHis
       <Button
         type="text"
         icon={<ReloadOutlined spin={loading} />}
-        onClick={fetchHistory}
-        loading={loading}
+        onClick={loadSessions}
+        loading={sessionsLoading || loading}
         title="刷新歷史記錄"
         style={{ color: token.colorTextSecondary }}
       />
@@ -132,7 +184,7 @@ export default function ChatHistoryDrawer({ visible, onClose, channel }: ChatHis
   );
 
   const chatTab = (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
       <div style={{ 
         padding: '12px 16px', 
         borderBottom: `1px solid ${token.colorBorderSecondary}`, 
@@ -157,7 +209,33 @@ export default function ChatHistoryDrawer({ visible, onClose, channel }: ChatHis
           style={{ flex: 1 }}
         />
       </div>
-      <div style={{ flex: 1, overflowY: 'auto', padding: '24px 16px' }} ref={scrollRef}>
+        {/* Sessions tab bar */}
+        {sessions.length > 1 && (
+          <div style={{
+            padding: '8px 16px',
+            borderBottom: `1px solid ${token.colorBorderSecondary}`,
+            background: token.colorBgContainer,
+            overflowX: 'auto',
+            whiteSpace: 'nowrap',
+          }}>
+            {sessionsLoading ? <Spin size="small" /> : sessions.map((s) => (
+              <Button
+                key={s.session_id}
+                type={activeSessionId === s.session_id ? 'primary' : 'default'}
+                size="small"
+                onClick={() => { setActiveSessionId(s.session_id); setSearchText(''); }}
+                style={{ marginRight: 8, marginBottom: 4 }}
+              >
+                {sessionLabel(s)}
+                <span style={{ fontSize: 10, marginLeft: 4, color: token.colorTextDescription }}>
+                  ({s.message_count})
+                </span>
+              </Button>
+            ))}
+          </div>
+        )}
+
+        <div style={{ flex: 1, overflowY: 'auto', padding: '24px 16px' }} ref={scrollRef}>
         {loading ? (
           <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}><Spin size="large" /></div>
         ) : filteredMessages.length === 0 ? (
@@ -181,6 +259,25 @@ export default function ChatHistoryDrawer({ visible, onClose, channel }: ChatHis
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
                   {msgs.map((msg, idx) => {
+                    const isSystem = msg.role === 'system';
+                    if (isSystem) {
+                      return (
+                        <div key={idx} style={{ textAlign: 'center', marginBottom: 24 }}>
+                          <Text type="secondary" style={{
+                            fontSize: 12,
+                            background: token.colorFillAlter,
+                            padding: '8px 16px',
+                            borderRadius: 12,
+                            display: 'inline-block',
+                            maxWidth: '90%',
+                            whiteSpace: 'pre-wrap',
+                            wordBreak: 'break-word',
+                          }}>
+                            {msg.content}
+                          </Text>
+                        </div>
+                      );
+                    }
                     const isUser = msg.role === 'user';
                     return (
                       <div key={idx} style={{ 
@@ -224,12 +321,13 @@ export default function ChatHistoryDrawer({ visible, onClose, channel }: ChatHis
             );
           })
         )}
+        <div ref={chatEndRef} />
       </div>
     </div>
   );
 
   const imageTab = (
-    <div style={{ padding: 24, overflowY: 'auto', height: '100%' }}>
+    <div style={{ padding: 24, overflowY: 'auto', flex: 1 }}>
       {imageMessages.length === 0 ? (
         <Empty description="尚無圖片" style={{ marginTop: 60 }} image={Empty.PRESENTED_IMAGE_SIMPLE} />
       ) : (
@@ -259,7 +357,7 @@ export default function ChatHistoryDrawer({ visible, onClose, channel }: ChatHis
   );
 
   const fileTab = (
-    <div style={{ padding: '12px 24px', overflowY: 'auto', height: '100%' }}>
+    <div style={{ padding: '12px 24px', overflowY: 'auto', flex: 1 }}>
       {fileMessages.length === 0 ? (
         <Empty description="尚無文件" style={{ marginTop: 60 }} image={Empty.PRESENTED_IMAGE_SIMPLE} />
       ) : (
@@ -304,12 +402,12 @@ export default function ChatHistoryDrawer({ visible, onClose, channel }: ChatHis
       <Drawer
         title={DrawerTitle}
         placement="right"
-        width={520}
+        size="large"
         onClose={onClose}
         open={visible}
         styles={{
           header: { padding: '16px 24px', borderBottom: `1px solid ${token.colorBorderSecondary}` },
-          body: { padding: 0, display: 'flex', flexDirection: 'column', background: token.colorBgLayout }
+          body: { padding: 0, overflowY: 'auto', height: '100%' }
         }}
       >
         <Tabs
@@ -320,7 +418,7 @@ export default function ChatHistoryDrawer({ visible, onClose, channel }: ChatHis
             { key: 'image', label: <Space><PictureOutlined /> 圖片 {imageMessages.length > 0 && `(${imageMessages.length})`}</Space>, children: imageTab },
             { key: 'file', label: <Space><FileOutlined /> 文件 {fileMessages.length > 0 && `(${fileMessages.length})`}</Space>, children: fileTab },
           ]}
-          style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}
+          style={{ height: '100%' }}
           tabBarStyle={{ padding: '0 24px', marginBottom: 0, background: token.colorBgContainer }}
         />
       </Drawer>

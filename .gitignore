@@ -89,3 +89,4 @@ web/
 
 # Tauri icons (allow)
 !src-tauri/icons/*.png
+.dev/

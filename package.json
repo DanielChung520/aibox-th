@@ -7,6 +7,8 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
+    "ragic:md:dryrun": "PYTHONPATH=ai-services ai-services/.venv/bin/python -m data_agent.ragic.import_md_file --pretty",
+    "ragic:md:apply": "PYTHONPATH=ai-services ai-services/.venv/bin/python -m data_agent.ragic.import_md_file --apply --pretty",
     "tauri": "tauri",
     "tauri:build": "tauri build",
     "tauri:build:mac-arm": "tauri build --target aarch64-apple-darwin",

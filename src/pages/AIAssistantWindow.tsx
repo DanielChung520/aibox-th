@@ -9,7 +9,7 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { ConfigProvider, App as AntApp, theme, Input, Button, Avatar, Spin, Tooltip, Tag } from 'antd';
-import { SendOutlined, BulbOutlined, RobotOutlined, PaperClipOutlined, CloseOutlined, ExpandOutlined, ShrinkOutlined } from '@ant-design/icons';
+import { SendOutlined, BulbOutlined, RobotOutlined, PaperClipOutlined, CloseOutlined, ExpandOutlined, ShrinkOutlined, PlusOutlined } from '@ant-design/icons';
 import type { InputRef, MenuProps } from 'antd';
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
@@ -21,6 +21,9 @@ import { intentEngine } from '../services/intentEngine';
 import { paramsApi } from '../services/api';
 import { AdminDropdown } from '../components/FloatingAssistant/AdminDropdown';
 import { ChatHistoryPanel } from '../components/FloatingAssistant/ChatHistoryPanel';
+import { MarkdownContent } from '../components/FloatingAssistant/ChatMarkdown';
+import RichMessageBubble from '../components/FloatingAssistant/RichMessageBubble';
+import DataSourceBadge from '../components/FloatingAssistant/DataSourceBadge';
 import { subscribeAssistantBridge, type AssistantBridgeState } from '../services/assistantBridge';
 import { resolvePageContext } from '../components/FloatingAssistant/types';
 import type { IntentGuess } from '../components/FloatingAssistant/types';
@@ -115,25 +118,33 @@ function AIAssistantWindow() {
   }, []);
 
   useEffect(() => {
-    const unsubscribe = authStore.subscribe(() => {
-      const state = authStore.getState();
-      if (state.isAuthenticated) {
-        setMessages([{
-          id: 'welcome',
-          role: 'assistant',
-          content: '您好！我是艾企 AI 助手。請問有什麼可以幫您的？',
-          timestamp: new Date()
-        }]);
+    const resumeSession = async () => {
+      const lastKey = aiqChatStore.getLastSessionKey();
+      if (lastKey) {
+        try {
+          await aiqChatStore.loadSessionMessages(lastKey);
+          return;
+        } catch {
+          aiqChatStore.setActiveSessionKey(null);
+        }
       }
-    });
-
-    if (authStore.getState().isAuthenticated) {
       setMessages([{
         id: 'welcome',
         role: 'assistant',
         content: '您好！我是艾企 AI 助手。請問有什麼可以幫您的？',
         timestamp: new Date()
       }]);
+    };
+
+    const unsubscribe = authStore.subscribe(() => {
+      const state = authStore.getState();
+      if (state.isAuthenticated) {
+        void resumeSession();
+      }
+    });
+
+    if (authStore.getState().isAuthenticated) {
+      void resumeSession();
     }
 
     return unsubscribe;
@@ -260,6 +271,20 @@ function AIAssistantWindow() {
     }
   }, []);
 
+  const handleNewChat = useCallback(() => {
+    setMessages([{
+      id: `welcome-${Date.now()}`,
+      role: 'assistant',
+      content: '您好！我是艾企 AI 助手。請問有什麼可以幫您的？',
+      timestamp: new Date()
+    }]);
+    setInputValue('');
+    setCurrentView('chat');
+    aiqChatStore.setActiveSessionKey(null);
+    aiqChatStore.resetCurrentSession();
+    aiqChatStore.clearDataSources();
+  }, []);
+
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     event.target.value = '';
   };
@@ -331,6 +356,9 @@ function AIAssistantWindow() {
           </div>
           <div className="ai-window-drag-area" onPointerDown={() => void handleDragPointerDown()} />
           <div className="ai-window-actions">
+            <Tooltip title="開始新對話">
+              <Button type="text" icon={<PlusOutlined />} onClick={handleNewChat} />
+            </Tooltip>
             <AdminDropdown menuItems={adminMenuItems} onMenuClick={handleAdminMenuClick} />
             <Tooltip title={isExpanded ? '還原' : '展開'}>
               <Button
@@ -368,14 +396,28 @@ function AIAssistantWindow() {
             {renderedMessages.map(msg => (
               <div key={msg.id} className={`message message-${msg.role}`}>
                 <div className="message-content">
-                  <div className="message-bubble">{msg.content}</div>
+                  <div className="message-bubble">
+                    <RichMessageBubble content={msg.content} role={msg.role as 'user' | 'assistant'} />
+                  </div>
+                  {msg.role === 'assistant' && storeState.dataSources.length > 0 && (
+                    <DataSourceBadge sources={storeState.dataSources} />
+                  )}
                   <div className="message-time">
                     {msg.timestamp.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })}
                   </div>
                 </div>
               </div>
             ))}
-            {storeState.isStreaming && (
+            {storeState.isStreaming && storeState.streamingContent && (
+              <div className="message message-assistant">
+                <div className="message-content">
+                  <div className="message-bubble">
+                    <MarkdownContent content={storeState.streamingContent} />
+                  </div>
+                </div>
+              </div>
+            )}
+            {storeState.isStreaming && !storeState.streamingContent && (
               <div className="message message-assistant">
                 <div className="message-content">
                   <div className="message-bubble loading">

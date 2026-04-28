@@ -2,9 +2,9 @@
 @file        arango_writer.py
 @description Write ParsedTable schemas, fields, and intents to ArangoDB collections
              (da_table_info_ragic, da_field_info_ragic, da_table_relation_ragic, intent_catalog).
-@lastUpdate  2026-04-13 01:43:49
+@lastUpdate  2026-04-24 11:34:00
 @author      Daniel Chung
-@version     1.4.0
+@version     1.8.0
 """
 
 from __future__ import annotations
@@ -12,6 +12,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import os
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 import httpx
@@ -34,42 +35,74 @@ _INTENT_COLLECTION = "intent_catalog"
 _BATCH_SIZE = 50
 
 
+def _now_iso() -> str:
+    return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
 def _make_table_id(account: str, table: ParsedTable) -> str:
-    return f"{account}_{table.tab_path}_{table.sheet_index}"
+    _ = account
+    normalized_tab = table.tab_path.replace("-", "").replace("_", "").upper()
+    return f"{normalized_tab}_{table.sheet_index}"
 
 
 def _make_table_doc(table: ParsedTable, account: str) -> dict[str, object]:
     table_id = _make_table_id(account, table)
+    now_iso = _now_iso()
     return {
         "_key": table_id,
+        "table_id": table_id,
         "table_name": table.table_name,
         "description": table.table_name,
         "row_count_estimate": 0,
         "module": table.tab_name,
         "tab": table.tab_path,
         "sheet_key": str(table.sheet_index),
+        "sheet_url": table.form_url,
+        "form_url": table.form_url,
+        "api_url": table.api_url,
         "s3_path": "",
         "account": account,
+        "data_source": "ragic",
+        "status": "enabled",
+        "created_at": now_iso,
+        "updated_at": now_iso,
+        "updated_by": "system",
+        "preview_mode": "paged",
+        "version": 1,
+        "form_key": table.main_form_key,
+        "record_count": 0,
+        "partition_keys": [],
+        "primary_keys": ["_ragicId"],
     }
 
 
 def _make_field_doc(
     field: ParsedField,
     table_id: str,
+    account: str,
     is_subtable: bool = False,
     subtable_key: str = "",
 ) -> dict[str, object]:
+    field_key_prefix = table_id.replace("_", "")
+    description = field.memo
     return {
-        "_key": f"{table_id}_{field.field_id}",
+        "_key": f"{field_key_prefix}_{field.field_id}",
+        "account": account,
         "table_id": table_id,
         "field_name": field.name,
         "field_type": field.field_type,
-        "description": "",
+        "description": description,
         "is_pk": False,
         "field_id": field.field_id,
         "writable": field.writable,
+        "write_format": field.write_format,
+        "memo": field.memo,
+        "linked_to": field.linked_to.model_dump() if field.linked_to else None,
+        "loaded_from": field.loaded_from.model_dump() if field.loaded_from else None,
         "is_subtable": is_subtable,
         "subtable_key": subtable_key,
+        "status": "enabled",
+        "data_source": "ragic",
     }
 
 
@@ -139,11 +172,17 @@ class RagicArangoWriter:
         for table in tables:
             table_id = _make_table_id(account, table)
             for field in table.fields:
-                docs.append(_make_field_doc(field, table_id))
+                docs.append(_make_field_doc(field, table_id, account))
             for sub_key, sub_fields in table.subtables.items():
                 for field in sub_fields:
                     docs.append(
-                        _make_field_doc(field, table_id, is_subtable=True, subtable_key=sub_key)
+                        _make_field_doc(
+                            field,
+                            table_id,
+                            account,
+                            is_subtable=True,
+                            subtable_key=sub_key,
+                        )
                     )
         return await self._batch_upsert(_FIELD_COLLECTION, docs)
 

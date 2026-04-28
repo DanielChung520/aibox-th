@@ -1,14 +1,20 @@
 import os
 import base64
 import httpx
+import logging
 from fastapi import APIRouter, Request, HTTPException, Header
 from typing import Optional
 
+logger = logging.getLogger("unified_agents.line_webhook")
+
 from unified_agents.platforms.line.services import db
+from shared.conversation import ConversationStorage
 from unified_agents.platforms.line.services.line_api import (
     verify_line_signature,
     reply_message,
     get_message_content,
+    get_group_summary,
+    get_user_profile,
 )
 
 router = APIRouter(tags=["LINE Webhook"])
@@ -71,6 +77,24 @@ def is_mentioned(text: str, bot_name: str) -> bool:
     if not text or not bot_name:
         return False
     return f"@{bot_name}" in text or f"@{bot_name} " in text
+
+
+async def call_agent_endpoint(endpoint_url: str, session_id: str, message: str, user_id: str, agent_key: str | None = None, platform: str = "line", image_content: str | None = None) -> str:
+    payload = {
+        "session_id": session_id,
+        "message": message,
+        "user_id": user_id,
+    }
+    if agent_key:
+        payload["agent_key"] = agent_key
+    if image_content:
+        payload["image_content"] = image_content
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        resp = await client.post(endpoint_url, json=payload)
+        if resp.status_code != 200:
+            return f"AI 服務錯誤: {resp.status_code}"
+        data = resp.json()
+        return data.get("reply", data.get("response", str(data)))
 
 
 async def call_ragic_helper(agent_key: str, session_id: str, message: str, user_id: str, platform: str = "line", image_content: str | None = None) -> str:
@@ -164,8 +188,21 @@ async def handle_line_webhook(
     if not events:
         return {"status": "ok"}
 
-    agent_key = channel.get("linked_agent_key") or "default"
-    bot_name = await get_agent_name(agent_key)
+    agent_key = channel.get("linked_agent_key") or ""
+    bot_name = await get_agent_name(agent_key) if agent_key else "機器人"
+    channel_name = channel.get("channel_name", "")
+
+    # 若 channel 有 linked_agent_key，查該 Agent 的 endpoint_url 做動態路由
+    agent_endpoint: str | None = None
+    if agent_key:
+        try:
+            agent_doc = await db.get_agent(agent_key)
+            if agent_doc:
+                ep = agent_doc.get("endpoint_url", "")
+                if ep:
+                    agent_endpoint = ep
+        except Exception:
+            pass
 
     for event in events:
         event_type = event.get("type")
@@ -178,20 +215,40 @@ async def handle_line_webhook(
         if event_type == "message":
             msg = event.get("message", {})
             msg_type = msg.get("type", "text")
-            content_id = msg.get("contentId")
+            content_id = msg.get("id") or msg.get("contentId")  # LINE uses "id"
 
             if msg_type == "text":
                 text = msg.get("text", "")
                 if not reply_token or not text:
                     continue
 
-                if source_type in ("group", "room") and not is_mentioned(text, bot_name):
+                is_mentioned_now = is_mentioned(text, bot_name) or is_mentioned(text, channel_name)
+
+                storage = ConversationStorage()
+                user_profile = await get_user_profile(user_id, channel.get("channel_access_token", ""))
+                user_display_name = user_profile.get("display_name", user_id)
+                metadata: dict = {"user_name": user_display_name}
+                if source_type == "group":
+                    group_id = source.get("groupId", "")
+                    group_name = (await get_group_summary(group_id, channel.get("channel_access_token", ""))).get("group_name", group_id)
+                    metadata["group_name"] = group_name
+                await storage.save_message(session_id=session_id, platform="line", role="user", message=text, metadata=metadata)
+
+                if source_type in ("group", "room") and not is_mentioned_now:
                     continue
 
                 try:
-                    ai_response = await call_ragic_helper(agent_key, session_id, text, user_id)
+                    if agent_endpoint:
+                        ai_response = await call_agent_endpoint(agent_endpoint, session_id, text, user_id, agent_key=agent_key)
+                    elif agent_key:
+                        ai_response = await call_ragic_helper(agent_key, session_id, text, user_id)
+                    else:
+                        ai_response = await call_ai_chat(user_id, session_id, text)
                 except Exception as e:
                     ai_response = f"系統錯誤: {str(e)}"
+
+                await storage.save_message(session_id=session_id, platform="line", role="assistant", message=ai_response)
+
                 await reply_message(
                     channel_access_token=channel.get("channel_access_token", ""),
                     reply_token=reply_token,
@@ -199,12 +256,16 @@ async def handle_line_webhook(
                 )
 
             elif msg_type in ("image", "video", "audio", "file"):
+                logger.info(f"[MEDIA] msg_type={msg_type} reply_token={bool(reply_token)} content_id={bool(content_id)} source_type={source_type}")
                 if not reply_token or not content_id:
+                    logger.warning(f"[MEDIA] Skipped: no reply_token or content_id")
                     continue
                 if source_type in ("group", "room"):
+                    logger.info(f"[MEDIA] Skipped: group/room not supported")
                     continue
                 try:
                     content = await get_message_content(content_id, channel.get("channel_access_token", ""))
+                    logger.info(f"[MEDIA] Downloaded {len(content)} bytes from LINE")
                     mime_map = {
                         "image": "image/jpeg",
                         "video": "video/mp4",
@@ -227,15 +288,27 @@ async def handle_line_webhook(
                         )
                         resp.raise_for_status()
                         mm = resp.json()
-                    prompt = f"[收到 {msg_type} 附件]\n附件已備份：{mm.get('seaweed_url')}\n請直接描述這個 {msg_type} 的內容並回答用戶。"
-                    ai_response = await call_ragic_helper(agent_key, session_id, prompt, user_id, image_content=b64_content)
+                    logger.info(f"[MEDIA] Analyzed: desc={mm.get('description','')[:60]}... seaweed={mm.get('seaweed_url','')}")
+                    # 圖片/影片/音訊只解析並存入上下文，不自動回覆
+                    context_msg = f"[系統提示] 使用者剛才傳送了一張{msg_type}，以下是該{msg_type}的 AI 分析結果，請根據此描述回答使用者後續關於該{msg_type}的問題：\n\n{mm.get('description', '')}\n\n備份位置：{mm.get('seaweed_url', '')}"
+                    storage = ConversationStorage()
+                    await storage.save_message(session_id=session_id, platform="line", role="assistant", message=context_msg)
+
+                    # 只在個別聊天時回應簡短確認
+                    if source_type == "user" and reply_token:
+                        await reply_message(
+                            channel_access_token=channel.get("channel_access_token", ""),
+                            reply_token=reply_token,
+                            messages=[{"type": "text", "text": f"收到 {msg_type}，已解析。需要我說明內容嗎？"}],
+                        )
                 except Exception as e:
-                    ai_response = f"收到附件，處理失敗：{str(e)}"
-                await reply_message(
-                    channel_access_token=channel.get("channel_access_token", ""),
-                    reply_token=reply_token,
-                    messages=[{"type": "text", "text": ai_response}],
-                )
+                    logger.error(f"[MEDIA] Failed: {type(e).__name__}: {e}", exc_info=True)
+                    if reply_token:
+                        await reply_message(
+                            channel_access_token=channel.get("channel_access_token", ""),
+                            reply_token=reply_token,
+                            messages=[{"type": "text", "text": f"收到附件，處理失敗：{str(e)}"}],
+                        )
 
             elif msg_type == "sticker":
                 if not reply_token:
@@ -258,11 +331,13 @@ async def handle_line_webhook(
                 longitude = msg.get("longitude", 0)
                 address = msg.get("address", "未知位置")
                 try:
-                    ai_response = await call_ragic_helper(
-                        agent_key, session_id,
-                        f"[收到位置分享] 地址：{address}，座標：{latitude},{longitude}",
-                        user_id
-                    )
+                    loc_text = f"[收到位置分享] 地址：{address}，座標：{latitude},{longitude}"
+                    if agent_endpoint:
+                        ai_response = await call_agent_endpoint(agent_endpoint, session_id, loc_text, user_id, agent_key=agent_key)
+                    elif agent_key:
+                        ai_response = await call_ragic_helper(agent_key, session_id, loc_text, user_id)
+                    else:
+                        ai_response = loc_text
                 except Exception:
                     ai_response = f"收到位置分享：{address}"
                 await reply_message(
@@ -283,7 +358,12 @@ async def handle_line_webhook(
             if reply_token:
                 postback_data = event.get("postback", {}).get("data", "")
                 try:
-                    ai_response = await call_ragic_helper(agent_key, session_id, postback_data, user_id)
+                    if agent_endpoint:
+                        ai_response = await call_agent_endpoint(agent_endpoint, session_id, postback_data, user_id, agent_key=agent_key)
+                    elif agent_key:
+                        ai_response = await call_ragic_helper(agent_key, session_id, postback_data, user_id)
+                    else:
+                        ai_response = f"收到回傳資料：{postback_data}"
                     await reply_message(
                         channel_access_token=channel.get("channel_access_token", ""),
                         reply_token=reply_token,

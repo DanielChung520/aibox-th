@@ -62,6 +62,9 @@ app.mount("/mcp/process-advisor", process_advisor_app)
 app.mount("/mcp/report-agent", report_agent_app)
 app.mount("/mcp/multimedia-analyzer", multimedia_analyzer_app)
 
+from bpa.ragic_agent.router import router as ragic_agent_router  # noqa: E402
+app.include_router(ragic_agent_router, prefix="/ragic-agent")
+
 from knowledge_agent.routers.hybrid import router as hybrid_router  # noqa: E402
 from knowledge_agent.routers.intent import router as intent_router  # noqa: E402
 from knowledge_agent.routers.search import router as search_router  # noqa: E402

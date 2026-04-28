@@ -11,18 +11,20 @@ router = APIRouter(
     dependencies=[Depends(verify_internal_token)],
 )
 
-OLLAMA_BASE_URL = "http://localhost:11434"
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434")
 DEFAULT_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5-coder:7b")
-ARANGO_URL = "http://localhost:8529"
-ARANGO_DB = "abc_desktop"
-ARANGO_USER = "root"
+ARANGO_URL = os.getenv("ARANGO_URL", "http://127.0.0.1:8529")
+ARANGO_DB = os.getenv("ARANGO_DB", "abc_desktop")
+ARANGO_USER = os.getenv("ARANGO_USER", "root")
 ARANGO_PASSWORD = os.getenv("ARANGO_PASSWORD", "")
+_http = httpx.AsyncClient(timeout=30.0)
 
 
 class KnowledgeRequest(BaseModel):
     query: str
-    collection: Optional[str] = "knowledge"
+    collection: Optional[str] = "knowledge_files"
     limit: Optional[int] = 5
+    root_id: Optional[str] = None
 
 
 class Document(BaseModel):
@@ -54,7 +56,7 @@ async def get_embedding(text: str) -> list[float]:
 
 
 async def search_similar(collection: str, limit: int) -> list[dict[str, object]]:
-    aql = f"FOR doc IN {collection} SORT BM25(doc) DESC LIMIT {limit} RETURN doc"
+    aql = f"FOR doc IN {collection} SORT doc.upload_time DESC LIMIT {limit} RETURN doc"
     async with httpx.AsyncClient(timeout=30.0) as client:
         response = await client.post(
             f"{ARANGO_URL}/_db/{ARANGO_DB}/_api/cursor",
@@ -91,7 +93,25 @@ async def generate_answer(query: str, context: str) -> str:
 @router.post("/search", response_model=KnowledgeResponse)
 async def search(request: KnowledgeRequest) -> KnowledgeResponse:
     try:
-        results = await search_similar(request.collection or "knowledge", request.limit or 5)
+        coll = request.collection or "knowledge_files"
+        limit = request.limit or 5
+
+        if request.root_id:
+            aql = f"FOR doc IN {coll} FILTER doc.root_id == @root_id OR doc.knowledge_root_id == @root_id SORT doc.upload_time DESC LIMIT @limit RETURN doc"
+            resp = await _http.post(
+                f"{ARANGO_URL}/_db/{ARANGO_DB}/_api/cursor",
+                json={"query": aql, "bindVars": {"root_id": request.root_id, "limit": limit}},
+                auth=(ARANGO_USER, ARANGO_PASSWORD),
+            )
+        else:
+            aql = f"FOR doc IN {coll} SORT doc.upload_time DESC LIMIT @limit RETURN doc"
+            resp = await _http.post(
+                f"{ARANGO_URL}/_db/{ARANGO_DB}/_api/cursor",
+                json={"query": aql, "bindVars": {"limit": limit}},
+                auth=(ARANGO_USER, ARANGO_PASSWORD),
+            )
+        resp.raise_for_status()
+        results = resp.json().get("result", [])
 
         if not results:
             return KnowledgeResponse(
@@ -117,7 +137,7 @@ async def search(request: KnowledgeRequest) -> KnowledgeResponse:
             )
 
         context = "\n\n".join(context_parts)
-        answer = await generate_answer(request.query, context)
+        answer = ""  # Skip LLM answer generation (Python 3.14 compatibility)
 
         return KnowledgeResponse(
             query=request.query,

@@ -4,9 +4,9 @@
 //! DA 的 Schema CRUD endpoints (tables, fields, relations)
 //! 支援雙資料源 (SAP + Ragic) + Ragic API Proxy
 //!
-//! # Last Update: 2026-04-11 17:45:24
+//! # Last Update: 2026-04-24 10:20:08
 //! # Author: Daniel Chung
-//! # Version: 2.1.0
+//! # Version: 2.2.0
 
 use crate::config::CONFIG;
 use crate::db::get_db;
@@ -15,7 +15,7 @@ use crate::table_cache;
 use axum::{
     extract::{Path, Query},
     http::StatusCode,
-    response::IntoResponse,
+    response::{IntoResponse, Response},
     routing::{get, post, put},
     Json, Router,
 };
@@ -34,6 +34,10 @@ fn resolve_collection_name(base: &str, data_source: &str) -> String {
         ("relation", "ragic") => "da_table_relation_ragic".to_string(),
         _ => format!("da_{}_{}", base, data_source),
     }
+}
+
+fn map_reqwest_status(status: reqwest::StatusCode) -> StatusCode {
+    StatusCode::from_u16(status.as_u16()).unwrap_or(StatusCode::BAD_GATEWAY)
 }
 
 pub fn create_da_router() -> Router {
@@ -89,6 +93,18 @@ pub fn create_da_router() -> Router {
         .route(
             "/api/v1/da/ragic/graph/all-relations",
             get(ragic_graph_all_relations),
+        )
+        .route(
+            "/api/v1/da/ragic/schema/import-md",
+            post(ragic_schema_import_md_proxy),
+        )
+        .route(
+            "/api/v1/da/ragic/intents",
+            get(ragic_intents_proxy),
+        )
+        .route(
+            "/api/v1/da/ragic/query/multi-step",
+            post(ragic_multi_step_query_proxy),
         )
 }
 
@@ -813,6 +829,7 @@ async fn ragic_proxy_data(
     );
 
     let rows = fetch_ragic(&ragic_url, &api_key, &table_id, offset, limit).await?;
+    let rows = enrich_ragic_rows(rows, &server_prefix, &ragic_database, tab, sheet_number);
 
     let row_count = rows.len() as i64;
     let total = if row_count < limit {
@@ -1020,6 +1037,54 @@ async fn fetch_ragic(
     Ok(rows)
 }
 
+fn enrich_ragic_rows(
+    rows: Vec<Value>,
+    server_prefix: &str,
+    ragic_database: &str,
+    tab: &str,
+    sheet_number: &str,
+) -> Vec<Value> {
+    rows
+        .into_iter()
+        .map(|row| {
+            let Some(mut obj) = row.as_object().cloned() else {
+                return row;
+            };
+
+            if let Some(record_url) = build_ragic_record_url(
+                server_prefix,
+                ragic_database,
+                tab,
+                sheet_number,
+                obj.get("_ragicId"),
+            ) {
+                obj.insert("_ragicRecordUrl".to_string(), Value::String(record_url));
+            }
+
+            Value::Object(obj)
+        })
+        .collect()
+}
+
+fn build_ragic_record_url(
+    server_prefix: &str,
+    ragic_database: &str,
+    tab: &str,
+    sheet_number: &str,
+    record_id: Option<&Value>,
+) -> Option<String> {
+    let record_id = match record_id {
+        Some(Value::Number(n)) => n.to_string(),
+        Some(Value::String(s)) if !s.trim().is_empty() => s.trim().to_string(),
+        _ => return None,
+    };
+
+    Some(format!(
+        "https://{}.ragic.com/{}/{}/{}/{}",
+        server_prefix, ragic_database, tab, sheet_number, record_id
+    ))
+}
+
 async fn upsert_cache_meta(
     db: &arangors::Database<arangors::client::reqwest::ReqwestClient>,
     table_id: &str,
@@ -1055,9 +1120,21 @@ async fn upsert_cache_meta(
 
 pub async fn ragic_graph_related_tables(
     Query(params): Query<HashMap<String, String>>,
-) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
-    let table_name = params.get("table_name").ok_or_else(|| (StatusCode::BAD_REQUEST, Json(json!({"code": 400, "message": "table_name is required"}))))?;
-    let account = params.get("account").ok_or_else(|| (StatusCode::BAD_REQUEST, Json(json!({"code": 400, "message": "account is required"}))))?;
+) -> Response {
+    let Some(table_name) = params.get("table_name") else {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"code": 400, "message": "table_name is required"})),
+        )
+            .into_response();
+    };
+    let Some(account) = params.get("account") else {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"code": 400, "message": "account is required"})),
+        )
+            .into_response();
+    };
     let depth = params.get("depth").map(|d| d.as_str()).unwrap_or("1");
 
     let url = format!(
@@ -1076,22 +1153,44 @@ pub async fn ragic_graph_related_tables(
         .await
     {
         Ok(resp) => {
-            let body: serde_json::Value = resp.json().await.unwrap_or_default();
-            Ok(Json(json!({ "code": 200, "data": body })))
+            let status = map_reqwest_status(resp.status());
+            let body: serde_json::Value = resp.json().await.unwrap_or_else(|_| {
+                json!({ "code": status.as_u16(), "message": "invalid JSON response from unified_agents" })
+            });
+            (status, Json(body)).into_response()
         }
-        Err(e) => Err((
+        Err(e) => (
             StatusCode::BAD_GATEWAY,
             Json(json!({ "code": 502, "message": format!("failed to get related tables: {}", e) })),
-        )),
+        )
+            .into_response(),
     }
 }
 
 pub async fn ragic_graph_path(
     Query(params): Query<HashMap<String, String>>,
-) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
-    let from_table = params.get("from_table").ok_or_else(|| (StatusCode::BAD_REQUEST, Json(json!({"code": 400, "message": "from_table is required"}))))?;
-    let to_table = params.get("to_table").ok_or_else(|| (StatusCode::BAD_REQUEST, Json(json!({"code": 400, "message": "to_table is required"}))))?;
-    let account = params.get("account").ok_or_else(|| (StatusCode::BAD_REQUEST, Json(json!({"code": 400, "message": "account is required"}))))?;
+) -> Response {
+    let Some(from_table) = params.get("from_table") else {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"code": 400, "message": "from_table is required"})),
+        )
+            .into_response();
+    };
+    let Some(to_table) = params.get("to_table") else {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"code": 400, "message": "to_table is required"})),
+        )
+            .into_response();
+    };
+    let Some(account) = params.get("account") else {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"code": 400, "message": "account is required"})),
+        )
+            .into_response();
+    };
 
     let url = format!(
         "{}/da/ragic/graph/path?from_table={}&to_table={}&account={}",
@@ -1109,20 +1208,30 @@ pub async fn ragic_graph_path(
         .await
     {
         Ok(resp) => {
-            let body: serde_json::Value = resp.json().await.unwrap_or_default();
-            Ok(Json(json!({ "code": 200, "data": body })))
+            let status = map_reqwest_status(resp.status());
+            let body: serde_json::Value = resp.json().await.unwrap_or_else(|_| {
+                json!({ "code": status.as_u16(), "message": "invalid JSON response from unified_agents" })
+            });
+            (status, Json(body)).into_response()
         }
-        Err(e) => Err((
+        Err(e) => (
             StatusCode::BAD_GATEWAY,
             Json(json!({ "code": 502, "message": format!("failed to get graph path: {}", e) })),
-        )),
+        )
+            .into_response(),
     }
 }
 
 pub async fn ragic_graph_all_relations(
     Query(params): Query<HashMap<String, String>>,
-) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
-    let account = params.get("account").ok_or_else(|| (StatusCode::BAD_REQUEST, Json(json!({"code": 400, "message": "account is required"}))))?;
+) -> Response {
+    let Some(account) = params.get("account") else {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"code": 400, "message": "account is required"})),
+        )
+            .into_response();
+    };
 
     let url = format!(
         "{}/da/ragic/graph/all-relations?account={}",
@@ -1138,12 +1247,123 @@ pub async fn ragic_graph_all_relations(
         .await
     {
         Ok(resp) => {
-            let body: serde_json::Value = resp.json().await.unwrap_or_default();
-            Ok(Json(json!({ "code": 200, "data": body })))
+            let status = map_reqwest_status(resp.status());
+            let body: serde_json::Value = resp.json().await.unwrap_or_else(|_| {
+                json!({ "code": status.as_u16(), "message": "invalid JSON response from unified_agents" })
+            });
+            (status, Json(body)).into_response()
         }
-        Err(e) => Err((
+        Err(e) => (
             StatusCode::BAD_GATEWAY,
             Json(json!({ "code": 502, "message": format!("failed to get all relations: {}", e) })),
-        )),
+        )
+            .into_response(),
+    }
+}
+
+pub async fn ragic_schema_import_md_proxy(
+    Json(payload): Json<Value>,
+) -> Response {
+    let url = format!(
+        "{}/da/ragic/schema/import-md",
+        CONFIG.ai_services.unified_agents_url
+    );
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(300))
+        .build();
+
+    let Ok(client) = client else {
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    };
+
+    match client.post(&url).json(&payload).send().await {
+        Ok(resp) => {
+            let status = map_reqwest_status(resp.status());
+            let body: serde_json::Value = resp.json().await.unwrap_or_else(|_| {
+                json!({ "code": status.as_u16(), "message": "invalid JSON response from unified_agents" })
+            });
+            (status, Json(body)).into_response()
+        }
+        Err(e) => (
+            StatusCode::BAD_GATEWAY,
+            Json(json!({ "code": 502, "message": format!("failed to import ragic schema: {}", e) })),
+        )
+            .into_response(),
+    }
+}
+
+pub async fn ragic_intents_proxy(
+    Query(params): Query<HashMap<String, String>>,
+) -> Response {
+    let Some(account) = params.get("account") else {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"code": 400, "message": "account is required"})),
+        )
+            .into_response();
+    };
+    let limit = params.get("limit").map(|d| d.as_str()).unwrap_or("500");
+
+    let url = format!(
+        "{}/da/ragic/intents?account={}&limit={}",
+        CONFIG.ai_services.unified_agents_url,
+        urlencoding::encode(account),
+        urlencoding::encode(limit)
+    );
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .build();
+
+    let Ok(client) = client else {
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    };
+
+    match client.get(&url).send().await {
+        Ok(resp) => {
+            let status = map_reqwest_status(resp.status());
+            let body: serde_json::Value = resp.json().await.unwrap_or_else(|_| {
+                json!({ "code": status.as_u16(), "message": "invalid JSON response from unified_agents" })
+            });
+            (status, Json(body)).into_response()
+        }
+        Err(e) => (
+            StatusCode::BAD_GATEWAY,
+            Json(json!({ "code": 502, "message": format!("failed to list ragic intents: {}", e) })),
+        )
+            .into_response(),
+    }
+}
+
+pub async fn ragic_multi_step_query_proxy(
+    Json(payload): Json<Value>,
+) -> Response {
+    let url = format!(
+        "{}/da/ragic/query/multi-step",
+        CONFIG.ai_services.unified_agents_url
+    );
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(120))
+        .build();
+
+    let Ok(client) = client else {
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    };
+
+    match client.post(&url).json(&payload).send().await {
+        Ok(resp) => {
+            let status = map_reqwest_status(resp.status());
+            let body: serde_json::Value = resp.json().await.unwrap_or_else(|_| {
+                json!({ "code": status.as_u16(), "message": "invalid JSON response from unified_agents" })
+            });
+            (status, Json(body)).into_response()
+        }
+        Err(e) => (
+            StatusCode::BAD_GATEWAY,
+            Json(json!({ "code": 502, "message": format!("failed to execute ragic multi-step query: {}", e) })),
+        )
+            .into_response(),
     }
 }

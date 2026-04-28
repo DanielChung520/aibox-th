@@ -369,12 +369,23 @@ async fn seed_roles(db: &Database<ReqwestClient>) -> Result<(), String> {
             _key: Some("admin".into()),
             name: "系统管理员".into(),
             description: "拥有所有权限".into(),
-            created_at: now,
+            created_at: now.clone(),
         },
         Default::default(),
     )
     .await
     .map_err(|e| format!("Seed role failed: {e}"))?;
+    col.create_document(
+        Role {
+            _key: Some("developer".into()),
+            name: "開發者".into(),
+            description: "負責接單與開發 AI Agent 需求".into(),
+            created_at: now,
+        },
+        Default::default(),
+    )
+    .await
+    .map_err(|e| format!("Seed role developer failed: {e}"))?;
     Ok(())
 }
 
@@ -517,6 +528,11 @@ async fn seed_functions(db: &Database<ReqwestClient>) -> Result<(), String> {
         ("knowledge", "知识管理", "group", None, None, Some("BookOutlined"), None, 2),
         ("knowledge.ontology", "知识本体列表", "sub_function", Some("knowledge"), Some("/app/knowledge/ontology"), Some("ApartmentOutlined"), None, 1),
         ("knowledge.management", "知识库管理", "sub_function", Some("knowledge"), Some("/app/knowledge/management"), Some("DatabaseOutlined"), None, 2),
+        ("agent", "AI 智能體與工具市集", "group", None, None, Some("RobotOutlined"), None, 3),
+        ("agent.browse", "智能體市集", "sub_function", Some("agent"), Some("/app/browse-agent"), Some("AppstoreOutlined"), None, 1),
+        ("agent.tools", "工具市集", "sub_function", Some("agent"), Some("/app/browse-tools"), Some("ToolOutlined"), None, 2),
+        ("dev", "系統開發", "group", None, None, Some("CodeOutlined"), None, 4),
+        ("dev.requirements", "需求看板", "sub_function", Some("dev"), Some("/app/requirements"), Some("ProjectOutlined"), None, 1),
     ];
 
     let now = Utc::now().to_rfc3339();
@@ -644,6 +660,7 @@ pub struct Role {
     pub _key: Option<String>,
     pub name: String,
     pub description: String,
+    #[serde(default)]
     pub created_at: String,
 }
 
@@ -675,6 +692,7 @@ pub struct Function {
     pub icon: Option<String>,
     pub sort_order: i32,
     pub status: String,
+    #[serde(default)]
     pub created_at: String,
 }
 

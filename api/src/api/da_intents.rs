@@ -1,9 +1,9 @@
 //! Data Agent Intents Catalog API Routes
 //!
 //! # Description
-//! DA 的 Intents Catalog CRUD endpoints + proxy to Python data_agent
+//! DA 的 Intents Catalog CRUD endpoints + proxy to unified_agents
 //! Catalog 路由直接操作 ArangoDB da_intents 集合
-//! sync-qdrant / models 路由代理轉發到 data_agent:8003
+//! sync-qdrant / models 路由代理轉發到 unified_agents /da/intent-rag/*
 //!
 //! # Last Update: 2026-03-24 13:16:23
 //! # Author: Daniel Chung
@@ -38,7 +38,7 @@ pub fn create_da_intents_router() -> Router {
             "/api/v1/da/intents/catalog/{intent_id}/feedback",
             post(feedback_intent),
         )
-        // Proxy to data_agent Python service
+        // Proxy to unified_agents
         .route(
             "/api/v1/da/intents/sync-qdrant",
             post(proxy_sync_qdrant),
@@ -321,9 +321,9 @@ async fn feedback_intent(
     })))
 }
 
-/// Proxy POST /api/v1/da/intents/sync-qdrant → data_agent:8003/intent-rag/embed-sync
+/// Proxy POST /api/v1/da/intents/sync-qdrant → unified_agents/da/intent-rag/embed-sync
 async fn proxy_sync_qdrant(Json(payload): Json<Value>) -> Result<impl IntoResponse, StatusCode> {
-    let url = format!("{}/intent-rag/data_agent/embed-sync", CONFIG.ai_services.data_agent_url);
+    let url = format!("{}/da/intent-rag/data_agent/embed-sync", CONFIG.ai_services.unified_agents_url);
 
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(120))
@@ -350,9 +350,9 @@ async fn proxy_sync_qdrant(Json(payload): Json<Value>) -> Result<impl IntoRespon
     }
 }
 
-/// Proxy GET /api/v1/da/intents/models → data_agent:8003/intent-rag/models
+/// Proxy GET /api/v1/da/intents/models → unified_agents/da/intent-rag/models
 async fn proxy_list_models() -> Result<impl IntoResponse, StatusCode> {
-    let url = format!("{}/intent-rag/models", CONFIG.ai_services.data_agent_url);
+    let url = format!("{}/da/intent-rag/models", CONFIG.ai_services.unified_agents_url);
 
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(10))

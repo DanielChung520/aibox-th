@@ -13,6 +13,16 @@ import type {
   SessionFile,
 } from '../services/api';
 
+export interface DataSourceRecord {
+  type: 'knowledge' | 'database' | 'tool';
+  label: string;
+  detail: string;
+  success: boolean;
+  duration_ms?: number;
+  row_count?: number;
+  timestamp: number;
+}
+
 export interface ChatState {
   sessions: ChatSession[];
   activeSessionKey: string | null;
@@ -26,6 +36,7 @@ export interface ChatState {
   greeting: string;
   chatDefaults: Record<string, string>;
   uploadedFiles: SessionFile[];
+  dataSources: DataSourceRecord[];
 }
 
 export const INITIAL_CHAT_STATE: ChatState = {
@@ -41,4 +52,5 @@ export const INITIAL_CHAT_STATE: ChatState = {
   greeting: '',
   chatDefaults: {},
   uploadedFiles: [],
+  dataSources: [],
 };

@@ -1,9 +1,9 @@
 /**
  * @file        Data Agent Schema 導入區塊
  * @description Schema 頁面的資料表導入按鈕與上傳邏輯，含圖譜與意圖 Modal
- * @lastUpdate  2026-04-11 22:24:32
+ * @lastUpdate  2026-04-24 12:17:42
  * @author      Daniel Chung
- * @version     2.0.0
+ * @version     2.1.0
  */
 
 import { useState, useRef } from 'react';
@@ -15,7 +15,7 @@ import SchemaIntentModal from './SchemaIntentModal';
 
 const { Text } = Typography;
 
-const DEFAULT_ACCOUNT = '2025shianyong';
+const DEFAULT_ACCOUNT = 'dawnlink';
 
 interface SchemaImportSectionProps {
   onImportSuccess: () => void;

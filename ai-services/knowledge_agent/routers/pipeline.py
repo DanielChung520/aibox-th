@@ -23,9 +23,9 @@ def _kms_check(root_id: str | None, user_role: str | None, operation: str) -> No
     except ValueError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
 
-ARANGO_URL = "http://localhost:8529"
-ARANGO_DB = "abc_desktop"
-ARANGO_USER = "root"
+ARANGO_URL = os.getenv("ARANGO_URL", "http://127.0.0.1:8529")
+ARANGO_DB = os.getenv("ARANGO_DB", "abc_desktop")
+ARANGO_USER = os.getenv("ARANGO_USER", "root")
 ARANGO_PASSWORD = os.getenv("ARANGO_PASSWORD", "")
 
 
