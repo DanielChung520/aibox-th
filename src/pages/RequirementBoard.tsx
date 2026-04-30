@@ -275,6 +275,7 @@ export default function RequirementBoard() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${authStore.getState().token}`,
         },
+        body: JSON.stringify({}),
       });
       if (res.ok) {
         message.success('已啟動需求分析，規格書產生中...');

@@ -9,6 +9,7 @@ ARANGO_URL = os.getenv("ARANGODB_URL", "http://localhost:8529")
 ARANGO_DB = os.getenv("ARANGO_DB", "abc_desktop")
 ARANGO_USER = os.getenv("ARANGODB_USERNAME", "root")
 ARANGO_PASSWORD = os.getenv("ARANGODB_PASSWORD", "abc_desktop_2026")
+PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "https://eeaapi.ent4i.com")
 
 
 async def _arango_headers() -> dict[str, str]:
@@ -141,7 +142,7 @@ async def create_channel(data: dict[str, Any]) -> dict[str, Any]:
     doc = {
         **data,
         "created_at": datetime.utcnow().isoformat(),
-        "webhook_url": f"https://api.aibox.com/webhook/line/{data.get('_key', 'unknown')}",
+        "webhook_url": f"{PUBLIC_BASE_URL}/api/v1/webhook/line/{data.get('_key', 'unknown')}",
         "webhook_enabled": False,
         "publication_status": "unpublished",
     }

@@ -232,6 +232,10 @@ class BuiltinExecutor(BaseExecutor):
                 tool = self._get_multimedia_tool()
                 output = await tool.execute(inp)
                 result = output.model_dump()
+            elif tool_name == "query_preorder_items":
+                from bpa.preorder_agent.skills.query_preorder_items import execute as exec_skill
+                skill_result = await exec_skill(arguments)
+                result = skill_result
             else:
                 raise ValueError(f"Unknown builtin tool: {tool_name}")
             return ToolResult(
@@ -257,7 +261,8 @@ class BuiltinExecutor(BaseExecutor):
 
     async def _lookup_tool_endpoint(self, tool_code: str) -> str | None:
         try:
-            import os, base64
+            import os
+            import base64
             cred = f"{os.getenv('ARANGO_USER','root')}:{os.getenv('ARANGO_PASSWORD','')}"
             async with httpx.AsyncClient(timeout=5.0) as client:
                 resp = await client.post(
@@ -275,7 +280,8 @@ class BuiltinExecutor(BaseExecutor):
 
     async def _lookup_tool_model(self, tool_code: str) -> str | None:
         try:
-            import os, base64
+            import os
+            import base64
             cred = f"{os.getenv('ARANGO_USER','root')}:{os.getenv('ARANGO_PASSWORD','')}"
             async with httpx.AsyncClient(timeout=5.0) as client:
                 resp = await client.post(

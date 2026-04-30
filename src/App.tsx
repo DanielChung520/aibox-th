@@ -27,6 +27,8 @@ import TaskSessionHistory from './pages/TaskSessionHistory';
 import TaskSessionScheduled from './pages/TaskSessionScheduled';
 import UnderDevelopment from './pages/UnderDevelopment';
 import RequirementBoard from './pages/RequirementBoard';
+import SkillBoard from './pages/SkillBoard';
+import PreorderBoard from './pages/PreorderBoard';
 import SchemaPage from './pages/data-agent/SchemaPage';
 import QueryPlayground from './pages/data-agent/QueryPlayground';
 import LeadManagement from './pages/LeadManagement';
@@ -230,7 +232,9 @@ function AppContent() {
               <Route path="task-session/history" element={<TaskSessionHistory />} />
               <Route path="task-session/scheduled" element={<TaskSessionScheduled />} />
               <Route path="under-development" element={<UnderDevelopment />} />
-      <Route path="requirements" element={<RequirementBoard />} />
+          <Route path="requirements" element={<RequirementBoard />} />
+          <Route path="skills" element={<SkillBoard />} />
+          <Route path="preorder" element={<PreorderBoard />} />
               <Route path="data-agent/schema" element={<SchemaPage />} />
 
               <Route path="data-agent/playground" element={<QueryPlayground />} />

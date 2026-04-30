@@ -1,7 +1,7 @@
 ---
-lastUpdate: 2026-03-22 12:09:59
+lastUpdate: 2026-04-24 10:07:45
 author: Daniel Chung (with AI assistance)
-version: 2.0.0
+version: 2.1.0
 status: Complete Draft
 ---
 
@@ -17,6 +17,7 @@ status: Complete Draft
 
 | 日期 | 版本 | 作者 | 變更說明 |
 |------|------|------|----------|
+| 2026-04-24 | 2.1.0 | Daniel Chung (with AI assistance) | 修正部署與整合拓樸：Data Agent 對外整合入口改為 unified_agents(:8011)/da/*，前端統一經 Rust API Gateway(:6500) |
 | 2026-03-22 | 2.0.0 | Daniel Chung (with AI assistance) | 完整重寫 DA 規格：採用 DuckDB + SeaWeedFS S3 + ArangoDB + Qdrant 架構，補齊端到端流程與前端維護畫面 |
 | 2026-03-20 | 1.1.0 | Internal | 初版草稿補充少量資料表，但未完成 |
 | 2026-03-18 | 1.0.0 | Internal | DA 初始概念文件（96 行，不完整，且含錯誤的 MySQL/PostgreSQL 方向） |
@@ -65,10 +66,10 @@ status: Complete Draft
 
 本規格適用於以下範圍：
 
-- AIBox Python FastAPI Data Agent 服務（`port 8002`）
+- AIBox Data Agent Python 模組（實作位於 `ai-services/data_agent/`，對外整合入口為 `unified_agents:8011/da/*`）
 - Rust API Gateway（`port 6500`）轉發 DA 請求
 - BPA 服務（`port 8005`）到 DA 的查詢委派
-- Top Orchestrator（`port 8006`）與 DA 的手遞協議整合
+- unified_agents（`port 8011`）承載 DA / KA / Memory / Backup 等整合路由
 - ArangoDB（`port 8529`）Schema/Intent metadata
 - Qdrant（`port 6333`）Intent 向量快取
 - Ollama（`port 11434`）意圖抽取與 SQL fallback 生成
@@ -128,18 +129,16 @@ DA v2.0 上線前，必須滿足以下前置條件：
 └──────────┬───────────────────┘
            │ internal HTTP
            ▼
-┌──────────────────────────────┐
-│ Top Orchestrator (Py :8006)  │
-└──────────┬───────────────────┘
-           │ handoff
-           ▼
-┌──────────────────────────────┐
-│ BPA Service (FastAPI :8005)  │
-└──────────┬───────────────────┘
-           │ POST /query
-           ▼
 ┌──────────────────────────────────────────────────────────────┐
-│ Data Agent (FastAPI :8002)                                   │
+│ unified_agents (FastAPI :8011)                              │
+│  /da/* → Data Agent modules                                  │
+│  /ka/* → Knowledge Agent                                     │
+└──────┬───────────────────────────┬───────────────────────────┘
+       │                           │
+       │ /da/*                     │
+       ▼                           ▼
+┌──────────────────────────────────────────────────────────────┐
+│ Data Agent implementation (ai-services/data_agent)          │
 │  Intent → Binding → Vector Match → SQL Gen → DuckDB Execute │
 └──────┬───────────────────────────┬───────────────────────────┘
        │                           │
@@ -190,7 +189,8 @@ DA v2.0 核心流程：
 
 | Component | Technology | Purpose |
 |-----------|------------|---------|
-| DA Service | Python FastAPI (port 8003) | Main service — dual-source (SAP + Ragic) |
+| DA Integration Entry | unified_agents `/da/*` (port 8011) | External integration entry for DA APIs |
+| DA Service Module | Python FastAPI module `ai-services/data_agent` | DA implementation — dual-source (SAP + Ragic) |
 | SQL Engine | DuckDB (in-memory, httpfs extension) | Query S3 Parquet files |
 | Vector DB | Qdrant (port 6333) | Intent similarity matching |
 | Metadata DB | ArangoDB (port 8529) | Schema KB + Intent records |
@@ -1489,7 +1489,7 @@ User NL Query
 ### 4.3 BPA → DA 時序圖
 
 ```text
-BPA(:8005)         DA(:8002)         ArangoDB(:8529)      Qdrant(:6333)       Ollama(:11434)      DuckDB/S3
+BPA(:8005)         unified_agents(:8011/da/*)   ArangoDB(:8529)      Qdrant(:6333)       Ollama(:11434)      DuckDB/S3
     |                  |                    |                   |                    |                 |
     | POST /query      |                    |                   |                    |                 |
     |----------------->|                    |                   |                    |                 |
@@ -1612,7 +1612,7 @@ BPA(:8005)         DA(:8002)         ArangoDB(:8529)      Qdrant(:6333)       Ol
 
 ### 5.3 BPA → DA 通訊規範
 
-1. BPA 對 DA 呼叫 `POST http://data-query:8002/query`。
+1. BPA 應透過 `POST http://unified-agents:8011/da/query` 或 Rust Gateway 對應 `/api/v1/da/query` 呼叫 DA。
 2. Authorization：沿用使用者 JWT，header `Authorization: Bearer <token>`。
 3. 傳遞 headers：
    - `X-Trace-Id`
@@ -2157,8 +2157,8 @@ export const dataAgentApi = {
   listFields: (tableId: string) => api.get(`/api/v1/da/schema/tables/${tableId}/fields`),
 
   // Intents
-  listIntents: (params?: IntentQuery) => api.get('/api/v1/da/intents', { params }),
-  getIntent: (id: string) => api.get(`/api/v1/da/intents/${id}`),
+  listIntents: (params?: IntentQuery) => api.get('/api/v1/da/intents/catalog', { params }),
+  getIntent: (id: string) => api.get(`/api/v1/da/intents/catalog/${id}`),
 
   // Query
   query: (data: { query: string }) => api.post('/api/v1/da/query', data),
@@ -2220,11 +2220,11 @@ export interface PlaygroundResponse {
 
 ```yaml
 services:
-  data-query:
-    build: ./ai-services/data-query
-    container_name: aibox-data-query
+  unified-agents:
+    build: ./ai-services/unified_agents
+    container_name: aibox-unified-agents
     ports:
-      - "8002:8002"
+      - "8011:8011"
     environment:
       - ARANGO_URL=http://arangodb:8529
       - ARANGO_DB=aibox
@@ -2261,7 +2261,7 @@ services:
 
 | 變數 | 說明 | 範例 |
 |------|------|------|
-| `DA_PORT` | DA 服務埠 | `8002` |
+| `UNIFIED_AGENTS_URL` | DA 對外整合入口 | `http://unified-agents:8011` |
 | `ARANGO_URL` | ArangoDB URL | `http://arangodb:8529` |
 | `ARANGO_DB` | DB 名稱 | `aibox` |
 | `ARANGO_USER` | DB 使用者 | `root` |
@@ -2772,11 +2772,11 @@ class QueryResponse(BaseModel):
 
 | Gateway Route | 目標服務 | 備註 |
 |---------------|----------|------|
-| `/api/v1/da/query` | `http://data-query:8002/query` | JWT required |
-| `/api/v1/da/query/sql` | `http://data-query:8002/query/sql` | admin only |
-| `/api/v1/da/schema/*` | `http://data-query:8002/schema/*` | manage schema |
-| `/api/v1/da/intents/*` | `http://data-query:8002/intents/*` | intent records |
-| `/api/v1/da/sync/*` | `http://data-query:8002/schema/sync` | sync ops |
+| `/api/v1/da/query` | `http://unified-agents:8011/da/query` | JWT required |
+| `/api/v1/da/query/sql` | `http://unified-agents:8011/da/query/sql` | admin only |
+| `/api/v1/da/schema/*` | Rust Gateway internal handlers / DA proxy | manage schema |
+| `/api/v1/da/intents/*` | `http://unified-agents:8011/da/intent-rag/*` or Rust handlers | intent records |
+| `/api/v1/da/ragic/*` | `http://unified-agents:8011/da/ragic/*` | ragic query / graph / import |
 
 ### 11.11 補充：最小可行驗收（MVP）
 

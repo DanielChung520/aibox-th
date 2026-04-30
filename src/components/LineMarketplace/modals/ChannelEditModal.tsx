@@ -105,7 +105,7 @@ export default function ChannelEditModal({
   }, [open, mode, editingChannel, editingAccount, form]);
 
   const handleCopyWebhook = () => {
-    const webhookUrl = editingChannel?.webhook_url || `https://api.aibox.com/webhook/line/${officialAccountKey || 'new'}`;
+    const webhookUrl = editingChannel?.webhook_url || `https://eeaapi.ent4i.com/api/v1/webhook/line/${officialAccountKey || 'new'}`;
     navigator.clipboard.writeText(webhookUrl).then(() => {
       antMessage.success('Webhook URL 已複製');
     });
@@ -246,7 +246,7 @@ export default function ChannelEditModal({
           <Form.Item label="Webhook URL (自動產生)">
             <Input
               readOnly
-              value={editingChannel?.webhook_url || `https://api.aibox.com/webhook/line/${officialAccountKey || 'new'}`}
+              value={editingChannel?.webhook_url || `https://eeaapi.ent4i.com/api/v1/webhook/line/${officialAccountKey || 'new'}`}
               addonAfter={
                 <CopyOutlined onClick={handleCopyWebhook} style={{ cursor: 'pointer' }} />
               }

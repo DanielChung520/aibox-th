@@ -244,11 +244,11 @@ Output JSON only:"#
 #[deprecated(since = "1.3.0", note = "Use Python LangGraph intent classifier (B4)")]
 pub async fn execute_tool(
     client: &reqwest::Client,
-    mcp_tools_url: &str,
+    unified_agents_url: &str,
     tool_name: &str,
     parameters: HashMap<String, Value>,
 ) -> Result<Value, IntentError> {
-    let url = format!("{}/execute", mcp_tools_url);
+    let url = format!("{}/mcp/execute", unified_agents_url);
     let body = ToolCall {
         tool: tool_name.to_string(),
         parameters,
@@ -493,7 +493,7 @@ pub struct ToolIntentResult {
 pub async fn route_tool_intent(
     client: &reqwest::Client,
     intent_rag_url: &str,
-    mcp_tools_url: &str,
+    unified_agents_url: &str,
     ollama_url: &str,
     ollama_model: &str,
     user_message: &str,
@@ -508,7 +508,7 @@ pub async fn route_tool_intent(
     eprintln!("[intent] extracting parameters for tool={} model={}", tool_name, ollama_model);
     let params = extract_parameters(client, ollama_url, ollama_model, user_message, &tool_name).await?;
     eprintln!("[intent] executing tool={} params={:?}", tool_name, params.keys().collect::<Vec<_>>());
-    let result = execute_tool(client, mcp_tools_url, &tool_name, params).await?;
+    let result = execute_tool(client, unified_agents_url, &tool_name, params).await?;
     eprintln!("[intent] tool={} executed successfully", tool_name);
 
     Ok(Some(ToolIntentResult {

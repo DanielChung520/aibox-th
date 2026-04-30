@@ -1,4 +1,3 @@
-import textwrap
 from datetime import datetime
 
 RECHART_CDN = """<script src="https://unpkg.com/recharts@2.15.0/umd/Recharts.js"></script>"""

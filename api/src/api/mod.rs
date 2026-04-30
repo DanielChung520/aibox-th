@@ -37,6 +37,8 @@ pub mod da_intents;
 pub mod backup;
 pub mod da_query;
 pub mod da_tables;
+pub mod da_schema_reports;
+pub mod da_schema_report_templates;
 pub mod da_expressions;
 pub mod knowledge;
 pub mod ontology;
@@ -59,6 +61,8 @@ pub mod intent_logs;
 pub mod platforms;
 pub mod agent_chat;
 pub mod ragic;
+pub mod mcp;
+pub mod skills;
 
 async fn sync_tool_intents(
     Path(key): Path<String>,
@@ -127,7 +131,7 @@ pub fn create_router() -> Router {
         .route("/api/v1/agents/{key}", get(get_agent).put(update_agent).delete(delete_agent))
         .route("/api/v1/agents/{key}/intents", get(list_agent_intents).post(create_agent_intent))
         .route("/api/v1/agents/{key}/intents/{intent_key}", put(update_agent_intent).delete(delete_agent_intent))
-        .route("/api/v1/agents/{key}/intents/{intent_key}/sync", post(sync_agent_intents_to_qdrant))
+        .route("/api/v1/agents/{key}/intents/sync", post(sync_agent_intents_to_qdrant))
         .route("/api/v1/agents/{key}/demands", get(list_agent_demands).post(create_agent_demand))
         .route("/api/v1/agents/{key}/demands/{demand_key}", get(get_agent_demand).put(update_agent_demand).delete(delete_agent_demand))
         .route("/api/v1/agents/{key}/demands/{demand_key}/suggest-intents", post(suggest_intents_for_demand))
@@ -195,9 +199,12 @@ pub fn create_router() -> Router {
         .merge(billing::create_billing_router())
         .merge(services::create_services_router())
         .merge(health::create_health_router())
+        .merge(skills::create_skill_router())
         .merge(da::create_da_router())
         .merge(da_intents::create_da_intents_router())
         .merge(da_tables::create_da_tables_router())
+        .merge(da_schema_reports::create_schema_reports_router())
+        .merge(da_schema_report_templates::create_schema_report_templates_router())
         .merge(da_expressions::create_da_expressions_router())
         .merge(backup::create_backup_router())
         .merge(platforms::line::create_line_router())
@@ -212,6 +219,7 @@ pub fn create_router() -> Router {
         .merge(intent_logs::create_intent_logs_router())
         .merge(aiq::create_aiq_router())
         .merge(ragic::create_ragic_router())
+        .merge(mcp::create_mcp_router())
         .route("/api/v1/events", post(post_events))
         .layer(middleware::from_fn(logging_middleware))
         .layer(cors)
@@ -1238,6 +1246,16 @@ async fn update_agent(Path(key): Path<String>, Json(payload): Json<serde_json::V
                 obj.insert("created_by".to_string(), cb.clone());
             }
         }
+        // 保護：避免前端送空字串覆寫既有值
+        for &field in &["llm_model", "system_prompt", "endpoint_url"] {
+            if let Some(v) = obj.get(field) {
+                if v.as_str().map_or(true, |s| s.is_empty()) {
+                    if let Some(old_val) = old.get(field) {
+                        obj.insert(field.to_string(), old_val.clone());
+                    }
+                }
+            }
+        }
         obj.insert("updated_at".to_string(), serde_json::json!(chrono::Utc::now().to_rfc3339()));
     }
 
@@ -1297,6 +1315,8 @@ struct CreateIntentRequest {
     status: String,
     #[serde(default)]
     action: String,
+    #[serde(default)]
+    data_scope: Option<serde_json::Value>,
 }
 
 async fn create_agent_intent(
@@ -1318,6 +1338,7 @@ async fn create_agent_intent(
         "priority": payload.priority,
         "status": if payload.status.is_empty() { "enabled" } else { &payload.status },
         "action": payload.action,
+        "data_scope": payload.data_scope,
         "created_at": now,
         "updated_at": now,
     });
@@ -2610,6 +2631,14 @@ Agent 名稱：{agent_name}
 - 配置須存 ArangoDB system_params，禁止 hardcode
 - 前端須遵循 AGENTS.md 的 Store 模式與元件結構
 - API 格式須符合 .docs/Spec/API Specification.md
+
+## 重要規範（務必遵守）
+1. **參照現有 BPA Agent 實作**：若為 AI Agent 需求，必須參照 `ai-services/bpa/ragic_agent/` 的目錄結構（router.py + agent.py + config.py + main.py + graph/），命名空間為 `bpa/{agent_name}/`
+2. **區分已有/新增組件**：mermaid_architecture 圖中，現有組件標記為 `[已有]`，本需求新建的標記為 `[新增]`
+3. **Phase 1 範圍**：若需求涉及多個通訊平台（LINE、WhatsApp、Dingtalk 等），Phase 1 只實作 LINE，其餘平台列在 `suggestions` 中作為「後續可透過工具市集擴展」
+4. **待釐清問題**：若需求描述有模糊或矛盾之處，在 `suggestions` 中以「🔍 待釐清：...」格式列出
+5. **風險標記**：若引用的系統組件在 spec_index 中標記為「未實現」或「規劃中」，必須在 `risks` 中明確標註「該組件尚未實現，需新建」
+6. **工時評估**：以 AI coding（Copilot/Cursor/OpenCode）輔助開發為前提，工時約純手動開發的 40–60%
 
 ## 輸出 JSON（只輸出 JSON）
 {{

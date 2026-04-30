@@ -13,7 +13,14 @@ class ToolConfigurationError(ToolError):
 
 
 class ToolValidationError(ToolError):
-    pass
+    def __init__(
+        self,
+        message: str,
+        tool_name: str | None = None,
+        field: str | None = None,
+    ) -> None:
+        self.field = field
+        super().__init__(message, tool_name=tool_name)
 
 
 class ToolExecutionError(ToolError):

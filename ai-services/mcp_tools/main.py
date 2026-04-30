@@ -19,9 +19,7 @@ app = FastAPI(
 app.add_middleware(LoggingMiddleware, service_name="mcp_tools")
 
 from tools.process_advisor.router import app as process_advisor_app  # noqa: E402
-from tools.report_agent.router import app as report_agent_app  # noqa: E402
 app.mount("/process-advisor", process_advisor_app)
-app.mount("/report-agent", report_agent_app)
 
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 DEFAULT_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2:latest")
@@ -51,6 +49,27 @@ _TOOL_REGISTRY = {
         "name": "Code Executor",
         "description": "Execute Python code safely",
         "parameters": {"code": "str"},
+    },
+    "tool_reports": {
+        "name": "Report Generator",
+        "description": "Generate HTML report from dataset with charts",
+        "parameters": {
+            "dataset": "dict|list",
+            "report_goal": "str",
+            "preferred_chart": "str?",
+            "knowledge_domain": "str?",
+            "hints": "str?",
+            "title": "str?",
+            "author": "str?",
+            "username": "str?",
+        },
+    },
+    "linear_mcp": {
+        "name": "Linear MCP",
+        "description": "Project management via Linear MCP. Requires LINEAR_API_KEY environment variable.",
+        "parameters": {
+            "operation": "str",
+        },
     },
 }
 
@@ -183,12 +202,21 @@ async def execute_tool(tool_name: str, parameters: dict[str, Any]) -> ToolResult
                 )
             case "code_executor":
                 result = await execute_code(parameters.get("code", ""))
+            case "tool_reports":
+                from tools.report_generator.tool_reports import tool_reports_execute
+                output = await tool_reports_execute(parameters)
+                result = output.to_dict()
+            case "linear_mcp":
+                from tools.linear.linear_mcp import execute_linear_mcp
+                operation = parameters.get("operation", "linear_search_issues")
+                kwargs = {k: v for k, v in parameters.items() if k != "operation" and v is not None}
+                result = await execute_linear_mcp(operation, **kwargs)
             case _:
                 return ToolResult(tool=tool_name, success=False, result=None, error=f"Unknown tool: {tool_name}")
-        
+
         if isinstance(result, dict) and result.get("error"):
             return ToolResult(tool=tool_name, success=False, result=result, error=result.get("error"))
-        
+
         return ToolResult(tool=tool_name, success=True, result=result)
     except Exception as e:
         return ToolResult(tool=tool_name, success=False, result=None, error=str(e))

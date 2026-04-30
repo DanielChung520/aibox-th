@@ -1,6 +1,5 @@
 import os
 import httpx
-from datetime import datetime
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException
@@ -201,7 +200,7 @@ async def generate_report(request: ReportRequest) -> dict:
         request.chart_types or [],
     )
 
-    chart_html = build_chart_html(chart_data, recommended_chart)
+    build_chart_html(chart_data, recommended_chart)
 
     html_content = generate_report_html(
         title=request.title,

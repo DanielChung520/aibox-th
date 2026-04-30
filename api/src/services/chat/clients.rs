@@ -67,8 +67,8 @@ pub async fn call_aitask_tagging(body: serde_json::Value) -> Result<serde_json::
 pub async fn call_knowledge_delete(file_key: &str) -> Result<(), ()> {
     HTTP_CLIENT
         .post(format!(
-            "{}/pipeline/delete?file_id={}",
-            CONFIG.ai_services.knowledge_agent_url, file_key
+            "{}/ka/pipeline/delete?file_id={}",
+            CONFIG.ai_services.unified_agents_url, file_key
         ))
         .timeout(std::time::Duration::from_secs(30))
         .send()
@@ -142,8 +142,8 @@ pub async fn call_seaweedfs_upload(s3_path: &str, data: Bytes) -> Result<(), ()>
 pub async fn call_knowledge_trigger(payload: serde_json::Value) -> Result<(), ()> {
     HTTP_CLIENT
         .post(format!(
-            "{}/pipeline/trigger",
-            CONFIG.ai_services.knowledge_agent_url
+            "{}/ka/pipeline/trigger",
+            CONFIG.ai_services.unified_agents_url
         ))
         .json(&payload)
         .timeout(std::time::Duration::from_secs(5))

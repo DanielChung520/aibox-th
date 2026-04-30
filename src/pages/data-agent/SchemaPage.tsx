@@ -19,6 +19,7 @@ import SchemaImportSection from './SchemaImportSection';
 import SchemaColumnsModal from './SchemaColumnsModal';
 import SchemaEditModal from './SchemaEditModal';
 import SchemaSettingsDrawer from './SchemaSettingsDrawer';
+import SchemaReportModal from './SchemaReportModal';
 import { useEntityPerception } from '../../hooks/useEntityPerception';
 
 const { Title, Text } = Typography;
@@ -48,6 +49,8 @@ export default function SchemaPage() {
   const [dataTableId, setDataTableId] = useState('');
   const [dataPreviewMode, setDataPreviewMode] = useState<'paged' | 'all'>('paged');
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [reportModalOpen, setReportModalOpen] = useState(false);
+  const [reportTableInfo, setReportTableInfo] = useState<TableInfo | null>(null);
   const { dispatchEntity } = useEntityPerception({ defaultEntityType: 'table', defaultAction: 'list' });
 
   const loadTables = async () => {
@@ -102,6 +105,12 @@ export default function SchemaPage() {
     setDataPreviewMode(record.preview_mode ?? 'paged');
     setDataModalVisible(true);
     dispatchEntity(record.table_id, 'view', { table_name: record.table_name, type: 'data_preview' });
+  };
+
+  const openReportModal = (record: TableInfo) => {
+    setReportTableInfo(record);
+    setReportModalOpen(true);
+    dispatchEntity(record.table_id, 'create', { table_name: record.table_name, action_type: 'open_report' });
   };
 
   const handlePreviewModeChange = async (mode: 'paged' | 'all') => {
@@ -251,6 +260,7 @@ export default function SchemaPage() {
             columns={getSchemaTableColumns({
               onOpenColumnsModal: openColumnsModal,
               onOpenDataModal: openDataModal,
+              onOpenReportModal: openReportModal,
               onEditTable: (record) => {
                 setEditingTable(record);
                 form.setFieldsValue(record);
@@ -298,6 +308,14 @@ export default function SchemaPage() {
       />
 
       <SchemaSettingsDrawer open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+
+      {reportTableInfo && (
+        <SchemaReportModal
+          open={reportModalOpen}
+          tableInfo={reportTableInfo}
+          onClose={() => { setReportModalOpen(false); setReportTableInfo(null); }}
+        />
+      )}
     </div>
   );
 }

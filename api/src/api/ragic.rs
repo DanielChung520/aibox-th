@@ -8,6 +8,7 @@ use axum::{
 };
 use reqwest::Client;
 use serde_json::Value;
+use urlencoding::encode;
 use std::time::Duration;
 
 #[derive(Clone)]
@@ -71,7 +72,7 @@ async fn get_session_history(
     axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
 ) -> Result<impl IntoResponse, StatusCode> {
     let limit = params.get("limit").cloned().unwrap_or_else(|| "20".to_string());
-    let url = format!("{}/session/{}/history?limit={}", ragic_base_url(), session_id, limit);
+    let url = format!("{}/session/{}/history?limit={}", ragic_base_url(), encode(&session_id), limit);
 
     let resp = state
         .client

@@ -29,7 +29,9 @@ async def detect_intent(query: str, scope: str = "data_agent") -> dict | None:
     return None
 
 
-async def hybrid_search(query: str, collection: str = "knowledge_default", top_k: int = 5) -> list[dict]:
+async def hybrid_search(
+    query: str, collection: str = "knowledge_default", top_k: int = 5
+) -> list[dict]:
     async with httpx.AsyncClient(timeout=30.0) as client:
         try:
             resp = await client.post(
@@ -78,10 +80,34 @@ async def build_rag_context(intents: list[dict], query: str) -> str:
 async def call_llm_chat(
     messages: list[dict],
     model: str,
+    api_base: str | None = None,
+    api_key: str = "",
     temperature: float = 0.7,
     max_tokens: int = 2000,
     images: list[str] | None = None,
     tools: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    base = api_base or OLLAMA_BASE_URL
+    is_local = "localhost" in base or "127.0.0.1" in base
+
+    if is_local:
+        return await _call_ollama_chat(
+            model, messages, base, temperature, max_tokens, images, tools
+        )
+
+    return await _call_openai_compatible_chat(
+        model, messages, base, api_key, temperature, max_tokens, tools
+    )
+
+
+async def _call_ollama_chat(
+    model: str,
+    messages: list[dict],
+    base_url: str,
+    temperature: float,
+    max_tokens: int,
+    images: list[str] | None,
+    tools: list[dict[str, Any]] | None,
 ) -> dict[str, Any]:
     if images:
         prompt_parts = []
@@ -104,7 +130,7 @@ async def call_llm_chat(
             "options": {"num_predict": max_tokens},
         }
         async with httpx.AsyncClient(timeout=120.0) as client:
-            resp = await client.post(f"{OLLAMA_BASE_URL}/api/generate", json=payload)
+            resp = await client.post(f"{base_url}/api/generate", json=payload)
             resp.raise_for_status()
             data = resp.json()
             content = data.get("response", "") or data.get("thinking", "")
@@ -121,12 +147,51 @@ async def call_llm_chat(
         chat_payload["tools"] = tools
 
     async with httpx.AsyncClient(timeout=120.0) as client:
-        resp = await client.post(f"{OLLAMA_BASE_URL}/api/chat", json=chat_payload)
+        resp = await client.post(f"{base_url}/api/chat", json=chat_payload)
         resp.raise_for_status()
         return resp.json()
 
 
-def _conversation_history_to_messages(history: list[dict]) -> list[AIMessage | HumanMessage]:
+async def _call_openai_compatible_chat(
+    model: str,
+    messages: list[dict],
+    base_url: str,
+    api_key: str,
+    temperature: float,
+    max_tokens: int,
+    tools: list[dict[str, Any]] | None,
+) -> dict[str, Any]:
+    headers: dict[str, str] = {"Content-Type": "application/json"}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+
+    payload: dict[str, Any] = {
+        "model": model,
+        "messages": messages,
+        "stream": False,
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+    }
+    if tools:
+        payload["tools"] = tools
+
+    async with httpx.AsyncClient(timeout=120.0) as client:
+        resp = await client.post(
+            f"{base_url}/chat/completions", json=payload, headers=headers
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        choices = data.get("choices", [])
+        if choices:
+            content = choices[0].get("message", {}).get("content", "")
+            if content:
+                return {"message": {"role": "assistant", "content": content}}
+        return {"message": {"role": "assistant", "content": ""}}
+
+
+def _conversation_history_to_messages(
+    history: list[dict],
+) -> list[AIMessage | HumanMessage]:
     msgs: list[AIMessage | HumanMessage] = []
     for entry in history:
         role = entry.get("role", "user")
@@ -138,7 +203,9 @@ def _conversation_history_to_messages(history: list[dict]) -> list[AIMessage | H
     return msgs
 
 
-def _message_to_dict(message: AIMessage | HumanMessage | SystemMessage) -> dict[str, str]:
+def _message_to_dict(
+    message: AIMessage | HumanMessage | SystemMessage,
+) -> dict[str, str]:
     msg_type = message.type
     role = "user" if msg_type == "human" else msg_type
     raw_content = message.content
@@ -182,12 +249,17 @@ async def chat_with_agent(
         model = "qwen3-vl:latest"
     temperature = agent_config.get("temperature", 0.7)
     max_tokens = agent_config.get("max_tokens", 2000)
+    api_base = agent_config.get("api_base")
+    api_key = agent_config.get("api_key", "")
     tools = agent_config.get("tools", [])
+    content = ""
 
     if not tools:
         response_data = await call_llm_chat(
             messages=messages,
             model=model,
+            api_base=api_base,
+            api_key=api_key,
             temperature=temperature,
             max_tokens=max_tokens,
             images=images,
@@ -198,9 +270,11 @@ async def chat_with_agent(
     from shared.orchestration.state import AgentState
 
     seed = _conversation_history_to_messages(conversation_history)
-    state_messages: list[AIMessage | HumanMessage | SystemMessage] = [
-        SystemMessage(content=system_with_context)
-    ] + seed + [HumanMessage(content=query)]
+    state_messages: list[AIMessage | HumanMessage | SystemMessage] = (
+        [SystemMessage(content=system_with_context)]
+        + seed
+        + [HumanMessage(content=query)]
+    )
     tool_results_accumulated: list[dict[str, Any]] = []
     state_version = 0
 
@@ -208,6 +282,8 @@ async def chat_with_agent(
         response_data = await call_llm_chat(
             messages=[_message_to_dict(m) for m in state_messages],
             model=model,
+            api_base=api_base,
+            api_key=api_key,
             temperature=temperature,
             max_tokens=max_tokens,
             images=images if loop_idx == 0 else None,
@@ -218,7 +294,9 @@ async def chat_with_agent(
         assistant_msg = response_data.get("message", {})
         content = assistant_msg.get("content", "")
 
-        tool_calls = response_data.get("tool_calls") or assistant_msg.get("tool_calls", [])
+        tool_calls = response_data.get("tool_calls") or assistant_msg.get(
+            "tool_calls", []
+        )
 
         if not tool_calls:
             return content
@@ -243,6 +321,8 @@ async def chat_with_agent(
     final_response = await call_llm_chat(
         messages=[_message_to_dict(m) for m in state_messages],
         model=model,
+        api_base=api_base,
+        api_key=api_key,
         temperature=temperature,
         max_tokens=max_tokens,
     )

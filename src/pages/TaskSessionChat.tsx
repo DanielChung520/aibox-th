@@ -9,7 +9,7 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent } from 'react';
 import { Input, Dropdown, Tag, message, Typography } from 'antd';
 import type { MenuProps } from 'antd';
-import { PlusOutlined, PaperClipOutlined, SmileOutlined, AudioOutlined, SendOutlined, StopOutlined, RobotOutlined, EditOutlined, DeleteOutlined, VerticalAlignBottomOutlined, ArrowLeftOutlined } from '@ant-design/icons';
+import { PlusOutlined, PaperClipOutlined, SmileOutlined, AudioOutlined, SendOutlined, StopOutlined, RobotOutlined, EditOutlined, DeleteOutlined, VerticalAlignBottomOutlined, ArrowLeftOutlined, MinusOutlined } from '@ant-design/icons';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useContentTokens } from '../contexts/AppThemeProvider';
 import { chatStore } from '../stores/chatStore';
@@ -43,9 +43,21 @@ export default function TaskSessionChat() {
 
   const [agentInfo, setAgentInfo] = useState<Agent | null>(null);
   const [agentMessages, setAgentMessages] = useState<ChatMessage[]>([]);
-  const [agentSessionId] = useState(() => `agent_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`);
+  const [agentSessionId, setAgentSessionId] = useState<string>('');
   const [agentLoading, setAgentLoading] = useState(false);
   const [agentLoaded, setAgentLoaded] = useState(false);
+
+  // 為每個 Agent 建立/取用固定 session_id（跨頁面重整一致）
+  useEffect(() => {
+    if (!isAgentMode || !agentKey) return;
+    const storageKey = `agent_session_id_${agentKey}`;
+    let sid = localStorage.getItem(storageKey);
+    if (!sid) {
+      sid = `agent_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+      localStorage.setItem(storageKey, sid);
+    }
+    setAgentSessionId(sid);
+  }, [isAgentMode, agentKey]);
 
   // Load agent info on mount
   useEffect(() => {
@@ -54,6 +66,19 @@ export default function TaskSessionChat() {
     agentApi.get(agentKey!).then((res) => {
       setAgentInfo(res.data.data);
     }).catch(() => {});
+    // Restore saved sessions
+    try {
+      const saved = localStorage.getItem(`agent_sessions_${agentKey}`);
+      if (saved) {
+        const sessions = JSON.parse(saved);
+        const all: ChatMessage[] = [];
+        sessions.forEach((s: any, i: number) => {
+          if (i > 0) all.push({ _key: `divider_${i}`, session_key: '', role: 'divider', content: `── 對話 ${i} ──`, thinking: null, tokens: null, created_at: s.createdAt });
+          (s.messages || []).forEach((m: ChatMessage) => all.push(m));
+        });
+        if (all.length > 0) setAgentMessages(all);
+      }
+    } catch {}
   }, [isAgentMode, agentKey, agentLoaded]);
 
   useEffect(() => {
@@ -198,17 +223,58 @@ export default function TaskSessionChat() {
     _key: key, session_key: '', role, content, thinking: null, tokens: null, created_at: new Date().toISOString(),
   });
 
+  const saveAgentSessions = (sid: string, msgs: ChatMessage[]) => {
+    try {
+      const currentMsgs = msgs.filter(m => m.role !== 'divider');
+      const entry = { sessionId: sid, createdAt: new Date().toISOString(), messages: currentMsgs };
+      const key = `agent_sessions_${agentKey}`;
+      const saved = localStorage.getItem(key);
+      let sessions = saved ? JSON.parse(saved) : [];
+      const existing = sessions.findIndex((s: any) => s.sessionId === sid);
+      if (existing >= 0) sessions[existing] = entry;
+      else sessions.push(entry);
+      localStorage.setItem(key, JSON.stringify(sessions));
+    } catch {}
+  };
+
+  const handleNewAgentSession = () => {
+    // Save current session first
+    if (agentMessages.length > 0 && agentSessionId) {
+      saveAgentSessions(agentSessionId, agentMessages);
+    }
+    const newId = `agent_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+    setAgentSessionId(newId);
+    // Save new session_id to localStorage
+    if (agentKey) {
+      localStorage.setItem(`agent_session_id_${agentKey}`, newId);
+    }
+    // Add divider
+    const divider: ChatMessage = {
+      _key: `divider_${Date.now()}`,
+      session_key: '',
+      role: 'divider',
+      content: `──── 新對話 ${new Date().toLocaleString('zh-TW')} ────`,
+      thinking: null,
+      tokens: null,
+      created_at: new Date().toISOString(),
+    };
+    setAgentMessages((prev) => [...prev, divider]);
+  };
+
   const handleAgentSend = async (text: string) => {
     if (!agentKey || !agentInfo) return;
     const userKey = `agent_user_${Date.now().toString(36)}`;
-    setAgentMessages((prev) => [...prev, makeAgentMsg('user', text, userKey)]);
+    const newMsgs = [...agentMessages, makeAgentMsg('user', text, userKey)];
+    setAgentMessages(newMsgs);
     setAgentLoading(true);
     try {
       const res = await agentApi.chat(agentKey, {
         session_id: agentSessionId,
         message: text,
       });
-      setAgentMessages((prev) => [...prev, makeAgentMsg('assistant', res.data.reply, `agent_asst_${Date.now().toString(36)}`)]);
+      const finalMsgs = [...newMsgs, makeAgentMsg('assistant', res.data.reply, `agent_asst_${Date.now().toString(36)}`)];
+      setAgentMessages(finalMsgs);
+      saveAgentSessions(agentSessionId, finalMsgs);
     } catch (err: any) {
       message.error(err?.response?.data?.message || '發送失敗');
     } finally {
@@ -348,12 +414,26 @@ export default function TaskSessionChat() {
         )}
 
         {displayMessages.map((msg) => (
+          msg.role === 'divider' ? (
+            <div key={msg._key} style={{
+              textAlign: 'center',
+              color: contentTokens.textSecondary,
+              fontSize: 12,
+              padding: '12px 0',
+              opacity: 0.5,
+              borderTop: `1px solid ${contentTokens.textSecondary}30`,
+              marginTop: 8,
+            }}>
+              {msg.content}
+            </div>
+          ) : (
           <div key={msg._key} id={`msg-${msg._key}`}>
             <MessageBubble
               message={msg}
               onCopyToInput={msg.role === 'user' ? (text: string) => setInputValue(text) : undefined}
             />
           </div>
+          )
         ))}
 
         {!isAgentMode && storeState.isStreaming && (
@@ -522,6 +602,17 @@ export default function TaskSessionChat() {
                 {item.icon}
               </span>
             ))}
+            {isAgentMode && (
+              <span
+                onClick={handleNewAgentSession}
+                title="新增對話"
+                style={{ fontSize: 16, color: contentTokens.colorPrimary, cursor: 'pointer', transition: 'color 0.2s', padding: '2px 4px', fontWeight: 'bold' }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = contentTokens.btnSendHover; }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = contentTokens.colorPrimary; }}
+              >
+                <PlusOutlined />
+              </span>
+            )}
             {!isAgentMode && (
               <span
                 onClick={handleAttachClick}

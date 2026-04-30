@@ -1,7 +1,6 @@
 import os
 import httpx
 from datetime import datetime
-import uuid
 
 
 class SeaWeedFSClient:

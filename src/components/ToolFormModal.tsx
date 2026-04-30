@@ -11,7 +11,7 @@ import { Modal, Form, Input, Select, InputNumber, Tabs, Button, Space, App, Radi
 import { SyncOutlined } from '@ant-design/icons';
 import { iconMap } from '../utils/icons';
 import IconPicker from './IconPicker';
-import { Tool, roleApi } from '../services/api';
+import { Tool, roleApi, paramsApi } from '../services/api';
 
 const { TextArea } = Input;
 
@@ -60,6 +60,24 @@ export default function ToolFormModal({
   const [syncing, setSyncing] = useState(false);
   const [nlExamples, setNlExamples] = useState<string[]>([]);
   const [newExample, setNewExample] = useState('');
+  const [modelOptions, setModelOptions] = useState<{ value: string; label: string }[]>([]);
+
+  // 讀取 system_params 中的已啟用模型清單
+  useEffect(() => {
+    paramsApi.get('llm.activated_models').then((res: any) => {
+      const raw = res?.data?.data?.param_value;
+      if (raw) {
+        try {
+          const list: { provider: string; model: string; label: string }[] =
+            typeof raw === 'string' ? JSON.parse(raw) : raw;
+          setModelOptions(list.map((m) => ({
+            value: `${m.provider}:${m.model}`,
+            label: m.label,
+          })));
+        } catch { /* ignore */ }
+      }
+    }).catch(() => {});
+  }, []);
 
   useEffect(() => {
     roleApi.list().then((res: { data?: { data?: { _key: string; name: string }[] } }) => {
@@ -83,7 +101,17 @@ export default function ToolFormModal({
         timeout_ms: tool.timeout_ms ?? 30000,
         input_schema_str: inputSchemaStr,
         output_schema_str: outputSchemaStr,
-        llm_model: tool.llm_model || 'gemma4:31b',
+        llm_model: (() => {
+          const stored = tool.llm_model || '';
+          // 已是 provider:model 格式
+          if (stored.includes(':')) return stored;
+          // 舊格式（純 model name）→ 匹配到對應的 provider:model
+          if (stored && modelOptions.length > 0) {
+            const match = modelOptions.find((o) => o.value.endsWith(`:${stored}`));
+            if (match) return match.value;
+          }
+          return stored || (modelOptions.length > 0 ? modelOptions[0].value : 'gemma4:31b');
+        })(),
         temperature: tool.temperature ?? 0.7,
         max_tokens: tool.max_tokens ?? 32000,
         visibility: tool.visibility || 'public',
@@ -98,7 +126,7 @@ export default function ToolFormModal({
         status: 'online',
         tool_type: 'custom',
         visibility: 'public',
-        llm_model: 'gemma4:31b',
+        llm_model: modelOptions.length > 0 ? modelOptions[0].value : 'gemma4:31b',
         temperature: 0.7,
         max_tokens: 32000,
         timeout_ms: 30000,
@@ -233,7 +261,17 @@ export default function ToolFormModal({
   const modelTab = (
     <>
       <Form.Item name="llm_model" label="LLM 模型">
-        <Input placeholder="例如：llama3, gpt-4" disabled={readOnly} />
+        <Select
+          placeholder="請選擇 LLM 模型"
+          disabled={readOnly}
+          options={modelOptions}
+          allowClear
+          showSearch
+          filterOption={(input, option) =>
+            (option?.label as string)?.toLowerCase().includes(input.toLowerCase()) ?? false
+          }
+          notFoundContent={modelOptions.length === 0 ? '無可用模型（請先設定 system_params llm.activated_models）' : '無相符選項'}
+        />
       </Form.Item>
       <Form.Item name="temperature" label="Temperature">
         <InputNumber min={0} max={2} step={0.1} style={{ width: '100%' }} disabled={readOnly} />

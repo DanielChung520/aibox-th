@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from typing import Literal
 
 SEAWEEDFS_URL = os.getenv("SEAWEEDFS_URL", "http://localhost:8888")
+PUBLIC_SEAWEED_URL = os.getenv("PUBLIC_SEAWEED_URL", SEAWEEDFS_URL)
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 VISION_MODEL = os.getenv("VISION_MODEL", "qwen3-vl:latest")
 AUDIO_MODEL = os.getenv("AUDIO_MODEL", "whisper")
@@ -27,7 +28,9 @@ async def upload_to_seaweedfs(
         )
         resp.raise_for_status()
 
-    return f"{SEAWEEDFS_URL}{full_path}"
+    # 回傳公開可存取的 URL（可透過 PUBLIC_SEAWEED_URL 覆寫，如 proxy 位址）
+    public_base = os.getenv("PUBLIC_SEAWEED_URL", SEAWEEDFS_URL)
+    return f"{public_base}{full_path}"
 
 
 async def analyze_image(content: bytes, prompt: str = "請詳細描述這張圖片的內容", model: str | None = None) -> str:

@@ -4,7 +4,7 @@
 def validate_non_empty_string(value: str, field_name: str) -> None:
     if not isinstance(value, str) or not value.strip():
         from tools.utils.errors import ToolValidationError
-        raise ToolValidationError(f"{field_name} must be a non-empty string", field_name=field_name)
+        raise ToolValidationError(f"{field_name} must be a non-empty string", field=field_name)
 
 
 def validate_coordinates(lat: float, lon: float) -> bool:

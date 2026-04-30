@@ -61,7 +61,7 @@ impl AiProxy {
 
     pub async fn forward_knowledge(&self, query: &str) -> Result<serde_json::Value, ApiError> {
         let response = self.client
-            .post(format!("{}/search", CONFIG.ai_services.knowledge_agent_url))
+            .post(format!("{}/ka/search", CONFIG.ai_services.unified_agents_url))
             .json(&serde_json::json!({ "query": query }))
             .send()
             .await
@@ -77,10 +77,10 @@ impl AiProxy {
 
     pub async fn forward_mcp(&self, tool: &str, params: serde_json::Value) -> Result<serde_json::Value, ApiError> {
         let response = self.client
-            .post(format!("{}/execute", CONFIG.ai_services.mcp_tools_url))
+            .post(format!("{}/mcp/execute", CONFIG.ai_services.unified_agents_url))
             .json(&serde_json::json!({
                 "tool": tool,
-                "params": params
+                "parameters": params
             }))
             .send()
             .await

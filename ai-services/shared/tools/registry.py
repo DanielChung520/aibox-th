@@ -24,6 +24,7 @@ class ToolSource(str, Enum):
     DATA_AGENT = "data_agent"
     KNOWLEDGE = "knowledge"
     BUILTIN = "builtin"
+    BPA = "bpa"
 
 
 class ToolDefinition(BaseModel):
@@ -223,6 +224,24 @@ class ToolRegistry:
                     ["content_b64", "media_type"],
                 ),
                 category="builtin",
+            )
+        )
+
+        self._register(
+            ToolDefinition(
+                name="query_preorder_items",
+                description="查詢預購可用之品項（品名、規格、庫存數量、單位），用於前置詢價或建立預購單。技能編號：SKL-2618-002。",
+                source=ToolSource.BUILTIN,
+                parameters=_json_schema(
+                    {
+                        "session_id": {"type": "string", "description": "對話 session 識別碼"},
+                        "user_id": {"type": "string", "description": "使用者識別碼"},
+                        "filter_term": {"type": "string", "description": "篩選關鍵字（品名含該字才回傳）"},
+                    },
+                    ["session_id", "user_id"],
+                ),
+                requires_auth=False,
+                category="bpa",
             )
         )
 

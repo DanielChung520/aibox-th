@@ -2,9 +2,11 @@ import hmac
 import hashlib
 import base64
 import httpx
+import re
 
 
 LINE_API_BASE = "https://api.line.me"
+_LINE_USER_ID_RE = re.compile(r"^U[0-9a-fA-F]{32}$")
 LINE_DATA_API_BASE = "https://api-data.line.me"
 
 
@@ -126,7 +128,9 @@ async def get_group_summary(group_id: str, channel_access_token: str) -> dict:
             )
             if resp.status_code == 200:
                 data = resp.json()
-                return {"group_name": data.get("groupName", group_id)}
+                name = data.get("groupName")
+                if name and not _LINE_USER_ID_RE.match(name):
+                    return {"group_name": name}
             return {"group_name": group_id}
         except Exception:
             return {"group_name": group_id}
@@ -142,7 +146,9 @@ async def get_room_summary(room_id: str, channel_access_token: str) -> dict:
             )
             if resp.status_code == 200:
                 data = resp.json()
-                return {"room_name": data.get("roomName", room_id)}
+                name = data.get("roomName")
+                if name and not _LINE_USER_ID_RE.match(name):
+                    return {"room_name": name}
             return {"room_name": room_id}
         except Exception:
             return {"room_name": room_id}

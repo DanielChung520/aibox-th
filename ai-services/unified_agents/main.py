@@ -1,8 +1,10 @@
 import os
 from datetime import datetime, timezone
+from typing import Any
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 
 from shared.logging import LoggingMiddleware, setup_logging
 
@@ -65,6 +67,14 @@ app.mount("/mcp/multimedia-analyzer", multimedia_analyzer_app)
 from bpa.ragic_agent.router import router as ragic_agent_router  # noqa: E402
 app.include_router(ragic_agent_router, prefix="/ragic-agent")
 
+from bpa.order_secretary.router import router as order_secretary_router  # noqa: E402
+from bpa.order_secretary.preorder import router as order_preorder_router  # noqa: E402
+app.include_router(order_secretary_router, prefix="/order-secretary")
+app.include_router(order_preorder_router, prefix="/order-secretary")
+
+from bpa.preorder_agent.router import router as preorder_agent_router  # noqa: E402
+app.include_router(preorder_agent_router, prefix="/preorder-agent")
+
 from knowledge_agent.routers.hybrid import router as hybrid_router  # noqa: E402
 from knowledge_agent.routers.intent import router as intent_router  # noqa: E402
 from knowledge_agent.routers.search import router as search_router  # noqa: E402
@@ -121,6 +131,53 @@ def mcp_health() -> dict[str, str]:
     return {"status": "ok", "service": "mcp_tools", "started_at": STARTED_AT}
 
 
+class ToolCallRequest(BaseModel):
+    tool: str
+    parameters: dict[str, Any]
+
+
+class ToolResultResponse(BaseModel):
+    tool: str
+    success: bool
+    result: Any = None
+    error: str | None = None
+
+
+@app.post("/mcp/execute", response_model=ToolResultResponse, tags=["MCP Execute"])
+async def mcp_execute(call: ToolCallRequest) -> ToolResultResponse:
+    """統一的 MCP 工具執行端點"""
+    try:
+        if call.tool == "tool_reports":
+            from tools.report_generator.tool_reports import tool_reports_execute
+            output = await tool_reports_execute(call.parameters)
+            return ToolResultResponse(
+                tool=call.tool,
+                success=output.success,
+                result={
+                    "report_url": output.report_url,
+                    "filename": output.filename,
+                    "title": output.title,
+                    "chart_type": output.chart_type,
+                    "analysis_summary": output.analysis_summary,
+                    "size_bytes": output.size_bytes,
+                    "warnings": output.warnings,
+                } if output.success else None,
+                error=output.error,
+            )
+        else:
+            return ToolResultResponse(
+                tool=call.tool,
+                success=False,
+                error=f"Unknown tool: {call.tool}",
+            )
+    except Exception as e:
+        return ToolResultResponse(
+            tool=call.tool,
+            success=False,
+            error=str(e),
+        )
+
+
 @app.get("/ka/health")
 def ka_health() -> dict[str, str]:
     return {"status": "ok", "service": "knowledge_agent", "started_at": STARTED_AT}
@@ -134,6 +191,24 @@ def memory_health() -> dict[str, str]:
 @app.get("/ragic/health")
 def ragic_health() -> dict[str, str]:
     return {"status": "ok", "service": "ragic-helper", "started_at": STARTED_AT}
+
+
+@app.get("/order-secretary/health")
+def order_secretary_health() -> dict[str, str]:
+    return {"status": "ok", "service": "order_secretary", "started_at": STARTED_AT}
+
+
+@app.get("/media/proxy/{path:path}")
+async def media_proxy(path: str):
+    """SeaweedFS 媒體檔案代理 — 將 /media/proxy/line/xxx 轉發到 SeaweedFS"""
+    import httpx
+    seaweed_url = os.getenv("SEAWEED_URL", "http://localhost:8888")
+    target_url = f"{seaweed_url}/{path}"
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        resp = await client.get(target_url)
+        from fastapi.responses import Response
+        media_type = resp.headers.get("content-type", "application/octet-stream")
+        return Response(content=resp.content, media_type=media_type)
 
 
 @app.get("/celery/health")

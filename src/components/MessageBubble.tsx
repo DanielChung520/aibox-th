@@ -80,7 +80,28 @@ function parseSegments(raw: string): Segment[] {
   return segments;
 }
 
+function renderTextWithLinks(text: string, tokens: Record<string, string>): React.ReactNode {
+  const urlRegex = /(https?:\/\/[^\s<]+)/g;
+  const parts = text.split(urlRegex);
+  const children = parts.map((part, i) => {
+    if (/^https?:\/\//.test(part)) {
+      return (
+        <a key={i} href={part} target="_blank" rel="noopener noreferrer"
+          style={{ color: tokens.primaryColor, textDecoration: 'underline', cursor: 'pointer', wordBreak: 'break-all' }}>
+          {part}
+        </a>
+      );
+    }
+    // 非 URL 部分直接回傳字串
+    return part;
+  });
+  // 包在 span 中讓 React 正確渲染混合字串與元件
+  return <span>{children}</span>;
+}
+
 function TextRenderer({ body, tokens }: { body: string; tokens: Record<string, string> }) {
+  // 使用 renderTextWithLinks 直接渲染 URL 為 <a> 標籤
+  // 其餘 markdown 語法（bold, italic, code, blockquote）仍由 markdown-to-jsx 處理
   const options = {
     overrides: {
       code: {
@@ -228,7 +249,7 @@ function TextRenderer({ body, tokens }: { body: string; tokens: Record<string, s
     },
   };
 
-  return <Markdown options={options}>{body}</Markdown>;
+  return <Markdown options={options}>{linkified}</Markdown>;
 }
 
 export default function MessageBubble({ message, streamingContent, streamingThinking, onCopyToInput }: MessageBubbleProps) {
@@ -378,7 +399,7 @@ export default function MessageBubble({ message, streamingContent, streamingThin
                 }
                 return (
                   <div key={i} style={{ padding: '2px 0' }}>
-                    <TextRenderer body={seg.body} tokens={tokens} />
+                    {renderTextWithLinks(seg.body, tokens)}
                   </div>
                 );
               })}

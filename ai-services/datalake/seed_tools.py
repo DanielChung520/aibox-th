@@ -20,6 +20,74 @@ COLLECTION = "tools"
 NOW = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 TOOLS: list[dict] = [
+    # ── Linear MCP ─────────────────────────────────────────────────────────────
+    {
+        "_key": "linear_mcp",
+        "code": "linear_mcp",
+        "name": "Linear 專案管理",
+        "description": "透過 Linear MCP 協定連接 Linear 專案管理工具。支援搜尋、建立、更新 Issue，查詢團隊、里程碑等操作。需要設定 LINEAR_API_KEY 環境變數。",
+        "tool_type": "tool",
+        "icon": "ProjectOutlined",
+        "status": "online",
+        "usage_count": 0,
+        "group_key": "utility",
+        "intent_tags": ["專案管理", "issue", "task", "Linear", "專案", "任務", "bug追蹤"],
+        "nl_examples": [
+            "搜尋 Linear 上的 authentication bug issue",
+            "幫我在 Linear 建立一個新 task",
+            "查詢我的團隊有哪些成員",
+            "列出所有 in progress 的 issue",
+            "幫我更新這個 issue 的狀態",
+            "查詢某個 milestone 的進度",
+            "幫我指派 issue 給某個人",
+            "在 Linear 上建立一個 bug report",
+        ],
+        "endpoint_url": None,
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "operation": {
+                    "type": "string",
+                    "description": "Linear MCP 操作：linear_search_issues, linear_create_issue, linear_get_teams, linear_create_project_milestone, 等",
+                },
+                "team_id": {"type": "string", "description": "團隊 ID"},
+                "title": {"type": "string", "description": "Issue 標題"},
+                "description": {"type": "string", "description": "Issue 描述"},
+                "query": {"type": "string", "description": "搜尋關鍵字"},
+                "limit": {"type": "integer", "description": "回傳數量上限"},
+                "priority": {"type": "integer", "description": "優先級：0=無, 1=緊急, 2=高, 3=中, 4=低"},
+                "status": {"type": "string", "description": "Issue 狀態"},
+                "assignee_id": {"type": "string", "description": "指派對象 ID"},
+                "issue_id": {"type": "string", "description": "Issue ID"},
+                "milestone_id": {"type": "string", "description": "里程碑 ID"},
+            },
+        },
+        "output_schema": {
+            "type": "object",
+            "properties": {
+                "success": {"type": "boolean"},
+                "result": {"type": "object", "description": "Linear MCP 執行結果"},
+                "duration_ms": {"type": "integer", "description": "執行耗時（毫秒）"},
+            },
+        },
+        "timeout_ms": 30000,
+        "llm_model": None,
+        "temperature": None,
+        "max_tokens": None,
+        "auth_config": {
+            "provider": "linear",
+            "api_key_env": "LINEAR_API_KEY",
+            "mcp_endpoint": "https://mcp.linear.app/mcp",
+        },
+        "visibility": "public",
+        "visibility_roles": [],
+        "visibility_accounts": [],
+        "created_by": "system",
+        "updated_by": "system",
+        "created_at": NOW,
+        "updated_at": NOW,
+    },
+
     # ── Weather ────────────────────────────────────────────────────────────────
     {
         "_key": "weather",

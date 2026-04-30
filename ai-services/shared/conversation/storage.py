@@ -32,6 +32,105 @@ class ConversationStorage:
     def _auth(self) -> tuple[str, str]:
         return (self._arango_user, self._arango_password)
 
+    async def upsert_session_group_name(
+        self,
+        session_id: str,
+        group_name: str,
+        platform: str = "line",
+    ) -> None:
+        doc_key = self._session_meta_key(session_id)
+        doc = {
+            "_key": doc_key,
+            "session_id": session_id,
+            "platform": platform,
+            "group_name": group_name,
+            "refreshed_at": datetime.now(timezone.utc).isoformat(),
+        }
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            try:
+                r = await client.patch(
+                    f"{self._arango_url}/_db/{self._arango_db}/_api/document/bot_session_metadata/{doc_key}",
+                    json=doc,
+                    auth=self._auth(),
+                )
+                if r.status_code == 404:
+                    r = await client.post(
+                        f"{self._arango_url}/_db/{self._arango_db}/_api/document/bot_session_metadata",
+                        json=doc,
+                        auth=self._auth(),
+                    )
+            except Exception:
+                pass
+
+    async def get_session_group_name(self, session_id: str) -> str | None:
+        """
+        Get cached session group_name if refreshed within 24 hours.
+        Returns None if no cached name or cache is stale.
+        """
+        doc_key = self._session_meta_key(session_id)
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            try:
+                resp = await client.get(
+                    f"{self._arango_url}/_db/{self._arango_db}/_api/document/bot_session_metadata/{doc_key}",
+                    auth=self._auth(),
+                )
+                if resp.status_code != 200:
+                    return None
+                doc = resp.json()
+                refreshed_str = doc.get("refreshed_at", "")
+                if not refreshed_str:
+                    return None
+                refreshed = datetime.fromisoformat(refreshed_str.replace("Z", "+00:00"))
+                age_hours = (datetime.now(timezone.utc) - refreshed).total_seconds() / 3600
+                if age_hours > 24:
+                    return None
+                name = doc.get("group_name", "")
+                return name if name and name != doc.get("session_id", "") else None
+            except Exception:
+                return None
+
+    async def get_greeting_responded_at(self, session_id: str) -> str | None:
+        doc_key = self._session_meta_key(session_id)
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            try:
+                resp = await client.get(
+                    f"{self._arango_url}/_db/{self._arango_db}/_api/document/bot_session_metadata/{doc_key}",
+                    auth=self._auth(),
+                )
+                if resp.status_code != 200:
+                    return None
+                return resp.json().get("greeting_responded_at")
+            except Exception:
+                return None
+
+    async def set_greeting_responded_at(self, session_id: str, date_str: str) -> None:
+        doc_key = self._session_meta_key(session_id)
+        doc = {
+            "_key": doc_key,
+            "session_id": session_id,
+            "greeting_responded_at": date_str,
+        }
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            try:
+                r = await client.patch(
+                    f"{self._arango_url}/_db/{self._arango_db}/_api/document/bot_session_metadata/{doc_key}",
+                    json=doc,
+                    auth=self._auth(),
+                )
+                if r.status_code == 404:
+                    await client.post(
+                        f"{self._arango_url}/_db/{self._arango_db}/_api/document/bot_session_metadata",
+                        json=doc,
+                        auth=self._auth(),
+                    )
+            except Exception:
+                pass
+
+    @staticmethod
+    def _session_meta_key(session_id: str) -> str:
+        import hashlib
+        return hashlib.sha256(session_id.encode()).hexdigest()[:32]
+
     async def save_message(
         self,
         session_id: str,
@@ -110,21 +209,15 @@ class ConversationStorage:
             return [r["_key"] for r in results]
 
     async def ensure_collection(self) -> None:
-        """
-        Ensure the bot_chat_sessions collection exists with proper indexes.
-        Creates the collection if it doesn't exist.
-        """
         async with httpx.AsyncClient(timeout=10.0) as client:
-            # Check if collection exists
             resp = await client.get(
                 f"{self._arango_url}/_db/{self._arango_db}/_api/collection/{self._collection}",
                 auth=self._auth(),
             )
             if resp.status_code == 200:
-                return  # Collection exists
+                return
 
             if resp.status_code == 404:
-                # Create collection
                 create_resp = await client.post(
                     f"{self._arango_url}/_db/{self._arango_db}/_api/collection",
                     json={"name": self._collection},
@@ -132,18 +225,41 @@ class ConversationStorage:
                 )
                 create_resp.raise_for_status()
 
-                # Create indexes
                 collection_url = f"{self._arango_url}/_db/{self._arango_db}/_api/index/{self._collection}"
-                # Index on session_id + created_at for efficient history queries
                 await client.post(
                     collection_url,
                     json={"type": "persistent", "fields": ["session_id", "created_at"]},
                     auth=self._auth(),
                 )
-                # Index on platform for platform-specific queries
                 await client.post(
                     collection_url,
                     json={"type": "persistent", "fields": ["platform"]},
+                    auth=self._auth(),
+                )
+                return
+
+            resp.raise_for_status()
+
+    async def ensure_session_metadata_collection(self) -> None:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(
+                f"{self._arango_url}/_db/{self._arango_db}/_api/collection/bot_session_metadata",
+                auth=self._auth(),
+            )
+            if resp.status_code == 200:
+                return
+
+            if resp.status_code == 404:
+                create_resp = await client.post(
+                    f"{self._arango_url}/_db/{self._arango_db}/_api/collection",
+                    json={"name": "bot_session_metadata"},
+                    auth=self._auth(),
+                )
+                create_resp.raise_for_status()
+                idx_url = f"{self._arango_url}/_db/{self._arango_db}/_api/index/bot_session_metadata"
+                await client.post(
+                    idx_url,
+                    json={"type": "persistent", "fields": ["session_id"]},
                     auth=self._auth(),
                 )
                 return

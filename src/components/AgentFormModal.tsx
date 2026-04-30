@@ -11,6 +11,7 @@ import { Modal, Form, Input, Select, Switch, InputNumber, Tabs, Button, Space, A
 import { iconMap } from '../utils/icons';
 import IconPicker from './IconPicker';
 import { roleApi, knowledgeApi, toolApi, daApi, agentApi, modelProviderApi } from '../services/api';
+import { authStore } from '../stores/auth';
 import DemandTab from './DemandTab';
 import { trackModal, trackAgentAction } from '../utils/analytics';
 import { pageContextManager } from '../services/PageContextManager';
@@ -98,6 +99,9 @@ export default function AgentFormModal({
 }: AgentFormModalProps) {
   const { message } = App.useApp();
   const [form] = Form.useForm();
+  const user = authStore.getState().user;
+  const userRoleNames: string[] = (user as any)?.role_names || [];
+  const canManageIntents = userRoleNames.includes('系统管理员') || userRoleNames.includes('顾问');
   const [iconPickerVisible, setIconPickerVisible] = useState(false);
   const [isThirdParty, setIsThirdParty] = useState(false);
   const [roles, setRoles] = useState<{ value: string; label: string }[]>([]);
@@ -463,7 +467,25 @@ export default function AgentFormModal({
     if (!key) return;
     try {
       const values = await intentForm.validateFields();
-      const merged = { ...editingIntent, ...values };
+      // 解析 data_scope 的欄位字串 → JSON 物件
+      const scope = values.data_scope || {};
+      if (typeof scope.allowed_fields === 'string') {
+        const obj: Record<string, string> = {};
+        scope.allowed_fields.split(',').forEach((s: string) => {
+          const [k, ...v] = s.trim().split(':');
+          if (k) obj[k.trim()] = v.join(':').trim();
+        });
+        scope.allowed_fields = obj;
+      }
+      if (typeof scope.denied_fields === 'string') {
+        const obj: Record<string, string> = {};
+        scope.denied_fields.split(',').forEach((s: string) => {
+          const [k, ...v] = s.trim().split(':');
+          if (k) obj[k.trim()] = v.join(':').trim();
+        });
+        scope.denied_fields = obj;
+      }
+      const merged = { ...editingIntent, ...values, data_scope: scope };
       if (merged._key && !String(merged._key).startsWith('temp_')) {
         await agentApi.updateIntent(key, merged._key, merged);
         message.success('更新成功');
@@ -592,6 +614,35 @@ export default function AgentFormModal({
       render: (s: string) => <Tag color={s === 'enabled' ? 'green' : 'default'}>{s === 'enabled' ? '啟用' : '停用'}</Tag>,
     },
     {
+      title: '資料表',
+      key: 'data_tables',
+      width: 120,
+      render: (_: any, record: any) => {
+        const tables = record.data_scope?.tables;
+        return tables?.length ? tables.join(', ') : '-';
+      },
+    },
+    {
+      title: '允許欄位',
+      key: 'allowed_fields',
+      width: 140,
+      render: (_: any, record: any) => {
+        const af = record.data_scope?.allowed_fields;
+        if (!af) return '-';
+        return Object.values(af).join(', ');
+      },
+    },
+    {
+      title: '禁止欄位',
+      key: 'denied_fields',
+      width: 140,
+      render: (_: any, record: any) => {
+        const df = record.data_scope?.denied_fields;
+        if (!df) return '-';
+        return Object.values(df).join(', ');
+      },
+    },
+    {
       title: '操作',
       key: 'action',
       width: 120,
@@ -716,6 +767,28 @@ export default function AgentFormModal({
               </Form.Item>
             </Space>
 
+            <Divider style={{ margin: '12px 0' }}>資料範圍 (data_scope)</Divider>
+
+            <Space style={{ width: '100%', alignItems: 'flex-start' }}>
+              <Form.Item name={['data_scope', 'tables']} label="資料表" style={{ width: 200 }}>
+                <Select mode="tags" placeholder="例如: STOCK_16" tokenSeparators={[',']} />
+              </Form.Item>
+              <Form.Item name={['data_scope', 'allowed_fields']} label="允許欄位 (field_id: 名稱)" style={{ width: 250 }}>
+                <Input placeholder="1018133:品項名稱, 1018271:存放數量" />
+              </Form.Item>
+              <Form.Item name={['data_scope', 'denied_fields']} label="禁止欄位 (field_id: 名稱)" style={{ width: 250 }}>
+                <Input placeholder="1018138:入庫單價/g, 1018139:庫存總金額/批" />
+              </Form.Item>
+            </Space>
+            <Space style={{ width: '100%' }}>
+              <Form.Item name={['data_scope', 'cache_ttl']} label="快取 TTL (秒)" style={{ width: 150 }}>
+                <InputNumber min={0} defaultValue={0} />
+              </Form.Item>
+              <Form.Item name={['data_scope', 'read_only']} label="唯讀" valuePropName="checked">
+                <Switch defaultChecked />
+              </Form.Item>
+            </Space>
+
             <Space style={{ marginTop: 12 }}>
               <Button type="primary" onClick={handleSaveIntent}>儲存</Button>
               <Button onClick={() => { setEditingIntent(null); intentForm.resetFields(); }}>取消</Button>
@@ -780,11 +853,11 @@ width="60vw"
                 label: '對話配置',
                 children: chatTab,
               },
-              {
+              ...(canManageIntents ? [{
                 key: 'intents',
                 label: '意圖表',
                 children: intentsTab,
-              },
+              }] : []),
               ...(mode === 'edit' && demandKey ? [{
                 key: 'demand',
                 label: (

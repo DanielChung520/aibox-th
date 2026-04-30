@@ -15,6 +15,7 @@ import {
   HeartOutlined, 
   HeartFilled,
   MessageOutlined,
+  ShoppingCartOutlined,
 } from '@ant-design/icons';
 import { iconMap } from '../utils/icons';
 import { useContentTokens } from '../contexts/AppThemeProvider';
@@ -43,6 +44,7 @@ interface AgentCardProps {
   actionStyle?: React.CSSProperties;
   showMenu?: boolean;
   onCardClick?: (agentId: string) => void;
+  onPreorder?: (agentId: string) => void;
 }
 
 const statusColors: Record<string, { color: string; text: string }> = {
@@ -67,6 +69,7 @@ export default function AgentCard({
   actionStyle,
   showMenu = true,
   onCardClick,
+  onPreorder,
 }: AgentCardProps) {
   const { token } = theme.useToken();
   const contentTokens = useContentTokens();
@@ -163,6 +166,20 @@ export default function AgentCard({
               {agent.name}
             </div>
             <Tag color={statusInfo.color}>{statusInfo.text}</Tag>
+            {onPreorder && (
+              <Button
+                type="link"
+                size="small"
+                icon={<ShoppingCartOutlined />}
+                style={{ padding: '0 4px', fontSize: 12, color: contentTokens.colorPrimary }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onPreorder(agent.id);
+                }}
+              >
+                預訂購
+              </Button>
+            )}
           </div>
         </div>
         

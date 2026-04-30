@@ -7,7 +7,7 @@
  */
 
 import { Button, Space, Tag, Popconfirm } from 'antd';
-import { EditOutlined, DeleteOutlined, UnorderedListOutlined, TableOutlined } from '@ant-design/icons';
+import { EditOutlined, DeleteOutlined, UnorderedListOutlined, TableOutlined, FileTextOutlined } from '@ant-design/icons';
 import { TableInfo } from '../../services/dataAgentApi';
 import { TAB_LABELS } from './schemaConstants';
 
@@ -16,6 +16,7 @@ interface SchemaTableColumnsProps {
   onOpenDataModal: (record: TableInfo) => void;
   onEditTable: (record: TableInfo) => void;
   onDeleteTable: (tableId: string) => void;
+  onOpenReportModal: (record: TableInfo) => void;
 }
 
 export const getSchemaTableColumns = ({
@@ -23,6 +24,7 @@ export const getSchemaTableColumns = ({
   onOpenDataModal,
   onEditTable,
   onDeleteTable,
+  onOpenReportModal,
 }: SchemaTableColumnsProps) => [
   { 
     title: '來源', dataIndex: 'data_source', key: 'data_source', width: 80,
@@ -56,11 +58,12 @@ export const getSchemaTableColumns = ({
     render: (status: string) => <Tag color={status === 'enabled' ? 'success' : 'default'}>{status}</Tag>
   },
   {
-    title: '操作', key: 'actions', width: 160,
+    title: '操作', key: 'actions', width: 200,
     render: (_: unknown, record: TableInfo) => (
       <Space>
         <Button type="link" icon={<UnorderedListOutlined />} onClick={() => onOpenColumnsModal(record)} title="查看欄位" />
         <Button type="link" icon={<TableOutlined />} onClick={() => onOpenDataModal(record)} title="查看資料" />
+        <Button type="link" icon={<FileTextOutlined />} onClick={() => onOpenReportModal(record)} title="智慧報表" />
         <Button type="link" icon={<EditOutlined />} onClick={() => onEditTable(record)} />
         <Popconfirm title="確定要刪除此資料表嗎？" onConfirm={() => onDeleteTable(record.table_id)}>
           <Button type="link" danger icon={<DeleteOutlined />} />

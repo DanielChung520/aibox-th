@@ -1,3 +1,4 @@
+from enum import Enum
 from typing import List, Optional
 
 from tools.base import BaseTool, ToolInput, ToolOutput
@@ -74,16 +75,16 @@ class WebSearchTool(BaseTool[WebSearchInput, WebSearchOutput]):
         ]
 
         provider = result.get("provider")
-        provider_str = provider.value if hasattr(provider, "value") else str(provider) if provider else "unknown"
+        provider_str = getattr(provider, "value", None) if isinstance(provider, Enum) else str(provider) if provider else "unknown"
         status = result.get("status")
-        status_str = status.value if hasattr(status, "value") else str(status) if status else "unknown"
+        status_str = getattr(status, "value", None) if isinstance(status, Enum) else str(status) if status else "unknown"
 
         output = WebSearchOutput(
             query=input_data.query,
-            provider=provider_str,
+            provider=provider_str or "unknown",
             results=results,
             total=result.get("total", 0),
-            status=status_str,
+            status=status_str or "unknown",
         )
         cache.set(cache_key, output.model_dump(), ttl=WEB_SEARCH_CACHE_TTL)
         return output

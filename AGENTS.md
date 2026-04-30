@@ -1,13 +1,13 @@
 ---
-lastUpdate: 2026-04-23 22:19:30
+lastUpdate: 2026-04-30 01:35:00
 author: Daniel Chung
-version: 1.12.0
+version: 1.13.0
 ---
 # AGENTS.md - Daniel Chung Guide for ABC Desktop
 
-## 開發觸發指令 @dev
+## 開發觸發指令 #dev
 
-當使用者輸入 `@dev {需求編號}` 時，AI Coder 必須參照 `agent-tool-dev-guide.md` 進行開發工作。
+當使用者輸入 `#dev {需求編號}` 時，AI Coder 必須參照 `agent-tool-dev-guide.md` 進行開發工作。
 
 詳見：[agent-tool-dev-guide.md](./agent-tool-dev-guide.md)
 
@@ -392,6 +392,86 @@ mkdir -p .tmp && mv screenshot.png .tmp/
 ls .tmp/    # 先確認內容
 rm -rf .tmp/*   # 確認無誤後執行清理
 ```
+
+---
+
+### 1.7 LLM Provider 解析標準（llm_resolver）
+
+**⚠️ 憲法級規範**：所有需要呼叫 LLM 的服務，必須統一透過 `shared/llm_resolver.py` 的 `resolve()` 函式解析 Model ID → provider → base_url + api_key，**嚴禁各服務自行實作 provider 解析邏輯**。
+
+#### 核心原則
+
+任一 LLM 呼叫的完整解析鏈為：
+
+```
+Model ID (e.g. "deepseek:DeepSeek-V4-Flash")
+    ↓ 解析 provider:model
+provider = "deepseek", model = "DeepSeek-V4-Flash"
+    ↓ 查詢 system_params llm.providers
+base_url = "https://api.deepseek.com/v1/chat/completions"
+api_key_param = "report.llm_api_key"
+    ↓ 查詢 system_params {api_key_param}
+api_key = "sk-..."
+    ↓ 構建 endpoint
+endpoint = base_url (已含完整路徑則直接用，否則依 /v1 判斷路徑)
+```
+
+#### 使用方式
+
+```python
+from shared.llm_resolver import resolve as resolve_llm
+
+# 只需傳入 model_id，自動解析所有連線資訊
+config = await resolve_llm("deepseek:DeepSeek-V4-Flash")
+
+# config.endpoint   → "https://api.deepseek.com/v1/chat/completions"
+# config.model_name → "DeepSeek-V4-Flash"
+# config.api_key    → "sk-..." （若 provider 有 api_key_param）
+# config.provider   → "deepseek"
+```
+
+#### Provider 設定來源
+
+Provider 連線資訊存放於 ArangoDB `system_params` 的 `llm.providers`：
+
+```json
+{
+  "ollama": {
+    "label": "Ollama",
+    "base_url": "http://localhost:11434",
+    "api_key_param": null
+  },
+  "deepseek": {
+    "label": "DeepSeek",
+    "base_url": "https://api.deepseek.com/v1/chat/completions",
+    "api_key_param": "report.llm_api_key"
+  }
+}
+```
+
+新增 provider 時只需更新 `llm.providers`，無需修改任何服務程式碼。
+
+#### URL 構建規則
+
+| Provider base_url | 結果 endpoint |
+|---|---|
+| `http://localhost:11434` | `http://localhost:11434/api/chat` |
+| `https://api.deepseek.com/v1` | `https://api.deepseek.com/v1/chat/completions` |
+| `https://api.deepseek.com/v1/chat/completions` | 直接使用 |
+
+#### 禁止行為
+
+- ❌ 各服務自行實作 `get_provider_config()` 解析 provider → base_url
+- ❌ 硬編碼 provider-specific 的 URL 路徑（如 `/api/chat` vs `/v1/chat/completions`）
+- ❌ 各服務各自快取 `llm.providers` 內容（應交由 `llm_resolver` 統一快取）
+- ✅ 一律使用 `from shared.llm_resolver import resolve`
+
+#### 已重構的服務
+
+| 服務 | 檔案 | 狀態 |
+|------|------|------|
+| Report Generator | `tools/report_generator/llm_analyzer.py` | ✅ 已使用 `llm_resolver` |
+| AITask | `aitask/main.py` | ⚠️ 仍使用自有 `get_provider_config()`，待重構 |
 
 ---
 
@@ -1870,6 +1950,18 @@ class AgentRunResult(TypedDict):
 
 ---
 
+### 10.11 複用函式索引（functionsIndex.md）
+
+**所有新開發的複用函式都必須記錄於 [functionsIndex.md](./ai-services/functionsIndex.md)，禁止重複實作。**
+
+| 文件 | 用途 |
+|------|------|
+| `functionsIndex.md` | 複用函式 registry，包含 RagicCache 等標準函式 |
+
+**使用方式**：開發任何需要快取、資料處理等通用能力時，先查閱 `functionsIndex.md`，有則直接引用，無則新增並記錄。
+
+---
+
 ## 11. Agent 建立指南
 
 本指南說明如何建立一個使用 `shared/orchestration/` 框架的標準 Agent。
@@ -2068,6 +2160,7 @@ async def execute_tools(tool_calls: list[dict], session_id: str, user_id: str):
 
 | 日期       | 版本  | 更新者       | 變更內容                                                             |
 | ---------- | ----- | ------------ | -------------------------------------------------------------------- |
+| 2026-04-30 | 1.13.0 | Daniel Chung | 新增 functionsIndex.md 複用函式索引；新增 RagicCache 通用快取實作（shared/ragic_cache.py） |
 | 2026-04-21 | 1.11.0 | Daniel Chung | 新增 Agent 建立指南（11章）；完善 shared/tools/ 與 shared/orchestration/ 框架文件 |
 | 2026-04-21 | 1.10.0 | Daniel Chung | 新增 shared/tools/ 標準工具編排框架；新增 shared/orchestration/ 標準工作編排框架（LangGraph StateMachine） |
 | 2026-04-19 | 1.9.0 | Daniel Chung | 新增 Service Architecture 原則，定義獨立服務與統一入口，規範 Port 分配；新增 ArangoDB PATCH vs PUT 安全操作規範（避免文件替換導致資料遺失） |

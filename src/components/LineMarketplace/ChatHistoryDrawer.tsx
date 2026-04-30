@@ -18,11 +18,16 @@ interface ChatSession {
   user_name?: string;
 }
 
+const LINE_USER_ID_RE = /^U[0-9a-fA-F]{32}$/;
+
 function sessionLabel(s: ChatSession): string {
   const sid = s.session_id;
   if (sid.includes(':group:')) {
-    if (s.group_name) return `👥 ${s.group_name}`;
-    return `👥 群組 ${sid.split(':')[3]?.slice(0, 8) || '?'}`;
+    const groupId = sid.split(':')[3]?.slice(0, 8) || '?';
+    if (s.group_name && !LINE_USER_ID_RE.test(s.group_name)) {
+      return `👥 ${s.group_name}`;
+    }
+    return `👥 群組 ${groupId}`;
   }
   if (s.user_name) return `💬 ${s.user_name}`;
   return `💬 ${sid.split(':')[2]?.slice(0, 10) || '?'}`;

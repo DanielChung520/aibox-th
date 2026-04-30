@@ -274,12 +274,12 @@ export const agentApi = {
   update: (key: string, data: Partial<Agent>) => api.put(`/api/v1/agents/${key}`, data),
   delete: (key: string) => api.delete(`/api/v1/agents/${key}`),
   toggleFavorite: (key: string) => api.patch<{ code: number; data: Agent }>(`/api/v1/agents/${key}/favorite`, {}),
-  chat: (key: string, data: AgentChatRequest) => api.post<AgentChatResponse>(`/api/v1/agents/${key}/chat`, data),
+  chat: (key: string, data: AgentChatRequest) => api.post<AgentChatResponse>(`/api/v1/agents/${key}/chat?_t=${Date.now()}`, data, { timeout: 180000, headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } }),
   listIntents: (key: string) => api.get<{ code: number; data: any[] }>(`/api/v1/agents/${key}/intents`),
   createIntent: (key: string, data: any) => api.post(`/api/v1/agents/${key}/intents`, data),
   updateIntent: (key: string, intentKey: string, data: any) => api.put(`/api/v1/agents/${key}/intents/${intentKey}`, data),
   deleteIntent: (key: string, intentKey: string) => api.delete(`/api/v1/agents/${key}/intents/${intentKey}`),
-  syncIntents: (key: string) => api.post(`/api/v1/agents/${key}/intents/${key}/sync`, {}),
+  syncIntents: (key: string) => api.post(`/api/v1/agents/${key}/intents/sync`, {}),
   listDemands: (key: string) => api.get<{ code: number; data: Demand[] }>(`/api/v1/agents/${key}/demands`),
   getDemand: (key: string, demandKey: string) => api.get<{ code: number; data: Demand }>(`/api/v1/agents/${key}/demands/${demandKey}`),
   createDemand: (key: string, data: Partial<Demand>) => api.post(`/api/v1/agents/${key}/demands`, data),
@@ -296,6 +296,38 @@ export const demandApi = {
     api.post<{ code: number; data: { estimated_hours: number; range_min: number; range_max: number; confidence: string; reasoning: string } }>('/api/v1/demands/estimate-hours', data),
   reviewDemand: (data: Partial<Demand>) =>
     api.post<{ code: number; data: AIReview }>('/api/v1/demands/review', data),
+};
+
+export interface SkillSpec {
+  _key: string;
+  skill_no: string;
+  title?: string;
+  name: string;
+  skill_type: string;
+  tags: string[];
+  description: string;
+  version: string;
+  status: string;
+  steps: string[];
+  guardrails: string[];
+  data_scope?: Record<string, unknown>;
+  linked_intents: string[];
+  spec_version: string;
+  code_language: string;
+  created_by: string;
+  developed_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export const skillApi = {
+  list: () => api.get<{ code: number; data: SkillSpec[] }>('/api/v1/skills'),
+  get: (id: string) => api.get<{ code: number; data: SkillSpec }>(`/api/v1/skills/${id}`),
+  create: (data: Partial<SkillSpec>) => api.post('/api/v1/skills', data),
+  update: (id: string, data: Partial<SkillSpec>) => api.put(`/api/v1/skills/${id}`, data),
+  delete: (id: string) => api.delete(`/api/v1/skills/${id}`),
+  getByNo: (no: string) => api.get<{ code: number; data: SkillSpec }>(`/api/v1/skills/by-no/${no}`),
+  analyze: (id: string, data?: { revision?: string }) => api.post<{ code: number; message: string; data: any }>(`/api/v1/skills/${id}/analyze`, data || {}),
 };
 
 // ============= Tool Registry =============
@@ -859,6 +891,48 @@ export const daApi = {
     api.get<ApiResponse<DaSchemaModule[]>>('/api/v1/da/schema/modules'),
 };
 
+export interface SchemaReportRecord {
+  _key: string;
+  table_id: string;
+  report_name: string;
+  report_url: string;
+  chart_type?: string;
+  analysis_summary?: string;
+  username: string;
+  created_at: string;
+}
+
+export const schemaReportsApi = {
+  list: (tableId: string) =>
+    api.get<ApiResponse<SchemaReportRecord[]>>(`/api/v1/da/schema-reports?table_id=${encodeURIComponent(tableId)}`),
+  create: (data: Omit<SchemaReportRecord, '_key'>) =>
+    api.post<ApiResponse<SchemaReportRecord>>('/api/v1/da/schema-reports', data),
+  delete: (key: string) =>
+    api.delete<ApiResponse<{ _key: string }>>(`/api/v1/da/schema-reports/${key}`),
+};
+
+export interface SchemaReportTemplate {
+  _key: string;
+  table_id: string;
+  name: string;
+  goal: string;
+  description: string;
+  chart_type: string;
+  notes: string;
+  created_at: string;
+}
+
+export const schemaReportTemplatesApi = {
+  list: (tableId: string) =>
+    api.get<ApiResponse<SchemaReportTemplate[]>>(
+      `/api/v1/da/schema-report-templates?table_id=${encodeURIComponent(tableId)}`
+    ),
+  create: (data: Omit<SchemaReportTemplate, '_key' | 'created_at'>) =>
+    api.post<ApiResponse<SchemaReportTemplate>>('/api/v1/da/schema-report-templates', data),
+  delete: (key: string) =>
+    api.delete<ApiResponse<{ _key: string }>>(`/api/v1/da/schema-report-templates/${key}`),
+};
+
 export const downloadFile = async (fileId: string): Promise<Blob> => {
   const token = localStorage.getItem('token');
   const resp = await fetch(`/api/v1/knowledge/files/${encodeURIComponent(fileId)}/download`, {
@@ -1128,4 +1202,24 @@ export const ragicApi = {
     api.get<{ sessions: any[]; count: number }>(
       `/api/v1/ragic/sessions?platform=${platform}&channel_id=${channelId || ''}`
     ),
+};
+
+export interface ToolExecuteResult {
+  tool: string;
+  success: boolean;
+  result?: {
+    report_url: string;
+    filename: string;
+    title: string;
+    chart_type: string;
+    analysis_summary: string;
+    size_bytes: number;
+    warnings: string[];
+  };
+  error: string | null;
+}
+
+export const toolsApi = {
+  execute: (tool: string, parameters: Record<string, unknown>) =>
+    api.post<ToolExecuteResult>('/api/v1/mcp/execute', { tool, parameters }, { timeout: 300000 }),
 };

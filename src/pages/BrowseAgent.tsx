@@ -112,6 +112,11 @@ export default function BrowseAgent() {
     navigate(`/app/task-session/chat?agent_key=${agentId}`);
   };
 
+  // 處理預訂購
+  const handlePreorder = (agentId: string) => {
+    navigate('/app/preorder');
+  };
+
   // 處理編輯
   const handleEdit = (agentId: string) => {
     const agent = agents.find((a) => a._key === agentId);
@@ -253,6 +258,7 @@ export default function BrowseAgent() {
                     onChat={handleChat}
                     onEdit={handleEdit}
                     onDelete={handleDelete}
+                    onPreorder={agent.name.includes('訂單') ? handlePreorder : undefined}
                   />
               </Col>
             ))}

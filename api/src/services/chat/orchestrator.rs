@@ -276,7 +276,7 @@ pub async fn handle_send_message(headers: HeaderMap, session_key: String, payloa
         let tool_result = route_tool_intent(
             &client,
             &CONFIG.ai_services.data_agent_url,
-            &CONFIG.ai_services.mcp_tools_url,
+            &CONFIG.ai_services.unified_agents_url,
             &ollama_base_url,
             &intent_model,
             &payload.content,

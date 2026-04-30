@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime
 
 import httpx
@@ -15,6 +16,7 @@ from unified_agents.platforms.line.services import db
 from unified_agents.platforms.line.services.line_api import test_channel_connection
 
 router = APIRouter(tags=["LINE Platform"])
+logger = logging.getLogger(__name__)
 
 
 @router.get("/official-accounts")

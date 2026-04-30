@@ -36,7 +36,9 @@ async def get_doc(collection: str, key: str) -> dict[str, Any] | None:
     return None
 
 
-async def query_one(collection: str, filter_aql: str, bind_vars: dict[str, Any]) -> dict[str, Any] | None:
+async def query_one(
+    collection: str, filter_aql: str, bind_vars: dict[str, Any]
+) -> dict[str, Any] | None:
     aql = f"FOR doc IN {collection} FILTER {filter_aql} LIMIT 1 RETURN doc"
 
     async with httpx.AsyncClient(timeout=10.0) as client:
