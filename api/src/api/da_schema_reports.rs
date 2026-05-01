@@ -2,11 +2,13 @@
 //!
 //! # Description
 //! Schema 智慧報表 CRUD endpoints，操作 ArangoDB schema_reports 集合。
-//! 報告產生後寫入此集合，SchemaReportModal 從此集合讀取報告列表。
+//! 支援同步/非同步兩種產生模式：
+//!   - 同步：report_url 必填，直接寫入完成狀態
+//!   - 非同步：report_url 可為空，status="generating"，後續由 Celery worker PATCH 更新
 //!
-//! # Last Update: 2026-04-30 11:30:00
-//! # Author: Daniel Chung
-//! # Version: 1.0.0
+//! # Last Update: 2026-05-01 03:00:00
+//! # Author: Daniel Chung / Sisyphus
+//! # Version: 1.1.0
 
 use crate::db::get_db;
 use crate::models::ApiResponse;
@@ -14,7 +16,7 @@ use axum::{
     extract::{Path, Query},
     http::StatusCode,
     response::IntoResponse,
-    routing::{delete, get, post},
+    routing::{delete, get, patch, post},
     Json, Router,
 };
 use serde_json::Value;
@@ -25,7 +27,7 @@ const COLLECTION: &str = "schema_reports";
 pub fn create_schema_reports_router() -> Router {
     Router::new()
         .route("/api/v1/da/schema-reports", get(list_reports).post(create_report))
-        .route("/api/v1/da/schema-reports/{key}", delete(delete_report))
+        .route("/api/v1/da/schema-reports/{key}", delete(delete_report).patch(update_report))
 }
 
 // ---------------------------------------------------------------------------
@@ -70,21 +72,15 @@ async fn list_reports(
 // ---------------------------------------------------------------------------
 
 async fn create_report(Json(payload): Json<Value>) -> Result<impl IntoResponse, StatusCode> {
-    // Validate required fields
-    let _ = payload
+    let table_id = payload
         .get("table_id")
         .and_then(|v| v.as_str())
         .filter(|v| !v.trim().is_empty())
-        .ok_or(StatusCode::BAD_REQUEST)?;
+        .ok_or(StatusCode::BAD_REQUEST)?
+        .to_string();
 
-    let _ = payload
+    let _report_name = payload
         .get("report_name")
-        .and_then(|v| v.as_str())
-        .filter(|v| !v.trim().is_empty())
-        .ok_or(StatusCode::BAD_REQUEST)?;
-
-    let _ = payload
-        .get("report_url")
         .and_then(|v| v.as_str())
         .filter(|v| !v.trim().is_empty())
         .ok_or(StatusCode::BAD_REQUEST)?;
@@ -93,21 +89,14 @@ async fn create_report(Json(payload): Json<Value>) -> Result<impl IntoResponse, 
 
     let mut doc = payload;
     if let Some(obj) = doc.as_object_mut() {
-        // Auto-generate _key if not provided
         if !obj.contains_key("_key") {
-            let key = format!(
-                "rpt_{}_{}",
-                obj.get("table_id")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("unknown"),
-                chrono::Utc::now().timestamp()
-            );
+            let key = format!("rpt_{}_{}", table_id, chrono::Utc::now().timestamp());
             obj.insert("_key".into(), serde_json::json!(key));
         }
-        obj.insert(
-            "created_at".into(),
-            serde_json::json!(chrono::Utc::now().to_rfc3339()),
-        );
+        let now = chrono::Utc::now().to_rfc3339();
+        obj.entry("created_at").or_insert(serde_json::json!(now));
+        obj.entry("updated_at").or_insert(serde_json::json!(now));
+        obj.entry("status").or_insert(serde_json::json!("generating"));
     }
 
     let col = db
@@ -122,7 +111,6 @@ async fn create_report(Json(payload): Json<Value>) -> Result<impl IntoResponse, 
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
-    // Return created document
     let key = doc
         .get("_key")
         .and_then(|v| v.as_str())
@@ -160,4 +148,49 @@ async fn delete_report(Path(key): Path<String>) -> Result<impl IntoResponse, Sta
         })?;
 
     Ok(Json(ApiResponse::success(serde_json::json!({ "_key": key }))))
+}
+
+// ---------------------------------------------------------------------------
+// PATCH a report — update status / report_url / error_message（非同步流程用）
+// 使用 ArangoDB PATCH 語法，只更新指定欄位，不覆蓋整份文件
+// ---------------------------------------------------------------------------
+
+async fn update_report(
+    Path(key): Path<String>,
+    Json(payload): Json<Value>,
+) -> Result<impl IntoResponse, StatusCode> {
+    let db = get_db();
+
+    let aql = "FOR r IN schema_reports \
+               FILTER r._key == @key \
+               UPDATE r WITH @payload IN schema_reports \
+               RETURN NEW";
+
+    let mut results: Vec<Value> = db
+        .aql_bind_vars(
+            aql,
+            [
+                ("key", serde_json::json!(key)),
+                ("payload", serde_json::json!({
+                    "status": payload.get("status"),
+                    "report_url": payload.get("report_url"),
+                    "error_message": payload.get("error_message"),
+                    "chart_type": payload.get("chart_type"),
+                    "analysis_summary": payload.get("analysis_summary"),
+                    "size_bytes": payload.get("size_bytes"),
+                    "filename": payload.get("filename"),
+                    "updated_at": chrono::Utc::now().to_rfc3339(),
+                })),
+            ]
+            .into(),
+        )
+        .await
+        .map_err(|e| {
+            eprintln!("schema_reports update error: {e}");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    let report = results.pop().ok_or(StatusCode::NOT_FOUND)?;
+
+    Ok(Json(ApiResponse::success(report)))
 }

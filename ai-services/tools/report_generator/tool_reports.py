@@ -17,7 +17,9 @@ async def tool_reports_execute(params: dict[str, Any]) -> ToolReportsOutput:
         dataset=input_data.dataset,
         report_goal=input_data.report_goal,
         preferred_chart=input_data.preferred_chart,
-        domain_context=None,
+        domain_context=input_data.knowledge_domain,
+        field_hints=input_data.field_hints,
+        special_notes=input_data.special_notes,
     )
 
     title = input_data.title or input_data.report_goal[:30]
@@ -29,6 +31,8 @@ async def tool_reports_execute(params: dict[str, Any]) -> ToolReportsOutput:
         analysis_summary=llm_result["analysis_summary"],
         author=input_data.author,
         hints=input_data.hints,
+        legend_show=input_data.legend_show,
+        legend_position=input_data.legend_position,
     )
 
     upload_result = await seaweed_client.upload_html(

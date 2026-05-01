@@ -28,6 +28,7 @@ from data_agent.ragic.models_phase9 import (
 )
 from data_agent.ragic.multi_step_orchestrator import MultiStepOrchestrator
 from data_agent.ragic.query_engine import RagicQueryEngine
+from data_agent.ragic.record_tracer import RecordTracer
 from data_agent.ragic.result_merger import ResultMerger
 from data_agent.ragic.schema_store import RagicSchemaStore
 from data_agent.ragic.step_executor import RagicStepExecutor
@@ -38,13 +39,10 @@ router = APIRouter()
 
 
 class _StepExecutorAdapter:
-
     def __init__(self, real: RagicStepExecutor) -> None:
         self._real = real
 
-    async def execute(
-        self, request: MultiStepQuery | StepResult
-    ) -> StepResult:
+    async def execute(self, request: MultiStepQuery | StepResult) -> StepResult:
         if isinstance(request, MultiStepQuery):
             return StepResult(
                 step_index=0,
@@ -64,12 +62,15 @@ _config_loader = RagicConfigLoader()
 _query_engine = RagicQueryEngine()
 _step_executor = RagicStepExecutor(_query_engine, _config_loader)
 _result_merger = ResultMerger()
-_import_orchestrator = RagicImportOrchestrator(_schema_store, _intent_store, _arango_writer)
+_import_orchestrator = RagicImportOrchestrator(
+    _schema_store, _intent_store, _arango_writer
+)
 _multi_step_orchestrator = MultiStepOrchestrator(
     graph_query=_graph_query,
     step_executor=_StepExecutorAdapter(_step_executor),
     result_merger=_result_merger,
 )
+_record_tracer = RecordTracer(graph_query=_graph_query, config_loader=_config_loader)
 
 
 class ImportMDRequest(BaseModel):
@@ -183,15 +184,17 @@ async def list_ragic_intents(
                 continue
             nl_raw = payload.get("nl_patterns", [])
             nl_list = [str(p) for p in nl_raw] if isinstance(nl_raw, list) else []
-            items.append(IntentListItem(
-                intent_id=str(payload.get("intent_id", "")),
-                account=str(payload.get("account", "")),
-                description=str(payload.get("description", "")),
-                action=str(payload.get("action", "list")),
-                table_key=str(payload.get("table_key", "")),
-                nl_patterns=nl_list,
-                api_template=str(payload.get("api_template", "")),
-            ))
+            items.append(
+                IntentListItem(
+                    intent_id=str(payload.get("intent_id", "")),
+                    account=str(payload.get("account", "")),
+                    description=str(payload.get("description", "")),
+                    action=str(payload.get("action", "list")),
+                    table_key=str(payload.get("table_key", "")),
+                    nl_patterns=nl_list,
+                    api_template=str(payload.get("api_template", "")),
+                )
+            )
         return IntentListResponse(data=items, total=len(items))
     except Exception as e:
         logger.exception("List ragic intents failed")
@@ -211,4 +214,34 @@ async def multi_step_query(req: MultiStepQuery) -> MultiStepQueryResponse:
         return MultiStepQueryResponse(data=result)
     except Exception as e:
         logger.exception("Multi-step query failed")
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+class TraceRecordRequest(BaseModel):
+    table_key: str
+    record_id: str
+    account: str
+    depth: int = Field(default=3, ge=1, le=5)
+    max_fan_out: int = Field(default=10, ge=1, le=50)
+
+
+class TraceRecordResponse(BaseModel):
+    code: int = 0
+    data: Optional[dict[str, object]] = None
+    error: Optional[str] = None
+
+
+@router.post("/trace/record", response_model=TraceRecordResponse)
+async def trace_record(req: TraceRecordRequest) -> TraceRecordResponse:
+    try:
+        graph = await _record_tracer.trace(
+            table_key=req.table_key,
+            record_id=req.record_id,
+            account=req.account,
+            depth=req.depth,
+            max_fan_out=req.max_fan_out,
+        )
+        return TraceRecordResponse(data=graph.to_dict())
+    except Exception as e:
+        logger.exception("Record trace failed")
         raise HTTPException(status_code=500, detail=str(e)) from e

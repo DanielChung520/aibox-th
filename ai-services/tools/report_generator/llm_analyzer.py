@@ -162,17 +162,21 @@ async def analyze_and_generate(
     report_goal: str,
     preferred_chart: str | None = None,
     domain_context: str | None = None,
+    field_hints: str | None = None,
+    special_notes: str | None = None,
 ) -> dict[str, Any]:
     import json as _json
 
     data_str = _json.dumps(dataset, ensure_ascii=False)
     chart_type_str = preferred_chart if preferred_chart else "餅圖、柱狀圖、線圖"
     context_block = f"\n知識領域上下文：{domain_context}" if domain_context else ""
+    field_block = f"\n指定關注欄位：{field_hints}" if field_hints else ""
+    notes_block = f"\n特別提示：{special_notes}" if special_notes else ""
 
     user_message = (
         "請分析以下 JSON 資料，並生成對應的圖表資料陣列。\n\n"
         f"完整資料：\n{data_str}\n"
-        f"{context_block}\n\n"
+        f"{context_block}{field_block}{notes_block}\n\n"
         f"報表目標：{report_goal}\n\n"
         f"希望生成的圖表類型：{chart_type_str}\n\n"
         "請用以下 JSON 格式回覆（只回覆 JSON，不要其他文字）：\n"

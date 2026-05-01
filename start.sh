@@ -187,8 +187,10 @@ start_celery() {
   fi
 
   cd "$AI_DIR"
-  PYTHONPATH="$AI_DIR" "$AI_DIR/.venv/bin/celery" \
-    -A celery_app.app worker --loglevel=info --concurrency=2 \
+  PYTHONPATH="$AI_DIR" "$AI_DIR/.venv/bin/watchfiles" \
+    --filter python \
+    "$AI_DIR/.venv/bin/celery -A celery_app.app worker --loglevel=info --concurrency=2" \
+    "$AI_DIR" \
     > /tmp/abc-celery.log 2>&1 &
   echo $! > "$PID_DIR/celery.pid"
 
@@ -196,7 +198,7 @@ start_celery() {
   local pid
   pid=$(cat "$PID_DIR/celery.pid")
   if kill -0 "$pid" 2>/dev/null; then
-    echo "  ✅ Celery Worker started (PID: $pid)"
+    echo "  ✅ Celery Worker started (PID: $pid, auto-reload on file change)"
   else
     echo "  ❌ Celery Worker failed to start"
     tail -10 /tmp/abc-celery.log
@@ -212,6 +214,73 @@ stop_celery() {
       kill "$pid" 2>/dev/null || true
     fi
     rm -f "$PID_DIR/celery.pid"
+  fi
+}
+
+reload_celery() {
+  echo "═══════════════════════════════════════"
+  echo " 🔄 Hot-reloading Celery Worker"
+  echo "═══════════════════════════════════════"
+
+  if [ ! -f "$PID_DIR/celery.pid" ]; then
+    echo "  ❌ Celery Worker is not running"
+    return 1
+  fi
+
+  local pid
+  pid=$(cat "$PID_DIR/celery.pid")
+  if ! kill -0 "$pid" 2>/dev/null; then
+    echo "  ❌ Celery Worker PID $pid not found"
+    rm -f "$PID_DIR/celery.pid"
+    return 1
+  fi
+
+  # SIGHUP triggers graceful restart: finish current tasks, reload code, restart workers
+  kill -HUP "$pid"
+  echo "  ✅ SIGHUP sent to PID $pid — workers will reload code after current tasks finish"
+}
+
+start_celery_beat() {
+  echo "═══════════════════════════════════════"
+  echo " Celery Beat (Scheduler)"
+  echo "═══════════════════════════════════════"
+
+  if [ -f "$PID_DIR/celery-beat.pid" ]; then
+    local old_pid
+    old_pid=$(cat "$PID_DIR/celery-beat.pid")
+    if kill -0 "$old_pid" 2>/dev/null; then
+      kill "$old_pid" 2>/dev/null || true
+      sleep 1
+    fi
+    rm -f "$PID_DIR/celery-beat.pid"
+  fi
+
+  cd "$AI_DIR"
+  PYTHONPATH="$AI_DIR" "$AI_DIR/.venv/bin/celery" \
+    -A celery_app.app beat --loglevel=info \
+    > /tmp/abc-celery-beat.log 2>&1 &
+  echo $! > "$PID_DIR/celery-beat.pid"
+
+  sleep 2
+  local pid
+  pid=$(cat "$PID_DIR/celery-beat.pid")
+  if kill -0 "$pid" 2>/dev/null; then
+    echo "  ✅ Celery Beat started (PID: $pid)"
+  else
+    echo "  ❌ Celery Beat failed to start"
+    tail -5 /tmp/abc-celery-beat.log
+  fi
+}
+
+stop_celery_beat() {
+  if [ -f "$PID_DIR/celery-beat.pid" ]; then
+    local pid
+    pid=$(cat "$PID_DIR/celery-beat.pid")
+    if kill -0 "$pid" 2>/dev/null; then
+      echo "  -> Stopping Celery Beat (PID: $pid)"
+      kill "$pid" 2>/dev/null || true
+    fi
+    rm -f "$PID_DIR/celery-beat.pid"
   fi
 }
 

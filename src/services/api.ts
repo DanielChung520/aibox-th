@@ -907,6 +907,8 @@ export const schemaReportsApi = {
     api.get<ApiResponse<SchemaReportRecord[]>>(`/api/v1/da/schema-reports?table_id=${encodeURIComponent(tableId)}`),
   create: (data: Omit<SchemaReportRecord, '_key'>) =>
     api.post<ApiResponse<SchemaReportRecord>>('/api/v1/da/schema-reports', data),
+  patch: (key: string, data: Record<string, unknown>) =>
+    api.patch<ApiResponse<SchemaReportRecord>>(`/api/v1/da/schema-reports/${key}`, data),
   delete: (key: string) =>
     api.delete<ApiResponse<{ _key: string }>>(`/api/v1/da/schema-reports/${key}`),
 };
@@ -1222,4 +1224,6 @@ export interface ToolExecuteResult {
 export const toolsApi = {
   execute: (tool: string, parameters: Record<string, unknown>) =>
     api.post<ToolExecuteResult>('/api/v1/mcp/execute', { tool, parameters }, { timeout: 300000 }),
+  executeAsync: (tool: string, parameters: Record<string, unknown>) =>
+    api.post<ToolExecuteResult>('/api/v1/mcp/execute-async', { tool, parameters }, { timeout: 15000 }),
 };

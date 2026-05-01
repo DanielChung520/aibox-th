@@ -28,12 +28,10 @@ CHART_HTML_MAP = {
                   label: function(entry) { return entry.name + ': ' + (entry.percent * 100).toFixed(1) + '%'; },
                   dataKey: 'value'
                 },
-                  data.map(function(entry, index) {
-                    return React.createElement(Recharts.Cell, {key: 'cell-' + index, fill: colors[index % colors.length]});
-                  })
+                  data.map(function(entry, index) { return React.createElement(Recharts.Cell, {key: index, fill: colors[index % colors.length]}); })
                 ),
                 React.createElement(Recharts.Tooltip, null),
-                React.createElement(Recharts.Legend, null)
+                __LEGEND__
               ),
               container
             );
@@ -53,7 +51,7 @@ CHART_HTML_MAP = {
                 React.createElement(Recharts.XAxis, {dataKey: 'name', interval: 0, angle: -30, textAnchor: 'end', height: 80}),
                 React.createElement(Recharts.YAxis, null),
                 React.createElement(Recharts.Tooltip, null),
-                React.createElement(Recharts.Legend, null),
+                __LEGEND__,
                 React.createElement(Recharts.Bar, {dataKey: 'value', fill: '#8884d8'})
               ),
               container
@@ -74,7 +72,7 @@ CHART_HTML_MAP = {
                 React.createElement(Recharts.XAxis, {dataKey: 'name'}),
                 React.createElement(Recharts.YAxis, null),
                 React.createElement(Recharts.Tooltip, null),
-                React.createElement(Recharts.Legend, null),
+                __LEGEND__,
                 React.createElement(Recharts.Line, {type: 'monotone', dataKey: 'value', stroke: '#8884d8', strokeWidth: 2})
               ),
               container
@@ -95,7 +93,7 @@ CHART_HTML_MAP = {
                 React.createElement(Recharts.XAxis, {dataKey: 'name'}),
                 React.createElement(Recharts.YAxis, null),
                 React.createElement(Recharts.Tooltip, null),
-                React.createElement(Recharts.Legend, null),
+                __LEGEND__,
                 React.createElement(Recharts.Area, {type: 'monotone', dataKey: 'value', stroke: '#8884d8', fill: '#8884d8', fillOpacity: 0.3})
               ),
               container
@@ -136,7 +134,7 @@ CHART_HTML_MAP = {
                 React.createElement(Recharts.XAxis, {dataKey: 'name'}),
                 React.createElement(Recharts.YAxis, null),
                 React.createElement(Recharts.Tooltip, null),
-                React.createElement(Recharts.Legend, null),
+                __LEGEND__,
                 React.createElement(Recharts.Bar, {dataKey: 'value', fill: '#8884d8'}),
                 React.createElement(Recharts.Line, {type: 'monotone', dataKey: 'value', stroke: '#FF8042', strokeWidth: 2})
               ),
@@ -305,12 +303,26 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 </html>"""
 
 
-def build_chart_html(chart_data: list, chart_type: str) -> str:
+def _build_legend_js(show: bool, position: str) -> str:
+    if not show:
+        return ""
+    pos_map = {
+        "top":    '{verticalAlign: "top",    align: "center"}',
+        "bottom": '{verticalAlign: "bottom", align: "center"}',
+        "left":   '{verticalAlign: "middle", align: "left",   layout: "vertical"}',
+        "right":  '{verticalAlign: "middle", align: "right",  layout: "vertical"}',
+    }
+    props = pos_map.get(position, pos_map["bottom"])
+    return f"React.createElement(Recharts.Legend, {props})"
+
+
+def build_chart_html(chart_data: list, chart_type: str, legend_show: bool = True, legend_position: str = "bottom") -> str:
     if not chart_data:
         return '<div style="color:#999;padding:40px;text-align:center;">（無圖表資料）</div>'
     data_json = json.dumps(chart_data)
+    legend_js = _build_legend_js(legend_show, legend_position)
     template = CHART_HTML_MAP.get(chart_type, CHART_HTML_MAP["bar"])
-    return template.replace("__DATA__", data_json).replace("__COLORS__", COLORS)
+    return template.replace("__DATA__", data_json).replace("__COLORS__", COLORS).replace("__LEGEND__", legend_js)
 
 
 def generate_report_html(
@@ -320,9 +332,11 @@ def generate_report_html(
     analysis_summary: str,
     author: str,
     hints: str | None = None,
+    legend_show: bool = True,
+    legend_position: str = "bottom",
 ) -> str:
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
-    chart_html = build_chart_html(chart_data, chart_type)
+    chart_html = build_chart_html(chart_data, chart_type, legend_show, legend_position)
     hints_block = HINTS_TEMPLATE.format(hints=hints) if hints else ""
     return HTML_TEMPLATE.format(
         title=title,

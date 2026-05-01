@@ -1,13 +1,13 @@
 /**
  * @file        智慧報表 Modal
- * @description Schema 頁面的智慧報表功能 — 報告列表、樣板管理、產生新報告
- * @lastUpdate  2026-04-30 01:35:00
- * @author      Daniel Chung
- * @version     1.0.0
+ * @description Schema 頁面的智慧報表功能 — 報告列表、樣板管理、產生新報告（支援非同步）
+ * @lastUpdate  2026-05-01 03:00:00
+ * @author      Daniel Chung / Sisyphus
+ * @version     1.1.0
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { Modal, Table, Form, Input, Select, Button, Space, Tag, App, theme } from 'antd';
+import { Modal, Table, Form, Input, Select, Button, Space, Tag, Badge, Switch, TimePicker, Checkbox, App, theme } from 'antd';
 import { FileTextOutlined, PlusOutlined } from '@ant-design/icons';
 import type { TableInfo } from '../../services/dataAgentApi';
 import { dataAgentApi } from '../../services/dataAgentApi';
@@ -20,6 +20,8 @@ export interface SchemaReport {
   report_name: string;
   created_at: string;
   report_link: string;
+  status?: string;
+  error_message?: string;
 }
 
 interface SchemaReportModalProps {
@@ -32,8 +34,25 @@ interface ReportFormValues {
   goal: string;
   description: string;
   chartType?: string;
+  legendShow?: boolean;
+  legendPosition?: string;
+  fieldHints?: string;
+  specialNotes?: string;
+  scheduleType?: string;
+  scheduleTime?: string;
+  scheduleDays?: number[];
   notes?: string;
 }
+
+const WEEK_OPTIONS = [
+  { label: '日', value: 0 },
+  { label: '一', value: 1 },
+  { label: '二', value: 2 },
+  { label: '三', value: 3 },
+  { label: '四', value: 4 },
+  { label: '五', value: 5 },
+  { label: '六', value: 6 },
+];
 
 const CHART_TYPES = [
   { value: 'pie', label: '圓餅圖 (Pie)' },
@@ -48,11 +67,14 @@ export default function SchemaReportModal({ open, tableInfo, onClose }: SchemaRe
   const { message } = App.useApp();
   const { token: antToken } = theme.useToken();
   const [form] = Form.useForm<ReportFormValues>();
+  const [regenerateForm] = Form.useForm();
   const [templates, setTemplates] = useState<SchemaReportTemplate[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [reports, setReports] = useState<SchemaReport[]>([]);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [regenerateVisible, setRegenerateVisible] = useState(false);
+  const [regenerateTarget, setRegenerateTarget] = useState<SchemaReport | null>(null);
 
   useEffect(() => {
     if (open && tableInfo.table_id) {
@@ -62,22 +84,34 @@ export default function SchemaReportModal({ open, tableInfo, onClose }: SchemaRe
         setTemplates([]);
       });
 
-      setLoading(true);
-      schemaReportsApi.list(tableInfo.table_id).then(res => {
-        const rows = res.data.data || [];
-        setReports(rows.map((r: { _key: string; report_name: string; created_at: string; report_url: string }) => ({
-          report_id: r._key,
-          report_name: r.report_name,
-          created_at: new Date(r.created_at).toLocaleString('zh-TW'),
-          report_link: r.report_url,
-        })));
-      }).catch(() => {
-        setReports([]);
-      }).finally(() => {
-        setLoading(false);
-      });
+      fetchReports();
     }
   }, [open, tableInfo.table_id]);
+
+  const fetchReports = useCallback(() => {
+    setLoading(true);
+    schemaReportsApi.list(tableInfo.table_id).then(res => {
+      const rows = res.data.data || [];
+      setReports(rows.map((r: { _key: string; report_name: string; created_at: string; report_url: string; status?: string; error_message?: string }) => ({
+        report_id: r._key,
+        report_name: r.report_name,
+        created_at: new Date(r.created_at).toLocaleString('zh-TW'),
+        report_link: r.report_url,
+        status: r.status || 'completed',
+        error_message: r.error_message,
+      })));
+    }).catch(() => {
+      setReports([]);
+    }).finally(() => {
+      setLoading(false);
+    });
+  }, [tableInfo.table_id]);
+
+  useEffect(() => {
+    if (!open) return;
+    const interval = setInterval(fetchReports, 5000);
+    return () => clearInterval(interval);
+  }, [open, fetchReports]);
 
   const handleApplyTemplate = useCallback((tpl: SchemaReportTemplate) => {
     setShowForm(true);
@@ -152,59 +186,50 @@ export default function SchemaReportModal({ open, tableInfo, onClose }: SchemaRe
       });
       if (dataset.length === 0) {
         message.error('無法取得資料錶的資料');
+        setSubmitting(false);
         return;
       }
-      const resp = await toolsApi.execute('tool_reports', {
+
+      const username = 'user_' + (localStorage.getItem('user_key') || 'anonymous');
+      const scheduleTime = values.scheduleTime || undefined;
+      const resp = await toolsApi.executeAsync('tool_reports', {
         dataset,
         report_goal: values.goal,
         preferred_chart: values.chartType,
         title: values.goal.slice(0, 30),
         author: 'system',
-        username: 'user_' + (localStorage.getItem('user_key') || 'anonymous'),
+        username,
+        table_id: tableInfo.table_id,
+        legend_show: values.legendShow ?? true,
+        legend_position: values.legendPosition || 'bottom',
+        field_hints: values.fieldHints || undefined,
+        special_notes: values.specialNotes || undefined,
+        schedule_type: values.scheduleType || undefined,
+        schedule_time: scheduleTime,
+        schedule_days: values.scheduleDays || undefined,
       });
-      if (resp.data.success && resp.data.result?.report_url) {
-        const reportUrl = resp.data.result.report_url;
+
+      if (resp.data.success) {
         const reportName = values.goal.slice(0, 20);
-        const chartType = values.chartType || '';
-        try {
-          const saved = await schemaReportsApi.create({
-            table_id: tableInfo.table_id,
+        setReports(prev => [
+          {
+            report_id: resp.data.report_key,
             report_name: reportName,
-            report_url: reportUrl,
-            chart_type: chartType,
-            username: 'user_' + (localStorage.getItem('user_key') || 'anonymous'),
-            created_at: new Date().toISOString(),
-          });
-          const created = saved.data.data;
-          setReports(prev => [
-            {
-              report_id: created._key,
-              report_name: created.report_name,
-              created_at: new Date(created.created_at).toLocaleString('zh-TW'),
-              report_link: created.report_url,
-            },
-            ...prev,
-          ]);
-        } catch {
-          setReports(prev => [
-            {
-              report_id: `rpt_${tableInfo.table_id}_${Date.now()}`,
-              report_name: reportName,
-              created_at: new Date().toLocaleString('zh-TW'),
-              report_link: reportUrl,
-            },
-            ...prev,
-          ]);
-        }
-        message.success('報告產生成功');
+            created_at: new Date().toLocaleString('zh-TW'),
+            report_link: '',
+            status: 'generating',
+          },
+          ...prev,
+        ]);
+        message.success('報告已提交生成');
         setShowForm(false);
         form.resetFields();
       } else {
-        message.error(resp.data.error || '報告產生失敗');
+        message.error(resp.data.error || '提交失敗');
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      message.error(`報告產生失敗：${msg}`);
+      message.error(`提交失敗：${msg}`);
     } finally {
       setSubmitting(false);
     }
@@ -219,16 +244,117 @@ export default function SchemaReportModal({ open, tableInfo, onClose }: SchemaRe
     });
   }, [message]);
 
+  const handleRegenerate = useCallback((record: SchemaReport) => {
+    setRegenerateTarget(record);
+    regenerateForm.setFieldsValue({
+      report_goal: record.report_name,
+      field_hints: '',
+      special_notes: '',
+      preferred_chart: undefined,
+    });
+    setRegenerateVisible(true);
+  }, [regenerateForm]);
+
+  const handleRegenerateConfirm = useCallback(async () => {
+    const values = await regenerateForm.validateFields().catch(() => null);
+    if (!values || !regenerateTarget) return;
+
+    setRegenerateVisible(false);
+    const record = regenerateTarget;
+    setRegenerateTarget(null);
+
+    try {
+      await schemaReportsApi.delete(record.report_id);
+      setReports(prev => prev.filter(r => r.report_id !== record.report_id));
+    } catch { /* proceed even if delete fails */ }
+
+    setSubmitting(true);
+    try {
+      const tableDataRes = await dataAgentApi.ragicProxyData(tableInfo.table_id, 0, 100);
+      const rawRows = tableDataRes.data.rows || [];
+      const fieldMap: Record<string, string> = {};
+      for (const f of tableDataRes.data.fields || []) {
+        if (f.field_id && f.field_name) fieldMap[f.field_id] = f.field_name;
+      }
+      const dataset = rawRows.map(row => {
+        const mapped: Record<string, unknown> = {};
+        for (const [k, v] of Object.entries(row)) mapped[fieldMap[k] ?? k] = v;
+        return mapped;
+      });
+      if (dataset.length === 0) {
+        message.error('無法取得資料表資料');
+        return;
+      }
+
+      const goal = values.report_goal || record.report_name;
+      const username = 'user_' + (localStorage.getItem('user_key') || 'anonymous');
+      const resp = await toolsApi.executeAsync('tool_reports', {
+        dataset,
+        report_goal: goal,
+        preferred_chart: values.preferred_chart || undefined,
+        title: goal.slice(0, 30),
+        author: 'system',
+        username,
+        table_id: tableInfo.table_id,
+        field_hints: values.field_hints || undefined,
+        special_notes: values.special_notes || undefined,
+      });
+      if (resp.data.success) {
+        setReports(prev => [{
+          report_id: resp.data.report_key,
+          report_name: goal.slice(0, 20),
+          created_at: new Date().toLocaleString('zh-TW'),
+          report_link: '',
+          status: 'generating',
+        }, ...prev]);
+        message.success('已重新提交生成');
+      } else {
+        message.error(resp.data.error || '重新生成失敗');
+      }
+    } catch {
+      message.error('重新生成失敗');
+    } finally {
+      setSubmitting(false);
+    }
+  }, [regenerateTarget, regenerateForm, tableInfo, message]);
+
   const reportColumns = [
-    { title: '報告名稱', dataIndex: 'report_name', key: 'report_name' },
+    {
+      title: '報告名稱',
+      dataIndex: 'report_name',
+      key: 'report_name',
+      render: (name: string, record: SchemaReport) => record.report_link ? (
+        <a href={record.report_link} target="_blank" rel="noopener noreferrer">{name}</a>
+      ) : name,
+    },
+    {
+      title: '狀態',
+      dataIndex: 'status',
+      key: 'status',
+      width: 90,
+      render: (status: string) => {
+        const statusMap: Record<string, { color: string; text: string }> = {
+          generating: { color: 'orange', text: '生成中' },
+          completed: { color: 'green', text: '完成' },
+          error: { color: 'red', text: '異常' },
+        };
+        const cfg = statusMap[status] || statusMap.completed;
+        return <Badge color={cfg.color} text={cfg.text} />;
+      },
+    },
     { title: '產生日期', dataIndex: 'created_at', key: 'created_at', width: 160 },
     {
-      title: '報告連結',
-      dataIndex: 'report_link',
-      key: 'report_link',
+      title: '重新生成',
+      key: 'regenerate',
       width: 80,
-      render: (link: string) => (
-        <a href={link} target="_blank" rel="noopener noreferrer">開啟</a>
+      render: (_: unknown, record: SchemaReport) => (
+        <Button
+          type="link"
+          size="small"
+          onClick={() => handleRegenerate(record)}
+        >
+          重新生成
+        </Button>
       ),
     },
     {
@@ -341,6 +467,60 @@ export default function SchemaReportModal({ open, tableInfo, onClose }: SchemaRe
               />
             </Form.Item>
 
+            <Form.Item label="圖例設定" style={{ marginBottom: 8 }}>
+              <Space>
+                <Form.Item name="legendShow" noStyle valuePropName="checked" initialValue={true}>
+                  <Switch checkedChildren="顯示" unCheckedChildren="隱藏" />
+                </Form.Item>
+                <Form.Item name="legendPosition" noStyle initialValue="bottom">
+                  <Select
+                    style={{ width: 80 }}
+                    options={[
+                      { value: 'top', label: '上' },
+                      { value: 'bottom', label: '下' },
+                      { value: 'left', label: '左' },
+                      { value: 'right', label: '右' },
+                    ]}
+                  />
+                </Form.Item>
+              </Space>
+            </Form.Item>
+
+            <Form.Item name="fieldHints" label="指定欄位">
+              <TextArea rows={2} placeholder="例：關注「銷售金額」和「利潤率」兩欄；不需理會「備註」欄（選填）" />
+            </Form.Item>
+
+            <Form.Item name="specialNotes" label="特別提示">
+              <TextArea rows={2} placeholder="例：數值超過1000的以紅色標註；前五名特別放大（選填）" />
+            </Form.Item>
+
+            <Form.Item label="排程設定" style={{ marginBottom: 8 }}>
+              <Space>
+                <Form.Item name="scheduleType" noStyle>
+                  <Select
+                    allowClear
+                    placeholder="不排程"
+                    style={{ width: 100 }}
+                    options={[
+                      { value: 'daily', label: '每天' },
+                      { value: 'weekly', label: '每週' },
+                    ]}
+                  />
+                </Form.Item>
+                <Form.Item name="scheduleTime" noStyle>
+                  <TimePicker format="HH:mm" placeholder="時間" style={{ width: 100 }} />
+                </Form.Item>
+              </Space>
+            </Form.Item>
+
+            <Form.Item noStyle shouldUpdate={(prev, cur) => prev.scheduleType !== cur.scheduleType}>
+              {({ getFieldValue }) => getFieldValue('scheduleType') === 'weekly' && (
+                <Form.Item name="scheduleDays" label="星期" style={{ marginBottom: 16 }}>
+                  <Checkbox.Group options={WEEK_OPTIONS} />
+                </Form.Item>
+              )}
+            </Form.Item>
+
             <Form.Item name="notes" label="備註">
               <TextArea rows={2} placeholder="額外需求或備註（選填）" />
             </Form.Item>
@@ -359,6 +539,30 @@ export default function SchemaReportModal({ open, tableInfo, onClose }: SchemaRe
           </Form>
         </div>
       )}
+
+      <Modal
+        title="修改提示意見"
+        open={regenerateVisible}
+        onCancel={() => { setRegenerateVisible(false); setRegenerateTarget(null); }}
+        onOk={handleRegenerateConfirm}
+        confirmLoading={submitting}
+        okText="重新生成"
+      >
+        <Form form={regenerateForm} layout="vertical" size="small">
+          <Form.Item name="report_goal" label="報表目標" rules={[{ required: true }]}>
+            <TextArea rows={2} />
+          </Form.Item>
+          <Form.Item name="preferred_chart" label="圖表類型">
+            <Select allowClear placeholder="沿用原設定" options={CHART_TYPES} />
+          </Form.Item>
+          <Form.Item name="field_hints" label="指定欄位">
+            <TextArea rows={2} placeholder="例：關注「銷售金額」和「利潤率」" />
+          </Form.Item>
+          <Form.Item name="special_notes" label="特別提示">
+            <TextArea rows={2} placeholder="例：超過1000以紅色標註" />
+          </Form.Item>
+        </Form>
+      </Modal>
     </Modal>
   );
 }

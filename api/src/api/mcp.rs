@@ -60,6 +60,44 @@ async fn mcp_execute(Json(req): Json<MCPExecuteRequest>) -> Response {
     }
 }
 
+/// Async variant — submits to Celery and returns immediately
+async fn mcp_execute_async(Json(req): Json<MCPExecuteRequest>) -> Response {
+    let url = format!("{}/mcp/execute-async", CONFIG.ai_services.unified_agents_url);
+
+    let client = reqwest::Client::new();
+    match client
+        .post(&url)
+        .json(&json!({
+            "tool": req.tool,
+            "parameters": req.parameters,
+        }))
+        .timeout(std::time::Duration::from_secs(15))
+        .send()
+        .await
+    {
+        Ok(resp) => {
+            let status = StatusCode::from_u16(resp.status().as_u16())
+                .unwrap_or(StatusCode::BAD_GATEWAY);
+            let body: Value = resp.json().await.unwrap_or_else(|_| {
+                json!({ "code": status.as_u16(), "message": "invalid JSON response" })
+            });
+            (status, Json(body)).into_response()
+        }
+        Err(e) => (
+            StatusCode::BAD_GATEWAY,
+            Json(json!({
+                "code": 502,
+                "message": format!("mcp execute-async failed: {}", e),
+                "success": false,
+                "error": e.to_string()
+            })),
+        )
+            .into_response(),
+    }
+}
+
 pub fn create_mcp_router() -> Router {
-    Router::new().route("/api/v1/mcp/execute", post(mcp_execute))
+    Router::new()
+        .route("/api/v1/mcp/execute", post(mcp_execute))
+        .route("/api/v1/mcp/execute-async", post(mcp_execute_async))
 }

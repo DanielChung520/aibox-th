@@ -33,11 +33,17 @@ app.conf.update(
     task_serializer="json",
     accept_content=["json"],
     result_serializer="json",
-    timezone="UTC",
-    enable_utc=True,
+    timezone="Asia/Taipei",
+    enable_utc=False,
     task_track_started=True,
     task_acks_late=True,
     worker_prefetch_multiplier=1,
+    beat_schedule={
+        "check-scheduled-reports": {
+            "task": "celery_app.tasks.check_scheduled_reports",
+            "schedule": 60.0,
+        },
+    },
 )
 
 

@@ -256,3 +256,201 @@ def process_file_task(
     v_result = pipeline.vectorize(file_id, local_path, root_id)
     g_result = pipeline.extract_graph(file_id, local_path)
     return {"file_id": file_id, "vector": v_result, "graph": g_result}
+
+
+@app.task(bind=True, max_retries=1)  # type: ignore[misc]
+def generate_report_task(
+    self: Any,
+    report_key: str,
+    params: dict[str, Any],
+    gateway_url: str = "http://localhost:6500",
+) -> dict[str, Any]:
+    import asyncio
+    import httpx
+    from datetime import datetime, timezone
+
+    from tools.report_generator.llm_analyzer import analyze_and_generate
+    from tools.report_generator.html_generator import generate_report_html
+    from tools.report_generator.seaweedfs_client import seaweed_client
+
+    def _patch_report(payload: dict[str, Any]) -> None:
+        try:
+            with httpx.Client(timeout=10.0) as client:
+                client.patch(
+                    f"{gateway_url}/api/v1/da/schema-reports/{report_key}",
+                    json=payload,
+                )
+        except Exception:
+            pass
+
+    try:
+        llm_result = asyncio.run(analyze_and_generate(
+            dataset=params["dataset"],
+            report_goal=params["report_goal"],
+            preferred_chart=params.get("preferred_chart"),
+            domain_context=params.get("knowledge_domain"),
+            field_hints=params.get("field_hints"),
+            special_notes=params.get("special_notes"),
+        ))
+
+        title = params.get("title") or params["report_goal"][:30]
+
+        html_content = generate_report_html(
+            title=title,
+            chart_data=llm_result["chart_data"],
+            chart_type=llm_result["chart_type"],
+            analysis_summary=llm_result["analysis_summary"],
+            author=params.get("author", "system"),
+            hints=params.get("hints"),
+            legend_show=params.get("legend_show", True),
+            legend_position=params.get("legend_position", "bottom"),
+        )
+
+        upload_result = asyncio.run(seaweed_client.upload_html(
+            html_content=html_content,
+            username=params.get("username", "anonymous"),
+            title=title,
+        ))
+
+        _patch_report({
+            "status": "completed",
+            "report_url": upload_result.get("url"),
+            "chart_type": llm_result["chart_type"],
+            "analysis_summary": llm_result["analysis_summary"],
+            "size_bytes": upload_result.get("size"),
+            "filename": upload_result.get("filename"),
+        })
+
+        return {"report_key": report_key, "status": "completed"}
+
+    except Exception as e:
+        _patch_report({
+            "status": "error",
+            "error_message": str(e)[:500],
+        })
+        raise
+
+
+@app.task(bind=True, max_retries=1)  # type: ignore[misc]
+def check_scheduled_reports(self: Any) -> dict[str, Any]:
+    import json as _json
+    import httpx
+    from datetime import datetime
+
+    ARANGO_URL = "http://localhost:8529"
+    ARANGO_DB = "abc_desktop"
+    ARANGO_AUTH = ("root", "abc_desktop_2026")
+    GATEWAY = "http://localhost:6500"
+
+    now = datetime.now()
+    current_time = now.strftime("%H:%M")
+    current_dow = now.weekday()  # 0=Mon ... 6=Sun  → map to 0=Sun..6=Sat
+
+    try:
+        with httpx.Client(timeout=10.0) as client:
+            resp = client.post(
+                f"{ARANGO_URL}/_db/{ARANGO_DB}/_api/cursor",
+                json={
+                    "query": (
+                        "FOR r IN schema_reports "
+                        "FILTER r.schedule_type != null "
+                        "FILTER r.schedule_time != null "
+                        "FILTER r.status != 'generating' "
+                        "RETURN r"
+                    ),
+                },
+                auth=ARANGO_AUTH,
+            )
+            resp.raise_for_status()
+            reports = resp.json().get("result", [])
+    except Exception:
+        return {"scheduled": 0, "triggered": 0}
+
+    triggered = 0
+    for r in reports:
+        sched_type = r.get("schedule_type")
+        sched_time = r.get("schedule_time")
+        if sched_time != current_time:
+            continue
+
+        if sched_type == "weekly":
+            sched_days = r.get("schedule_days", [])
+            if current_dow not in sched_days:
+                continue
+
+        schedule_params_raw = r.get("schedule_params")
+        if not schedule_params_raw:
+            continue
+        try:
+            sched_params = _json.loads(schedule_params_raw) if isinstance(schedule_params_raw, str) else schedule_params_raw
+        except Exception:
+            continue
+
+        table_id = r.get("table_id", "unknown")
+        username = r.get("username", "anonymous")
+
+        try:
+            with httpx.Client(timeout=30.0) as client:
+                data_resp = client.get(
+                    f"{GATEWAY}/api/v1/da/ragic/proxy/{table_id}/data?offset=0&limit=100",
+                    timeout=30.0,
+                )
+                if data_resp.status_code != 200:
+                    continue
+                ragic_data = data_resp.json().get("data", {})
+                raw_rows = ragic_data.get("rows", [])
+                fields = ragic_data.get("fields", [])
+
+            field_map = {}
+            for f in fields:
+                if f.get("field_id") and f.get("field_name"):
+                    field_map[f["field_id"]] = f["field_name"]
+
+            dataset = []
+            for row in raw_rows:
+                mapped = {}
+                for k, v in row.items():
+                    mapped[field_map.get(k, k)] = v
+                dataset.append(mapped)
+
+            if not dataset:
+                continue
+
+            new_report_name = sched_params.get("report_goal", "排程報表")[:20]
+            with httpx.Client(timeout=10.0) as client:
+                create_resp = client.post(
+                    f"{GATEWAY}/api/v1/da/schema-reports",
+                    json={
+                        "table_id": table_id,
+                        "report_name": new_report_name,
+                        "username": username,
+                        "status": "generating",
+                    },
+                )
+                if create_resp.status_code not in (200, 201):
+                    continue
+                new_report = create_resp.json().get("data", {})
+
+            generate_report_task.delay(
+                report_key=new_report["_key"],
+                params={
+                    "dataset": dataset,
+                    "report_goal": sched_params.get("report_goal", new_report_name),
+                    "preferred_chart": sched_params.get("preferred_chart"),
+                    "field_hints": sched_params.get("field_hints"),
+                    "special_notes": sched_params.get("special_notes"),
+                    "legend_show": sched_params.get("legend_show", True),
+                    "legend_position": sched_params.get("legend_position", "bottom"),
+                    "hints": sched_params.get("hints"),
+                    "title": sched_params.get("report_goal", "")[:30],
+                    "author": "schedule",
+                    "username": username,
+                    "table_id": table_id,
+                },
+                gateway_url=GATEWAY,
+            )
+            triggered += 1
+        except Exception:
+            continue
+
+    return {"scheduled": len(reports), "triggered": triggered}

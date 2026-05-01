@@ -141,6 +141,7 @@ class ToolResultResponse(BaseModel):
     success: bool
     result: Any = None
     error: str | None = None
+    async_mode: bool = False
 
 
 @app.post("/mcp/execute", response_model=ToolResultResponse, tags=["MCP Execute"])
@@ -176,6 +177,69 @@ async def mcp_execute(call: ToolCallRequest) -> ToolResultResponse:
             success=False,
             error=str(e),
         )
+
+
+@app.post("/mcp/execute-async", tags=["MCP Execute"])
+async def mcp_execute_async(call: ToolCallRequest) -> dict[str, Any]:
+    import json as _json
+
+    gateway = os.getenv("GATEWAY_URL", "http://localhost:6500")
+
+    if call.tool != "tool_reports":
+        return {"success": False, "error": f"Async not supported for tool: {call.tool}"}
+
+    report_name = call.parameters.get("report_goal", "未命名報告")[:20]
+    table_id = call.parameters.get("table_id", "unknown")
+    username = call.parameters.get("username", "anonymous")
+    schedule_type = call.parameters.get("schedule_type")
+    schedule_time = call.parameters.get("schedule_time")
+
+    schedule_params = None
+    if schedule_type and schedule_time:
+        schedule_params = _json.dumps({
+            "report_goal": call.parameters.get("report_goal"),
+            "preferred_chart": call.parameters.get("preferred_chart"),
+            "field_hints": call.parameters.get("field_hints"),
+            "special_notes": call.parameters.get("special_notes"),
+            "legend_show": call.parameters.get("legend_show", True),
+            "legend_position": call.parameters.get("legend_position", "bottom"),
+            "hints": call.parameters.get("hints"),
+        }, ensure_ascii=False)
+
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        create_resp = await client.post(
+            f"{gateway}/api/v1/da/schema-reports",
+            json={
+                "table_id": table_id,
+                "report_name": report_name,
+                "username": username,
+                "status": "generating",
+                "schedule_type": schedule_type,
+                "schedule_time": schedule_time,
+                "schedule_days": call.parameters.get("schedule_days"),
+                "schedule_params": schedule_params,
+            },
+        )
+        if create_resp.status_code not in (200, 201):
+            return {"success": False, "error": "Failed to create report record"}
+        report = create_resp.json().get("data", {})
+
+    from celery_app.tasks import generate_report_task
+
+    result = generate_report_task.delay(
+        report_key=report["_key"],
+        params=call.parameters,
+        gateway_url=gateway,
+    )
+
+    return {
+        "success": True,
+        "async": True,
+        "report_key": report["_key"],
+        "task_id": result.id,
+        "status": "generating",
+        "report_name": report_name,
+    }
 
 
 @app.get("/ka/health")
