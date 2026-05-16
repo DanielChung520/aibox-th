@@ -146,6 +146,8 @@ bpa/{agent_name}/
 ## 開發規範參考
 
 - 系統開發基準：`dev.spec_context` 系統參數（於 `/app/params` 查看）
+- 規格產出模型：`dev.requirement_spec_model`（模型名稱，如 `deepseek-v4-flash`）
+- 規格產出 Provider：`dev.requirement_spec_provider`（Provider Code，如 `deepseek`，須與 `model_providers` 集合中的記錄對應）
 - 完整開發規範：`AGENTS.md`
 - 系統規格索引：`.docs/Spec/系統開發/00-index.md`
 
