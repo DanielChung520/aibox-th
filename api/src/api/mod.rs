@@ -2399,8 +2399,71 @@ async fn get_model_provider(Path(key): Path<String>) -> Result<impl IntoResponse
         .into_iter()
         .filter_map(|v| serde_json::from_value(v).ok())
         .collect();
-    let provider = providers.into_iter().next().ok_or(StatusCode::NOT_FOUND)?;
-    Ok(Json(ApiResponse::success(provider)))
+    let p = providers.into_iter().next().ok_or(StatusCode::NOT_FOUND)?;
+    Ok(Json(ApiResponse::success(p)))
+}
+
+#[cfg(test)]
+mod requirement_tests {
+    use serde_json::json;
+
+    fn check_model_exists(provider: &serde_json::Value, model: &str) -> bool {
+        provider.get("models")
+            .and_then(|v| v.as_array())
+            .map(|models| models.iter().any(|m|
+                m.get("model_id").and_then(|v| v.as_str()) == Some(model)
+            ))
+            .unwrap_or(false)
+    }
+
+    fn is_ollama_url(url: &str) -> bool {
+        url.contains("localhost") || url.contains("127.0.0.1")
+    }
+
+    fn model_for_remote(model: &str) -> String {
+        model.split(':').next().unwrap_or(model).to_string()
+    }
+
+    #[test]
+    fn test_model_exists_in_provider() {
+        let provider = json!({
+            "models": [
+                {"model_id": "deepseek-v4-flash", "name": "DeepSeek V4 Flash"},
+                {"model_id": "gpt-4o", "name": "GPT-4o"}
+            ]
+        });
+        assert!(check_model_exists(&provider, "deepseek-v4-flash"));
+        assert!(check_model_exists(&provider, "gpt-4o"));
+        assert!(!check_model_exists(&provider, "nonexistent-model"));
+    }
+
+    #[test]
+    fn test_model_exists_empty_models() {
+        let provider = json!({"models": []});
+        assert!(!check_model_exists(&provider, "anything"));
+    }
+
+    #[test]
+    fn test_model_exists_no_models_field() {
+        let provider = json!({"base_url": "http://localhost:11434"});
+        assert!(!check_model_exists(&provider, "anything"));
+    }
+
+    #[test]
+    fn test_is_ollama_url() {
+        assert!(is_ollama_url("http://localhost:11434"));
+        assert!(is_ollama_url("http://127.0.0.1:11434"));
+        assert!(!is_ollama_url("https://api.deepseek.com/v1"));
+        assert!(!is_ollama_url("https://api.openai.com/v1"));
+    }
+
+    #[test]
+    fn test_model_for_remote_strips_tag() {
+        assert_eq!(model_for_remote("deepseek-v4-flash:latest"), "deepseek-v4-flash");
+        assert_eq!(model_for_remote("deepseek-v4-flash"), "deepseek-v4-flash");
+        assert_eq!(model_for_remote("gpt-4o"), "gpt-4o");
+        assert_eq!(model_for_remote("qwen3-coder:30b"), "qwen3-coder");
+    }
 }
 
 async fn create_model_provider(Json(payload): Json<serde_json::Value>) -> Result<impl IntoResponse, StatusCode> {
@@ -2848,7 +2911,7 @@ Agent 名稱：{agent_name}
         body.get("choices").and_then(|c| c.get(0)).and_then(|c| c.get("message")).and_then(|m| m.get("content")).and_then(|c| c.as_str()).map(|s| s.to_string())
     };
 
-    let mut spec_json = match content {
+    let spec_json = match content {
         Some(ref c) => {
             if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(c) {
                 parsed
