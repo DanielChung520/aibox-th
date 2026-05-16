@@ -63,6 +63,7 @@ pub mod agent_chat;
 pub mod ragic;
 pub mod mcp;
 pub mod skills;
+pub mod todos;
 
 async fn sync_tool_intents(
     Path(key): Path<String>,
@@ -200,6 +201,7 @@ pub fn create_router() -> Router {
         .merge(services::create_services_router())
         .merge(health::create_health_router())
         .merge(skills::create_skill_router())
+        .merge(todos::create_todos_router())
         .merge(da::create_da_router())
         .merge(da_intents::create_da_intents_router())
         .merge(da_tables::create_da_tables_router())
@@ -2251,6 +2253,9 @@ async fn create_tool(Json(payload): Json<CreateToolRequest>) -> Result<impl Into
         updated_by: None,
         created_at: now.clone(),
         updated_at: now,
+        mcp_transport: payload.mcp_transport,
+        mcp_command: payload.mcp_command,
+        mcp_args: payload.mcp_args,
     };
 
     let col = db.collection("tools").await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -2553,7 +2558,7 @@ async fn accept_agent_requirement(
 async fn analyze_agent_requirement(
     Path(req_key): Path<String>,
     Json(payload): Json<serde_json::Value>,
-) -> Result<impl IntoResponse, StatusCode> {
+) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
     let db = get_db();
     let docs: Vec<serde_json::Value> = db
         .aql_bind_vars(
@@ -2561,18 +2566,17 @@ async fn analyze_agent_requirement(
             [("key", serde_json::json!(req_key))].into(),
         )
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    let doc = docs.into_iter().next().ok_or(StatusCode::NOT_FOUND)?;
+        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": "Database query failed"}))))?;
+    let doc = docs.into_iter().next().ok_or(
+        (StatusCode::NOT_FOUND, Json(serde_json::json!({"error": "Requirement not found"})))
+    )?;
 
     let goal = doc.get("goal").and_then(|v| v.as_str()).unwrap_or("");
     let expected = doc.get("expected_effect").and_then(|v| v.as_str()).unwrap_or("");
     let problem = doc.get("problem_description").and_then(|v| v.as_str()).unwrap_or("");
     let agent_name = doc.get("agent_name").and_then(|v| v.as_str()).unwrap_or("");
 
-    let ollama_url = std::env::var("OLLAMA_BASE_URL").unwrap_or_else(|_| "http://localhost:11434".to_string());
-    let ollama_url = ollama_url.trim_end_matches('/');
-
-    // Read model from system_params, fallback to qwen3-coder:30b
+    // Read model from system_params
     let model: String = db
         .aql_bind_vars(
             "FOR p IN system_params FILTER p.param_key == @key LIMIT 1 RETURN p.param_value",
@@ -2582,6 +2586,76 @@ async fn analyze_agent_requirement(
         .ok()
         .and_then(|mut v: Vec<String>| v.pop())
         .unwrap_or_else(|| "qwen3-coder:30b".to_string());
+
+    // Read provider from system_params
+    let provider: String = db
+        .aql_bind_vars(
+            "FOR p IN system_params FILTER p.param_key == @key LIMIT 1 RETURN p.param_value",
+            [("key", serde_json::json!("dev.requirement_spec_provider"))].into(),
+        )
+        .await
+        .ok()
+        .and_then(|mut v: Vec<String>| v.pop())
+        .unwrap_or_default();
+
+    if provider.is_empty() {
+        return Err((StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": "dev.requirement_spec_provider 未設定，請在系統參數中指定 Provider"}))));
+    }
+
+    // Query model_providers to get base_url, api_key, and validate model
+    let provider_docs: Vec<serde_json::Value> = db
+        .aql_bind_vars(
+            "FOR p IN model_providers FILTER p.code == @code AND p.status == 'enabled' LIMIT 1 RETURN p",
+            [("code", serde_json::json!(provider))].into(),
+        )
+        .await
+        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": "Failed to query model providers"}))))?;
+
+    let provider_info = provider_docs.into_iter().next().ok_or(
+        (StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": format!("Provider '{}' 不存在或未啟用", provider)})))
+    )?;
+
+    let api_base = provider_info.get("base_url")
+        .and_then(|v| v.as_str())
+        .unwrap_or("http://localhost:11434")
+        .trim_end_matches('/')
+        .to_string();
+
+    let api_key = provider_info.get("api_key")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+
+    // Validate model exists in this provider's model list
+    let model_exists = provider_info.get("models")
+        .and_then(|v| v.as_array())
+        .map(|models| models.iter().any(|m|
+            m.get("model_id").and_then(|v| v.as_str()) == Some(&model)
+        ))
+        .unwrap_or(false);
+
+    if !model_exists {
+        return Err((StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": format!("Model '{}' 不在 Provider '{}' 的 models 清單中", model, provider)}))));
+    }
+
+    // Determine API format: Ollama vs OpenAI-compatible
+    let mut model_for_url = model.clone();
+    let is_ollama = api_base.contains("localhost") || api_base.contains("127.0.0.1");
+    if !is_ollama {
+        model_for_url = model.split(':').next().unwrap_or(&model).to_string();
+    }
+
+    // Read max_tokens
+    let max_tokens: usize = db
+        .aql_bind_vars(
+            "FOR p IN system_params FILTER p.param_key == @key LIMIT 1 RETURN p.param_value",
+            [("key", serde_json::json!("dev.requirement_spec_max_tokens"))].into(),
+        )
+        .await
+        .ok()
+        .and_then(|mut v: Vec<String>| v.pop())
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(4000);
 
     let revision = payload.get("revision").and_then(|v| v.as_str()).unwrap_or("");
     let revision_hint = if revision.is_empty() {
@@ -2669,45 +2743,141 @@ Agent 名稱：{agent_name}
         ref_hours = ref_hours,
     );
 
-    let mut spec_json = serde_json::json!({
-        "summary": "LLM 分析中...",
-        "tech_stack": [],
-        "modules": [],
-        "data_sources": [],
-        "integration_points": [],
-        "risks": [],
-        "suggestions": [],
-    });
+    let col = db.collection("agent_requirements").await
+        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": "Failed to open agent_requirements collection"}))))?;
 
-    if let Ok(client) = reqwest::Client::builder().timeout(std::time::Duration::from_secs(120)).build() {
-        if let Ok(resp) = client
-            .post(format!("{ollama_url}/api/chat"))
+    // Build HTTP client and send LLM request
+    let client = match reqwest::Client::builder().timeout(std::time::Duration::from_secs(120)).build() {
+        Ok(c) => c,
+        Err(e) => {
+            let err_msg = format!("建立 HTTP client 失敗: {}", e);
+            let _ = col.update_document(
+                &req_key,
+                serde_json::json!({
+                    "status": "analyze_failed",
+                    "analyze_error": err_msg,
+                    "analyzed_at": chrono::Utc::now().to_rfc3339(),
+                    "updated_at": chrono::Utc::now().to_rfc3339(),
+                }),
+                Default::default(),
+            ).await;
+            return Err((StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": err_msg}))));
+        }
+    };
+
+    let llm_req = if is_ollama {
+        client
+            .post(format!("{api_base}/api/chat"))
             .json(&serde_json::json!({
                 "model": model,
                 "messages": [{"role": "user", "content": prompt}],
                 "stream": false,
                 "format": "json",
+                "options": {"num_predict": max_tokens as i32},
             }))
-            .send()
-            .await
-        {
-            if let Ok(body) = resp.json::<serde_json::Value>().await {
-                if let Some(content) = body.get("message").and_then(|m| m.get("content")).and_then(|c| c.as_str()) {
-                    if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(content) {
-                        spec_json = parsed;
-                    } else if let Some(start) = content.find('{') {
-                        if let Some(end) = content.rfind('}') {
-                            if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&content[start..=end]) {
-                                spec_json = parsed;
-                            }
-                        }
-                    }
-                }
-            }
+    } else {
+        let mut req = client
+            .post(format!("{api_base}/chat/completions"))
+            .json(&serde_json::json!({
+                "model": model_for_url,
+                "messages": [{"role": "user", "content": prompt}],
+                "stream": false,
+                "max_tokens": max_tokens,
+            }));
+        if !api_key.is_empty() {
+            req = req.header("Authorization", format!("Bearer {}", api_key));
         }
+        req
+    };
+
+    let resp = match llm_req.send().await {
+        Ok(r) => r,
+        Err(e) => {
+            let err_msg = format!("LLM 呼叫失敗: {}", e);
+            let _ = col.update_document(
+                &req_key,
+                serde_json::json!({
+                    "status": "analyze_failed",
+                    "analyze_error": err_msg,
+                    "analyzed_at": chrono::Utc::now().to_rfc3339(),
+                    "updated_at": chrono::Utc::now().to_rfc3339(),
+                }),
+                Default::default(),
+            ).await;
+            return Err((StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": err_msg}))));
+        }
+    };
+
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let err_msg = format!("LLM 回傳錯誤狀態: {}", status);
+        let _ = col.update_document(
+            &req_key,
+            serde_json::json!({
+                "status": "analyze_failed",
+                "analyze_error": err_msg,
+                "analyzed_at": chrono::Utc::now().to_rfc3339(),
+                "updated_at": chrono::Utc::now().to_rfc3339(),
+            }),
+            Default::default(),
+        ).await;
+        return Err((StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": err_msg}))));
     }
 
-    let col = db.collection("agent_requirements").await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let body: serde_json::Value = match resp.json().await {
+        Ok(b) => b,
+        Err(e) => {
+            let err_msg = format!("解析 LLM 回應 JSON 失敗: {}", e);
+            let _ = col.update_document(
+                &req_key,
+                serde_json::json!({
+                    "status": "analyze_failed",
+                    "analyze_error": err_msg,
+                    "analyzed_at": chrono::Utc::now().to_rfc3339(),
+                    "updated_at": chrono::Utc::now().to_rfc3339(),
+                }),
+                Default::default(),
+            ).await;
+            return Err((StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": err_msg}))));
+        }
+    };
+
+    let content = if is_ollama {
+        body.get("message").and_then(|m| m.get("content")).and_then(|c| c.as_str()).map(|s| s.to_string())
+    } else {
+        body.get("choices").and_then(|c| c.get(0)).and_then(|c| c.get("message")).and_then(|m| m.get("content")).and_then(|c| c.as_str()).map(|s| s.to_string())
+    };
+
+    let mut spec_json = match content {
+        Some(ref c) => {
+            if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(c) {
+                parsed
+            } else if let Some(start) = c.find('{') {
+                if let Some(end) = c.rfind('}') {
+                    serde_json::from_str::<serde_json::Value>(&c[start..=end]).unwrap_or_default()
+                } else {
+                    serde_json::json!({"error": "LLM 回應不是有效 JSON"})
+                }
+            } else {
+                serde_json::json!({"error": "LLM 回應不是有效 JSON"})
+            }
+        }
+        None => {
+            let err_msg = "LLM 回應內容為空".to_string();
+            let _ = col.update_document(
+                &req_key,
+                serde_json::json!({
+                    "status": "analyze_failed",
+                    "analyze_error": err_msg,
+                    "analyzed_at": chrono::Utc::now().to_rfc3339(),
+                    "updated_at": chrono::Utc::now().to_rfc3339(),
+                }),
+                Default::default(),
+            ).await;
+            return Err((StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": err_msg}))));
+        }
+    };
+
     col.update_document(
         &req_key,
         serde_json::json!({
@@ -2719,7 +2889,7 @@ Agent 名稱：{agent_name}
         Default::default(),
     )
     .await
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": "Failed to update requirement document"}))))?;
 
     Ok(Json(ApiResponse::success("spec_generated".to_string())))
 }

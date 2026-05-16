@@ -14,10 +14,12 @@ import { agentApi } from '../services/api';
 import type { Demand } from '../services/api';
 import { authStore } from '../stores/auth';
 import { MarkdownContent } from '../components/FloatingAssistant/ChatMarkdown';
+import { useEntityPerception } from '../hooks/useEntityPerception';
+import { pageContextManager } from '../services/PageContextManager';
 
 const { Text, Paragraph } = Typography;
 
-type RequirementStatus = 'pending_accept' | 'analyzing' | 'spec_ready' | 'accepted' | 'in_development' | 'completed';
+type RequirementStatus = 'pending_accept' | 'analyzing' | 'spec_ready' | 'accepted' | 'in_development' | 'completed' | 'analyze_failed';
 
 interface RequirementRecord {
   _key: string;
@@ -43,6 +45,7 @@ const statusMap: Record<RequirementStatus, { label: string; color: string }> = {
   accepted: { label: '已承接', color: 'green' },
   in_development: { label: '開發中', color: 'purple' },
   completed: { label: '已完成', color: 'default' },
+  analyze_failed: { label: '分析失敗', color: 'red' },
 };
 
 function flattenApiResponse(raw: unknown): RequirementRecord[] {
@@ -61,6 +64,21 @@ function flattenApiResponse(raw: unknown): RequirementRecord[] {
 }
 
 function buildMarkdownSpec(record: RequirementRecord): string {
+  if (record.status === 'analyze_failed') {
+    const errMsg = (record as any).analyze_error || 'LLM 呼叫失敗，請檢查 Provider 設定後重新分析。';
+    const lines: string[] = [];
+    lines.push('## ⚠️ 規格分析失敗');
+    lines.push('');
+    lines.push(`> ${errMsg}`);
+    lines.push('');
+    lines.push('請檢查以下設定後重新啟動分析：');
+    lines.push('');
+    lines.push('- **dev.requirement_spec_provider** — 使用的 Provider Code');
+    lines.push('- **dev.requirement_spec_model** — 使用的模型名稱');
+    lines.push('- **model_providers** — Provider 是否有正確的 API Key 與 base_url');
+    lines.push('');
+    return lines.join('\n');
+  }
   const spec = record.dev_spec || {};
   const aiReview = record.ai_review;
   const lines: string[] = [];
@@ -205,6 +223,7 @@ export default function RequirementBoard() {
   const [specRecord, setSpecRecord] = useState<RequirementRecord | null>(null);
 
   const user = authStore.getState().user;
+  useEntityPerception({ defaultEntityType: 'requirement', defaultAction: 'list' });
 
   const fetchList = async () => {
     setLoading(true);
@@ -225,6 +244,10 @@ export default function RequirementBoard() {
 
   useEffect(() => {
     fetchList();
+  }, []);
+
+  useEffect(() => {
+    pageContextManager.report({ component: 'RequirementBoard', entityType: 'requirement', action: 'list' });
   }, []);
 
   const handleViewDemand = async (record: RequirementRecord) => {
@@ -460,7 +483,7 @@ export default function RequirementBoard() {
               接單
             </Button>
           )}
-          {record.status === 'accepted' && (
+          {(record.status === 'accepted' || record.status === 'analyze_failed') && (
             <Button
               type="primary"
               size="small"
