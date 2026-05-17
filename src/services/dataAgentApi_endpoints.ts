@@ -1,7 +1,7 @@
 /**
  * @file        Data Agent API 服務層 - API 端點函式
  * @description DA 的 Schema、Intents、Query 等 API 端點定義
- * @lastUpdate  2026-04-12 01:22:59
+ * @lastUpdate  2026-05-01 10:31:57
  * @author      Daniel Chung
  */
 
@@ -20,6 +20,9 @@ import type {
   RagicIntentItem,
   RagicNLQueryRequest,
   RagicNLQueryResponse,
+  RecordTraceResponse,
+  FkPreviewResponse,
+  FkEdgeResponse,
 } from './dataAgentApi_types';
 
 export const dataAgentApi_endpoints = {
@@ -196,4 +199,68 @@ export const dataAgentApi_endpoints = {
 
   ragicNLQuery: (data: RagicNLQueryRequest) =>
     api.post<RagicNLQueryResponse>('/api/v1/da/ragic/query', data, { timeout: 120000 }),
+
+  // Trace — Record Data Lineage
+  recordTrace: (data: { table_key: string; record_id: string; account: string; depth?: number }) =>
+    api.post<{ code: number; data: RecordTraceResponse }>(
+      '/api/v1/da/trace/record', data, { timeout: 120000 }
+    ),
+
+  // Progressive lineage — FK preview (root record + ghost edges, no traversal)
+  fkPreview: (data: { table_key: string; record_id: string; account: string }) =>
+    api.post<{ code: number; data: FkPreviewResponse }>(
+      '/api/v1/da/trace/fk-preview', data, { timeout: 15000 }
+    ),
+
+  // Progressive lineage — expand a single FK edge
+  fkExpandEdge: (data: {
+    table_key: string; record_id: string;
+    field_id: string; field_value: string;
+    account: string; via_field_name?: string;
+  }) => api.post<{ code: number; data: FkEdgeResponse }>(
+    '/api/v1/da/trace/fk-edge', data, { timeout: 30000 }
+  ),
+
+  runTraceScenario: (scenarioId: string, data: {
+    entry_batch?: string; entry_table?: string;
+    depth?: number; max_fan_out?: number;
+    options?: Record<string, unknown>;
+  }) => api.post<{ code: number; data: unknown }>(
+    `/api/v1/da/trace-engine/scenario/${scenarioId}`, data, { timeout: 180000 }
+  ),
+
+  nlParseTrace: (data: { text: string }) =>
+    api.post<{ code: number; data: { parsed: boolean; scenario: string | null; batch_no: string; suggestion: string } }>(
+      '/api/v1/da/trace-engine/nl-parse', data, { timeout: 15000 }
+    ),
+
+  saveTraceReport: (data: {
+    name: string; scenario: string;
+    entry_table?: string; entry_batch?: string;
+    trace_result?: Record<string, unknown> | null;
+    summary?: Record<string, unknown>;
+    tags?: string[]; created_by?: string;
+  }) => api.post<{ code: number; data: { key: string } }>(
+    '/api/v1/da/trace-engine/report/save', data, { timeout: 15000 }
+  ),
+
+  getTraceReport: (reportId: string) =>
+    api.get<{ code: number; data: Record<string, unknown> }>(
+      `/api/v1/da/trace-engine/report/${reportId}`
+    ),
+
+  listTraceReports: (params?: { scenario?: string; page?: number; limit?: number }) =>
+    api.get<{ code: number; data: Record<string, unknown>[]; page: number; limit: number }>(
+      '/api/v1/da/trace-engine/reports', { params }
+    ),
+
+  deleteTraceReport: (reportId: string) =>
+    api.delete<{ code: number; message: string }>(
+      `/api/v1/da/trace-engine/report/${reportId}`
+    ),
+
+  traceEngineHealth: () =>
+    api.get<{ status: string; service: string }>(
+      '/api/v1/da/trace-engine/health'
+    ),
 };
