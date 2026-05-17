@@ -26,6 +26,8 @@ export interface TraceResultTableProps {
   onRowClick?: (ragicId: string) => void;
   /** 載入中狀態 */
   loading?: boolean;
+  /** 目前選取的節點 ragic_id（用於行高亮） */
+  activeRagicId?: string | null;
 }
 
 /* =================== 工具函式 =================== */
@@ -92,7 +94,7 @@ function extractDate(fields: Record<string, unknown>): string {
 
 const PAGE_SIZE_OPTIONS = [25, 50, 100];
 
-export default function TraceResultTable({ nodes, onRowClick, loading }: TraceResultTableProps) {
+export default function TraceResultTable({ nodes, onRowClick, loading, activeRagicId }: TraceResultTableProps) {
   const columns: ColumnsType<TraceNodeData> = useMemo(() => [
     {
       title: 'Depth',
@@ -227,7 +229,10 @@ export default function TraceResultTable({ nodes, onRowClick, loading }: TraceRe
     onClick: () => {
       onRowClick?.(record.ragic_id);
     },
-    style: { cursor: onRowClick ? 'pointer' : undefined },
+    style: {
+      cursor: onRowClick ? 'pointer' : undefined,
+      background: activeRagicId === record.ragic_id ? '#e6f4ff' : undefined,
+    },
   });
 
   return (

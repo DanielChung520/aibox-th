@@ -14,16 +14,12 @@ import TraceResultTable from './components/TraceResultTable';
 import ResultSummary from './components/ResultSummary';
 import ReportSaveModal from './components/ReportSaveModal';
 import { dataAgentApi } from '../../services/dataAgentApi';
+import type { RecordTraceNode, RecordTraceEdge } from '../../services/dataAgentApi_types';
 
 const { Title } = Typography;
 
-interface TraceNodeData {
-  ragic_id: string; table_name: string; depth: number;
-  fields: Record<string, unknown>; table_key?: string;
-}
-
 interface TraceResultData {
-  nodes: TraceNodeData[]; edges: Array<Record<string, unknown>>;
+  nodes: RecordTraceNode[]; edges: RecordTraceEdge[];
   summary: { node_count: number; edge_count: number; max_depth: number; total_time_ms: number };
 }
 
@@ -48,11 +44,17 @@ const DataDepthTracking: React.FC = () => {
       const data = res.data?.data;
       if (data?.nodes?.length > 0) {
         setTraceResult({
-          nodes: data.nodes.map((n: any) => ({
-            ragic_id: n.ragic_id, table_name: n.table_name,
-            depth: n.depth || 0, fields: n.fields || {}, table_key: n.table_key,
+          nodes: data.nodes.map((n: RecordTraceNode) => ({
+            table_key: n.table_key, table_name: n.table_name,
+            ragic_id: n.ragic_id, fields: n.fields || {},
+            depth: n.depth || 0,
           })),
-          edges: data.edges || [],
+          edges: (data.edges || []).map((e: RecordTraceEdge) => ({
+            from_ragic_id: e.from_ragic_id, from_table_key: e.from_table_key,
+            to_ragic_id: e.to_ragic_id, to_table_key: e.to_table_key,
+            via_field_id: e.via_field_id || '', via_field_name: e.via_field_name || '',
+            relation_type: e.relation_type || 'link',
+          })),
           summary: {
             node_count: data.nodes.length,
             edge_count: data.edges?.length || 0,
@@ -78,7 +80,7 @@ const DataDepthTracking: React.FC = () => {
 
   return (
     <Layout style={{ padding: 24, background: 'transparent', minHeight: '100%' }}>
-      <Title level={3} style={{ marginBottom: 24, color: tokens?.textPrimary }}>資料深度追蹤</Title>
+      <Title level={3} style={{ marginBottom: 24, color: tokens?.colorTextBase }}>資料深度追蹤</Title>
       <Row gutter={[24, 24]} style={{ marginBottom: 24 }}>
         <Col xs={24} md={6}>
           <ScenarioSelector selectedScenario={selectedScenario} onSelect={setSelectedScenario} />
@@ -110,7 +112,6 @@ const DataDepthTracking: React.FC = () => {
               <TraceGraphView
                 nodes={traceResult.nodes}
                 edges={traceResult.edges}
-                activeNodeId={activeNodeId}
                 onNodeClick={handleGraphNodeClick}
                 loading={false}
               />
@@ -120,6 +121,7 @@ const DataDepthTracking: React.FC = () => {
                 nodes={traceResult.nodes}
                 onRowClick={handleRowClick}
                 loading={false}
+                activeRagicId={activeNodeId}
               />
             </Col>
           </Row>

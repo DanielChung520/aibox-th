@@ -21,8 +21,8 @@ export interface TraceGraphViewProps {
   nodes: RecordTraceNode[];
   /** 追蹤結果邊（FK 關聯） */
   edges: RecordTraceEdge[];
-  /** 根記錄的 ragic_id（用於 root 節點特殊標色） */
-  rootRagicId: string;
+  /** 根記錄的 ragic_id（用於 root 節點特殊標色，可選） */
+  rootRagicId?: string;
   /** 載入中狀態 */
   loading: boolean;
   /** 點擊節點回呼（供 parent 同步表格等） */

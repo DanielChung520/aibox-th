@@ -143,6 +143,7 @@ async def run_scenario(scenario_id: str, req: ScenarioTraceRequest) -> dict[str,
 
     account = str(req.options.get("account", "default"))
 
+    engine: ForwardTraceEngine | ReverseTraceEngine
     try:
         if scenario_id in _FORWARD_SCENARIOS:
             engine = await _get_forward_engine()
