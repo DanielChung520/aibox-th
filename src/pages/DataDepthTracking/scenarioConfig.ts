@@ -41,7 +41,7 @@ export const SCENARIO_DEFINITIONS: ScenarioDefinition[] = [
     direction: 'bidirectional',
     hasDateRange: false,
     hasSupplierInput: false,
-    entryTables: ['ERP_26', 'ERP_23'],
+    entryTables: ['ERP_26', 'ERP_23', 'STOCK_17'],
   },
   {
     id: TraceScenario.INCOMING_BATCH,
@@ -54,7 +54,7 @@ export const SCENARIO_DEFINITIONS: ScenarioDefinition[] = [
     direction: 'forward',
     hasDateRange: false,
     hasSupplierInput: false,
-    entryTables: ['ERP_48', 'ERP_15'],
+    entryTables: ['ERP_48', 'ERP_15', 'STOCK_17'],
   },
   {
     id: TraceScenario.PRODUCT_FULL_HISTORY,
@@ -67,7 +67,7 @@ export const SCENARIO_DEFINITIONS: ScenarioDefinition[] = [
     direction: 'bidirectional',
     hasDateRange: false,
     hasSupplierInput: false,
-    entryTables: ['MES2_17', 'STOCK_16', 'STOCK_17'],
+    entryTables: ['MES2_17', 'STOCK_16', 'STOCK_17', 'ERP_26'],
   },
   {
     id: TraceScenario.WORK_ORDER,
@@ -80,7 +80,7 @@ export const SCENARIO_DEFINITIONS: ScenarioDefinition[] = [
     direction: 'bidirectional',
     hasDateRange: false,
     hasSupplierInput: false,
-    entryTables: ['MES2_17'],
+    entryTables: ['MES2_17', 'MES2_15'],
   },
   {
     id: TraceScenario.COMPLAINT_RECALL,
@@ -119,7 +119,7 @@ export const SCENARIO_DEFINITIONS: ScenarioDefinition[] = [
     direction: 'bidirectional',
     hasDateRange: false,
     hasSupplierInput: false,
-    entryTables: ['ERP_60', 'ERP_62'],
+    entryTables: ['ERP_60', 'ERP_62', 'ERP_48'],
   },
   {
     id: TraceScenario.SUPPLIER_TRACE,
