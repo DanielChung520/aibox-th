@@ -27,7 +27,7 @@ import TaskSessionHistory from './pages/TaskSessionHistory';
 import TaskSessionScheduled from './pages/TaskSessionScheduled';
 import UnderDevelopment from './pages/UnderDevelopment';
 import RequirementBoard from './pages/RequirementBoard';
-import SkillBoard from './pages/SkillBoard';
+import ActionBoard from './pages/ActionBoard';
 import PreorderBoard from './pages/PreorderBoard';
 import SchemaPage from './pages/data-agent/SchemaPage';
 import QueryPlayground from './pages/data-agent/QueryPlayground';
@@ -35,11 +35,17 @@ import LeadManagement from './pages/LeadManagement';
 import DataLakePage from './pages/data-agent/DataLakePage';
 import OntologyList from './pages/knowledge/OntologyList';
 import KnowledgeBaseManagement from './pages/knowledge/KnowledgeBaseManagement';
+import SkillsManagement from './pages/knowledge/SkillsManagement';
 import KnowledgeBaseDetail from './pages/knowledge/KnowledgeBaseDetail';
 import IntentCatalog from './pages/IntentCatalog';
 import MermaidVerification from './pages/MermaidVerification';
+import DataDepthTracking from './pages/DataDepthTracking';
 import PlatformLINE from './pages/PlatformLINE';
 import PlatformBotPage from './pages/PlatformBotPage';
+import TodoBoard from './pages/TodoBoard';
+import ESGStandards from './pages/esg/ESGStandards';
+import ESGRecords from './pages/esg/ESGRecords';
+import ESGDashboard from './pages/esg/ESGDashboard';
 
 import { authStore } from './stores/auth';
 import AppUpdater from './components/AppUpdater';
@@ -48,6 +54,7 @@ import AIAssistantWindow from './pages/AIAssistantWindow';
 import { setupAssistantBridge } from './services/assistantBridge';
 import { setupPageViewTracking, setupBeforeUnload } from './utils/analytics';
 import { actionTrail } from './services/actionTrail';
+import { startGlobalTracking, stopGlobalTracking } from './services/globalActionTracker';
 import { resolvePageContext } from './components/FloatingAssistant/types';
 
 function AppPerceptionBridge() {
@@ -69,7 +76,11 @@ function AppPerceptionBridge() {
 
   useEffect(() => {
     actionTrail.startAutoFlush();
-    return () => actionTrail.stopAutoFlush();
+    startGlobalTracking();
+    return () => {
+      actionTrail.stopAutoFlush();
+      stopGlobalTracking();
+    };
   }, []);
 
   return null;
@@ -233,7 +244,7 @@ function AppContent() {
               <Route path="task-session/scheduled" element={<TaskSessionScheduled />} />
               <Route path="under-development" element={<UnderDevelopment />} />
           <Route path="requirements" element={<RequirementBoard />} />
-          <Route path="skills" element={<SkillBoard />} />
+          <Route path="action-board" element={<ActionBoard />} />
           <Route path="preorder" element={<PreorderBoard />} />
               <Route path="data-agent/schema" element={<SchemaPage />} />
 
@@ -242,8 +253,14 @@ function AppContent() {
               <Route path="knowledge/ontology" element={<OntologyList />} />
               <Route path="knowledge/management" element={<KnowledgeBaseManagement />} />
               <Route path="knowledge/management/:id" element={<KnowledgeBaseDetail />} />
+              <Route path="knowledge/skills" element={<SkillsManagement />} />
+              <Route path="knowledge/todos" element={<TodoBoard />} />
               <Route path="intent-orchestration" element={<IntentCatalog />} />
               <Route path="mermaid-verification" element={<MermaidVerification />} />
+              <Route path="eea-erp/data-depth-trace" element={<DataDepthTracking />} />
+              <Route path="esg/dashboard" element={<ESGDashboard />} />
+              <Route path="esg/standards" element={<ESGStandards />} />
+              <Route path="esg/records" element={<ESGRecords />} />
             </Route>
           </Routes>
         </AntApp>
