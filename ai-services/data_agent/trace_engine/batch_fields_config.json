@@ -1,0 +1,565 @@
+{
+  "meta": {
+    "version": "1.0.0",
+    "generated_at": "2026-05-17",
+    "description": "Ragic ERP batch-number-field mapping config for ABC Desktop trace engine",
+    "data_sources": ["da_field_info_ragic", "da_table_info_ragic"],
+    "total_batch_fields": 23,
+    "total_date_fields": 24,
+    "total_tables": 28
+  },
+  "batch_fields": [
+    {
+      "table_key": "ERP_3",
+      "table_name": "內部領用單",
+      "field_id": "1017248",
+      "field_name": "批號",
+      "field_type": "連結欄位",
+      "description": "連結到庫存表表單上的批號，從倉儲庫存表載入",
+      "confidence": "high"
+    },
+    {
+      "table_key": "ERP_15",
+      "table_name": "收貨單",
+      "field_id": "1018604",
+      "field_name": "批號",
+      "field_type": "文字",
+      "description": "公式 M1+'-'+AD11 唯讀",
+      "confidence": "high"
+    },
+    {
+      "table_key": "ERP_16",
+      "table_name": "特採單",
+      "field_id": "1023080",
+      "field_name": "批號",
+      "field_type": "文字",
+      "description": "唯讀",
+      "confidence": "high"
+    },
+    {
+      "table_key": "ERP_22",
+      "table_name": "進貨退出單",
+      "field_id": "1019130",
+      "field_name": "批號",
+      "field_type": "文字",
+      "description": "唯讀，從進貨單載入",
+      "confidence": "high"
+    },
+    {
+      "table_key": "ERP_23",
+      "table_name": "配貨揀貨單",
+      "field_id": "1019193",
+      "field_name": "批號",
+      "field_type": "連結欄位",
+      "description": "連結到庫存表批號（從倉儲庫存表載入）",
+      "confidence": "high"
+    },
+    {
+      "table_key": "ERP_23",
+      "table_name": "配貨揀貨單",
+      "field_id": "1019209",
+      "field_name": "批號出貨數量",
+      "field_type": "數字",
+      "description": "按批號的出貨數量",
+      "confidence": "high"
+    },
+    {
+      "table_key": "ERP_23",
+      "table_name": "配貨揀貨單",
+      "field_id": "1019332",
+      "field_name": "批號項次",
+      "field_type": "連結欄位",
+      "description": "連結到倉儲庫存表項次",
+      "confidence": "high"
+    },
+    {
+      "table_key": "ERP_26",
+      "table_name": "銷貨單",
+      "field_id": "1019262",
+      "field_name": "批號",
+      "field_type": "連結欄位",
+      "description": "唯讀，連結到庫存表批號",
+      "confidence": "high"
+    },
+    {
+      "table_key": "ERP_34",
+      "table_name": "銷貨退回單",
+      "field_id": "1019397",
+      "field_name": "批號",
+      "field_type": "連結欄位",
+      "description": "唯讀，連結到庫存表批號",
+      "confidence": "high"
+    },
+    {
+      "table_key": "ERP_48",
+      "table_name": "進貨單",
+      "field_id": "1023135",
+      "field_name": "批號",
+      "field_type": "文字",
+      "description": "隱藏欄位",
+      "confidence": "high"
+    },
+    {
+      "table_key": "ERP_60",
+      "table_name": "原料驗貨單",
+      "field_id": "1018604",
+      "field_name": "批號",
+      "field_type": "文字",
+      "description": "唯讀",
+      "confidence": "high"
+    },
+    {
+      "table_key": "ERP_62",
+      "table_name": "驗貨單",
+      "field_id": "1018604",
+      "field_name": "批號",
+      "field_type": "文字",
+      "description": "唯讀",
+      "confidence": "high"
+    },
+    {
+      "table_key": "ERP_64",
+      "table_name": "原料驗貨單",
+      "field_id": "1018604",
+      "field_name": "批號",
+      "field_type": "文字",
+      "description": "唯讀隱藏",
+      "confidence": "high"
+    },
+    {
+      "table_key": "ERP_65",
+      "table_name": "驗貨單",
+      "field_id": "1018604",
+      "field_name": "批號",
+      "field_type": "文字",
+      "description": "唯讀隱藏",
+      "confidence": "high"
+    },
+    {
+      "table_key": "STOCK_7",
+      "table_name": "食品添加劑庫存開帳",
+      "field_id": "1017350",
+      "field_name": "批號",
+      "field_type": "文字",
+      "description": "公式 X3+'-'+W3 唯讀",
+      "confidence": "high"
+    },
+    {
+      "table_key": "STOCK_9",
+      "table_name": "食品添加劑庫存表",
+      "field_id": "1017350",
+      "field_name": "批號",
+      "field_type": "文字",
+      "description": "唯讀，不可重複",
+      "confidence": "high"
+    },
+    {
+      "table_key": "STOCK_9",
+      "table_name": "食品添加劑庫存表",
+      "field_id": "1017382",
+      "field_name": "批號QR CODE",
+      "field_type": "條碼",
+      "description": "公式 D8",
+      "confidence": "high"
+    },
+    {
+      "table_key": "STOCK_13",
+      "table_name": "期初庫存開帳",
+      "field_id": "1018128",
+      "field_name": "批號",
+      "field_type": "文字",
+      "description": "公式 S3+'-'+U3 唯讀，不可重複",
+      "confidence": "high"
+    },
+    {
+      "table_key": "STOCK_16",
+      "table_name": "庫存表",
+      "field_id": "1018132",
+      "field_name": "批號",
+      "field_type": "單選",
+      "description": "唯讀，連結到庫存表批號",
+      "confidence": "high"
+    },
+    {
+      "table_key": "STOCK_16",
+      "table_name": "庫存表",
+      "field_id": "1019209",
+      "field_name": "批號出貨數量",
+      "field_type": "數字",
+      "description": "按批號的出貨數量",
+      "confidence": "high"
+    },
+    {
+      "table_key": "STOCK_17",
+      "table_name": "倉儲庫存表",
+      "field_id": "1018132",
+      "field_name": "批號",
+      "field_type": "單選",
+      "description": "唯讀，連結到庫存表批號",
+      "confidence": "high"
+    },
+    {
+      "table_key": "STOCK_17",
+      "table_name": "倉儲庫存表",
+      "field_id": "1019338",
+      "field_name": "批號QR CODE",
+      "field_type": "條碼",
+      "description": "公式 D7+'-'+A8",
+      "confidence": "high"
+    },
+    {
+      "table_key": "STOCK_24",
+      "table_name": "倉儲庫存表_2",
+      "field_id": "1023804",
+      "field_name": "批號",
+      "field_type": "連結欄位",
+      "description": "唯讀，連結到庫存表批號",
+      "confidence": "high"
+    },
+    {
+      "table_key": "MES2_15",
+      "table_name": "領料單",
+      "field_id": "1017448",
+      "field_name": "批號",
+      "field_type": "連結欄位",
+      "description": "唯讀，連結到庫存表批號（從倉儲庫存表載入）",
+      "confidence": "high"
+    },
+    {
+      "table_key": "MES2_17",
+      "table_name": "生產製令單",
+      "field_id": "1017762",
+      "field_name": "批號",
+      "field_type": "文字",
+      "description": "隱藏，原物料批號",
+      "confidence": "high"
+    },
+    {
+      "table_key": "MES2_17",
+      "table_name": "生產製令單",
+      "field_id": "1017799",
+      "field_name": "批號",
+      "field_type": "文字",
+      "description": "隱藏，食品添加劑批號",
+      "confidence": "high"
+    },
+    {
+      "table_key": "MES2_17",
+      "table_name": "生產製令單",
+      "field_id": "1017830",
+      "field_name": "入庫批號",
+      "field_type": "文字",
+      "description": "公式 R2+'-'+P10，成品入庫批號",
+      "confidence": "high"
+    }
+  ],
+  "date_fields": [
+    {
+      "table_key": "ERP_48",
+      "table_name": "進貨單",
+      "field_id": "1023136",
+      "field_name": "有效日期",
+      "field_type": "日期 (yyyy/MM/dd)",
+      "confidence": "high"
+    },
+    {
+      "table_key": "ERP_15",
+      "table_name": "收貨單",
+      "field_id": "1018597",
+      "field_name": "有效日期",
+      "field_type": "日期 (yyyy/MM/dd)",
+      "description": "",
+      "confidence": "high"
+    },
+    {
+      "table_key": "ERP_22",
+      "table_name": "進貨退出單",
+      "field_id": "1019131",
+      "field_name": "有效日期",
+      "field_type": "日期 (yyyy/MM/dd)",
+      "description": "唯讀，從進貨單載入",
+      "confidence": "high"
+    },
+    {
+      "table_key": "ERP_26",
+      "table_name": "銷貨單",
+      "field_id": "1020139",
+      "field_name": "有效日期",
+      "field_type": "日期 (yyyy/MM/dd)",
+      "description": "隱藏，從庫存表載入",
+      "confidence": "high"
+    },
+    {
+      "table_key": "ERP_26",
+      "table_name": "銷貨單",
+      "field_id": "1020138",
+      "field_name": "製造/進貨日期",
+      "field_type": "日期 (yyyy/MM/dd)",
+      "description": "隱藏，從庫存表載入",
+      "confidence": "high"
+    },
+    {
+      "table_key": "ERP_60",
+      "table_name": "原料驗貨單",
+      "field_id": "1018597",
+      "field_name": "製造 / 有效日期",
+      "field_type": "日期 (yyyy/MM/dd)",
+      "confidence": "high"
+    },
+    {
+      "table_key": "ERP_62",
+      "table_name": "驗貨單",
+      "field_id": "1018597",
+      "field_name": "製造 / 有效日期",
+      "field_type": "日期 (yyyy/MM/dd)",
+      "confidence": "high"
+    },
+    {
+      "table_key": "ERP_64",
+      "table_name": "原料驗貨單",
+      "field_id": "1018597",
+      "field_name": "製造 / 有效日期",
+      "field_type": "日期 (yyyy/MM/dd)",
+      "confidence": "high"
+    },
+    {
+      "table_key": "ERP_65",
+      "table_name": "驗貨單",
+      "field_id": "1018597",
+      "field_name": "製造 / 有效日期",
+      "field_type": "日期 (yyyy/MM/dd)",
+      "confidence": "high"
+    },
+    {
+      "table_key": "STOCK_7",
+      "table_name": "食品添加劑庫存開帳",
+      "field_id": "1017354",
+      "field_name": "製造/進貨日期",
+      "field_type": "日期 (yyyy/MM/dd)",
+      "confidence": "high"
+    },
+    {
+      "table_key": "STOCK_7",
+      "table_name": "食品添加劑庫存開帳",
+      "field_id": "1017355",
+      "field_name": "有效日期",
+      "field_type": "日期 (yyyy/MM/dd)",
+      "confidence": "high"
+    },
+    {
+      "table_key": "STOCK_9",
+      "table_name": "食品添加劑庫存表",
+      "field_id": "1017354",
+      "field_name": "製造/進貨日期",
+      "field_type": "日期 (yyyy/MM/dd)",
+      "confidence": "high"
+    },
+    {
+      "table_key": "STOCK_9",
+      "table_name": "食品添加劑庫存表",
+      "field_id": "1017355",
+      "field_name": "有效日期",
+      "field_type": "日期 (yyyy/MM/dd)",
+      "confidence": "high"
+    },
+    {
+      "table_key": "STOCK_9",
+      "table_name": "食品添加劑庫存表",
+      "field_id": "1022933",
+      "field_name": "效期剩餘天數",
+      "field_type": "數字",
+      "description": "公式 A8-TODAY() 唯讀",
+      "confidence": "high"
+    },
+    {
+      "table_key": "STOCK_13",
+      "table_name": "期初庫存開帳",
+      "field_id": "1018134",
+      "field_name": "製造/進貨日期",
+      "field_type": "日期 (yyyy/MM/dd)",
+      "confidence": "high"
+    },
+    {
+      "table_key": "STOCK_13",
+      "table_name": "期初庫存開帳",
+      "field_id": "1018135",
+      "field_name": "有效日期",
+      "field_type": "日期 (yyyy/MM/dd)",
+      "confidence": "high"
+    },
+    {
+      "table_key": "STOCK_16",
+      "table_name": "庫存表",
+      "field_id": "1022907",
+      "field_name": "效期剩餘天數",
+      "field_type": "數字",
+      "description": "公式 D4-TODAY() 唯讀",
+      "confidence": "high"
+    },
+    {
+      "table_key": "STOCK_17",
+      "table_name": "倉儲庫存表",
+      "field_id": "1019285",
+      "field_name": "製造/進貨日期",
+      "field_type": "日期 (yyyy/MM/dd)",
+      "description": "從庫存表載入",
+      "confidence": "high"
+    },
+    {
+      "table_key": "STOCK_17",
+      "table_name": "倉儲庫存表",
+      "field_id": "1019287",
+      "field_name": "有效日期",
+      "field_type": "日期 (yyyy/MM/dd)",
+      "description": "從庫存表載入",
+      "confidence": "high"
+    },
+    {
+      "table_key": "STOCK_17",
+      "table_name": "倉儲庫存表",
+      "field_id": "1022924",
+      "field_name": "效期剩餘天數",
+      "field_type": "數字",
+      "description": "從庫存表載入",
+      "confidence": "high"
+    },
+    {
+      "table_key": "STOCK_24",
+      "table_name": "倉儲庫存表_2",
+      "field_id": "1023805",
+      "field_name": "效期剩餘天數",
+      "field_type": "數字",
+      "confidence": "high"
+    },
+    {
+      "table_key": "STOCK_24",
+      "table_name": "倉儲庫存表_2",
+      "field_id": "1023806",
+      "field_name": "有效日期",
+      "field_type": "日期 (yyyy/MM/dd)",
+      "confidence": "high"
+    },
+    {
+      "table_key": "MES2_17",
+      "table_name": "生產製令單",
+      "field_id": "1017710",
+      "field_name": "保存期限",
+      "field_type": "文字",
+      "description": "從品項管理載入（天數）",
+      "confidence": "high"
+    },
+    {
+      "table_key": "ERP_15",
+      "table_name": "收貨單",
+      "field_id": "1023049",
+      "field_name": "標籤照片(有效日期)",
+      "field_type": "多圖片上傳",
+      "confidence": "low"
+    }
+  ],
+  "tables_meta": {
+    "ERP_1": { "name": "報價單（下游-1）", "module": "進銷存表單" },
+    "ERP_2": { "name": "訂購單（下游-2）", "module": "進銷存表單" },
+    "ERP_3": { "name": "內部領用單", "module": "進銷存表單" },
+    "ERP_9": { "name": "詢價單（上游-2）", "module": "進銷存表單" },
+    "ERP_15": { "name": "收貨單（上游-4）", "module": "進銷存表單" },
+    "ERP_16": { "name": "特採單（上游-5b）", "module": "進銷存表單" },
+    "ERP_22": { "name": "進貨退出單（上游-5a）", "module": "進銷存表單" },
+    "ERP_23": { "name": "配貨揀貨單（下游-3）", "module": "進銷存表單" },
+    "ERP_26": { "name": "銷貨單（下游-4）", "module": "進銷存表單" },
+    "ERP_34": { "name": "銷貨退回單（下游-5）", "module": "進銷存表單" },
+    "ERP_48": { "name": "進貨單（上游-5）", "module": "進銷存表單" },
+    "ERP_52": { "name": "採購單（上游-3）", "module": "進銷存表單" },
+    "ERP_54": { "name": "請購單（上游-1）", "module": "進銷存表單" },
+    "ERP_60": { "name": "原料驗貨單（上游-4a）", "module": "進銷存表單" },
+    "ERP_62": { "name": "驗貨單（上游-4b）", "module": "進銷存表單" },
+    "ERP_64": { "name": "原料驗貨單（上游-4a）", "module": "進銷存表單" },
+    "ERP_65": { "name": "驗貨單（上游-4b）", "module": "進銷存表單" },
+    "ERP_66": { "name": "表單成立追蹤（主）", "module": "進銷存表單" },
+    "STOCK_7": { "name": "食品添加劑庫存開帳", "module": "庫存" },
+    "STOCK_9": { "name": "食品添加劑庫存表", "module": "庫存" },
+    "STOCK_13": { "name": "期初庫存開帳", "module": "庫存" },
+    "STOCK_16": { "name": "庫存表", "module": "庫存" },
+    "STOCK_17": { "name": "倉儲庫存表", "module": "庫存" },
+    "STOCK_24": { "name": "倉儲庫存表_2", "module": "庫存" },
+    "STOCK_27": { "name": "庫存彙總表", "module": "庫存" },
+    "MES2_1": { "name": "生產需求單（下游-3）", "module": "生產" },
+    "MES2_2": { "name": "物料需求單（下游-3a）", "module": "生產" },
+    "MES2_15": { "name": "領料單", "module": "生產" },
+    "MES2_17": { "name": "生產製令單（下游）", "module": "生產" }
+  },
+  "essential_paths": {
+    "procurement_to_inbound": {
+      "from": "ERP_52",
+      "from_name": "採購單（上游-3）",
+      "to": "ERP_15",
+      "to_name": "收貨單（上游-4）",
+      "via": "採購單號",
+      "description": "採購→收貨"
+    },
+    "inbound_to_receiving_inspection": {
+      "from": "ERP_15",
+      "from_name": "收貨單（上游-4）",
+      "to": "ERP_60",
+      "to_name": "原料驗貨單（上游-4a）",
+      "via": "收貨單號",
+      "description": "收貨→原料檢驗"
+    },
+    "inbound_to_inventory": {
+      "from": "ERP_48",
+      "from_name": "進貨單（上游-5）",
+      "to": "STOCK_16",
+      "to_name": "庫存表",
+      "via": "批號",
+      "description": "進貨入庫→庫存（批號為連結鍵）"
+    },
+    "inventory_to_warehouse": {
+      "from": "STOCK_16",
+      "from_name": "庫存表",
+      "to": "STOCK_17",
+      "to_name": "倉儲庫存表",
+      "via": "批號",
+      "description": "庫存明細→倉儲庫存（批號為連結鍵）"
+    },
+    "production_to_picking": {
+      "from": "MES2_17",
+      "from_name": "生產製令單（下游）",
+      "to": "MES2_15",
+      "to_name": "領料單",
+      "via": "生產製令單號",
+      "description": "生產製令→領料（原物料批號追溯）"
+    },
+    "picking_to_inventory": {
+      "from": "MES2_15",
+      "from_name": "領料單",
+      "to": "STOCK_17",
+      "to_name": "倉儲庫存表",
+      "via": "批號",
+      "description": "領料→庫存扣減（批次扣減）"
+    },
+    "finished_to_inventory": {
+      "from": "MES2_17",
+      "from_name": "生產製令單（下游）",
+      "to": "STOCK_16",
+      "to_name": "庫存表",
+      "via": "入庫批號",
+      "description": "生產入庫批號（R2+'-'+P10）→庫存"
+    },
+    "sales_to_picking": {
+      "from": "ERP_26",
+      "from_name": "銷貨單（下游-4）",
+      "to": "ERP_23",
+      "to_name": "配貨揀貨單（下游-3）",
+      "via": "銷貨單號",
+      "description": "銷貨→揀貨（批號出貨數量）"
+    },
+    "picking_to_inventory_deduction": {
+      "from": "ERP_23",
+      "from_name": "配貨揀貨單（下游-3）",
+      "to": "STOCK_17",
+      "to_name": "倉儲庫存表",
+      "via": "批號",
+      "description": "揀貨出貨→庫存扣減"
+    }
+  }
+}
