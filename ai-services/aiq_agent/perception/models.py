@@ -53,6 +53,8 @@ class BehaviorSnapshot(BaseModel):
     recent_actions: list[SignalEvent] = Field(default_factory=list)
     dwell_hotspots: list[str] = Field(default_factory=list)
     filter_patterns: list[str] = Field(default_factory=list)
+    click_counts: dict[str, int] = Field(default_factory=dict)  # page → click count
+    recent_searches: list[str] = Field(default_factory=list)  # recent search keywords
 
 
 class UserPrior(BaseModel):

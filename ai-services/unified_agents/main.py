@@ -38,6 +38,7 @@ from data_agent.intent_rag.da_intents_sync import router as da_intents_router  #
 from data_agent.query.router import router as query_router  # noqa: E402
 from data_agent.ragic.router import router as ragic_router  # noqa: E402
 from data_agent.ragic.router_import import router as ragic_import_router  # noqa: E402
+from data_agent.trace_engine.router import router as trace_router  # noqa: E402
 
 app.include_router(intent_rag_router, prefix="/da/intent-rag", tags=["DA Intent RAG"])
 app.include_router(da_sync_router, prefix="/da/intent-rag", tags=["DA Expressions Sync"])
@@ -45,6 +46,7 @@ app.include_router(da_intents_router, prefix="/da/intent-rag", tags=["DA Intents
 app.include_router(query_router, prefix="/da/query", tags=["DA Query"])
 app.include_router(ragic_router, prefix="/da/ragic", tags=["DA Ragic"])
 app.include_router(ragic_import_router, prefix="/da/ragic", tags=["DA Ragic Import"])
+app.include_router(trace_router, prefix="/da/trace-engine", tags=["DA Trace Engine"])
 
 from backup_agent.routers.backup import router as backup_router  # noqa: E402
 
@@ -74,6 +76,9 @@ app.include_router(order_preorder_router, prefix="/order-secretary")
 
 from bpa.preorder_agent.router import router as preorder_agent_router  # noqa: E402
 app.include_router(preorder_agent_router, prefix="/preorder-agent")
+
+from bpa.esg_helper.router import router as esg_helper_router  # noqa: E402
+app.include_router(esg_helper_router, prefix="/esg-helper")
 
 from knowledge_agent.routers.hybrid import router as hybrid_router  # noqa: E402
 from knowledge_agent.routers.intent import router as intent_router  # noqa: E402
@@ -165,11 +170,25 @@ async def mcp_execute(call: ToolCallRequest) -> ToolResultResponse:
                 } if output.success else None,
                 error=output.error,
             )
-        else:
+
+        import httpx
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            resp = await client.post(
+                f"http://localhost:8004/execute",
+                json={"tool": call.tool, "parameters": call.parameters},
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                return ToolResultResponse(
+                    tool=data.get("tool", call.tool),
+                    success=data.get("success", False),
+                    result=data.get("result"),
+                    error=data.get("error"),
+                )
             return ToolResultResponse(
                 tool=call.tool,
                 success=False,
-                error=f"Unknown tool: {call.tool}",
+                error=f"mcp_tools error: {resp.status_code}",
             )
     except Exception as e:
         return ToolResultResponse(
@@ -182,6 +201,7 @@ async def mcp_execute(call: ToolCallRequest) -> ToolResultResponse:
 @app.post("/mcp/execute-async", tags=["MCP Execute"])
 async def mcp_execute_async(call: ToolCallRequest) -> dict[str, Any]:
     import json as _json
+    import httpx
 
     gateway = os.getenv("GATEWAY_URL", "http://localhost:6500")
 

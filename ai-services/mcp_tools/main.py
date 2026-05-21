@@ -21,6 +21,9 @@ app.add_middleware(LoggingMiddleware, service_name="mcp_tools")
 from tools.process_advisor.router import app as process_advisor_app  # noqa: E402
 app.mount("/process-advisor", process_advisor_app)
 
+from mcp_tools.mcp_gateway import router as mcp_gateway_router  # noqa: E402
+app.include_router(mcp_gateway_router)
+
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 DEFAULT_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2:latest")
 

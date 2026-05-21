@@ -298,7 +298,7 @@ export const demandApi = {
     api.post<{ code: number; data: AIReview }>('/api/v1/demands/review', data),
 };
 
-export interface SkillSpec {
+export interface ActionScript {
   _key: string;
   skill_no: string;
   title?: string;
@@ -312,22 +312,115 @@ export interface SkillSpec {
   guardrails: string[];
   data_scope?: Record<string, unknown>;
   linked_intents: string[];
+  linked_agents?: string[];
   spec_version: string;
   code_language: string;
   created_by: string;
   developed_by: string;
   created_at: string;
   updated_at: string;
+  last_sync_at?: string;
+  check_status?: 'pending' | 'checking' | 'passed' | 'failed' | 'warning';
+  last_check_at?: string;
 }
 
-export const skillApi = {
-  list: () => api.get<{ code: number; data: SkillSpec[] }>('/api/v1/skills'),
-  get: (id: string) => api.get<{ code: number; data: SkillSpec }>(`/api/v1/skills/${id}`),
-  create: (data: Partial<SkillSpec>) => api.post('/api/v1/skills', data),
-  update: (id: string, data: Partial<SkillSpec>) => api.put(`/api/v1/skills/${id}`, data),
-  delete: (id: string) => api.delete(`/api/v1/skills/${id}`),
-  getByNo: (no: string) => api.get<{ code: number; data: SkillSpec }>(`/api/v1/skills/by-no/${no}`),
-  analyze: (id: string, data?: { revision?: string }) => api.post<{ code: number; message: string; data: any }>(`/api/v1/skills/${id}/analyze`, data || {}),
+export const actionApi = {
+  list: () => api.get<{ code: number; data: ActionScript[] }>('/api/v1/action-scripts'),
+  get: (id: string) => api.get<{ code: number; data: ActionScript }>(`/api/v1/action-scripts/${id}`),
+  create: (data: Partial<ActionScript>) => api.post('/api/v1/action-scripts', data),
+  update: (id: string, data: Partial<ActionScript>) => api.put(`/api/v1/action-scripts/${id}`, data),
+  delete: (id: string) => api.delete(`/api/v1/action-scripts/${id}`),
+  getByNo: (no: string) => api.get<{ code: number; data: ActionScript }>(`/api/v1/action-scripts/by-no/${no}`),
+  analyze: (id: string, data?: { revision?: string }) => api.post<{ code: number; message: string; data: any }>(`/api/v1/action-scripts/${id}/analyze`, data || {}),
+};
+
+// ============= Todos Engine =============
+
+export interface TodoItem {
+  _key?: string;
+  todo_no: string;
+  title: string;
+  description?: string;
+  skill_key?: string;
+  skill_no?: string;
+  status: string;
+  priority: number;
+  current_step_index: number;
+  total_steps: number;
+  progress: number;
+  input_data?: Record<string, unknown>;
+  output_data?: Record<string, unknown>;
+  pdca_verdict: string;
+  pdca_summary?: string;
+  assigned_to?: string;
+  assigned_role?: string;
+  tags?: string[];
+  error_message?: string;
+  created_by?: string;
+  started_at?: string;
+  completed_at?: string;
+  created_at: string;
+  updated_at: string;
+  steps?: TodoStep[];
+}
+
+export interface TodoStep {
+  _key?: string;
+  todo_key: string;
+  step_index: number;
+  step_title: string;
+  step_type: string;
+  status: string;
+  result?: Record<string, unknown>;
+  error?: string;
+  duration_ms?: number;
+  started_at?: string;
+  completed_at?: string;
+  pdca_verdict?: string;
+  pdca_comment?: string;
+}
+
+export interface TodoLog {
+  _key?: string;
+  todo_key: string;
+  step_index?: number;
+  log_type: string;
+  message: string;
+  details?: Record<string, unknown>;
+  created_at: string;
+}
+
+export const todoApi = {
+  list: (params?: Record<string, string>) =>
+    api.get<{ code: number; data: TodoItem[] }>('/api/v1/todos', { params }),
+  get: (key: string) =>
+    api.get<{ code: number; data: TodoItem }>(`/api/v1/todos/${key}?steps=true`),
+  create: (data: Partial<TodoItem> & { steps: Array<{ title: string; step_type: string; step_config?: Record<string, unknown> }> }) =>
+    api.post<{ code: number; data: TodoItem }>('/api/v1/todos', data),
+  update: (key: string, data: Partial<TodoItem>) =>
+    api.patch(`/api/v1/todos/${key}`, data),
+  delete: (key: string) =>
+    api.delete(`/api/v1/todos/${key}`),
+  start: (key: string) =>
+    api.post(`/api/v1/todos/${key}/start`),
+  pause: (key: string) =>
+    api.post(`/api/v1/todos/${key}/pause`),
+  restart: (key: string) =>
+    api.post(`/api/v1/todos/${key}/restart`),
+  completeStep: (key: string, stepIndex: number, result?: Record<string, unknown>) =>
+    api.post(`/api/v1/todos/${key}/step/${stepIndex}/complete`, result),
+  failStep: (key: string, stepIndex: number, error: string) =>
+    api.post(`/api/v1/todos/${key}/step/${stepIndex}/fail`, { error }),
+  skipStep: (key: string, stepIndex: number) =>
+    api.post(`/api/v1/todos/${key}/step/${stepIndex}/skip`),
+  retryStep: (key: string, stepIndex: number) =>
+    api.post(`/api/v1/todos/${key}/step/${stepIndex}/retry`),
+  plan: (key: string, stepIndex: number) =>
+    api.post(`/api/v1/todos/${key}/step/${stepIndex}/plan`),
+  check: (key: string, stepIndex: number) =>
+    api.post(`/api/v1/todos/${key}/step/${stepIndex}/check`),
+  logs: (key: string) =>
+    api.get<{ code: number; data: TodoLog[] }>(`/api/v1/todos/${key}/logs`),
 };
 
 // ============= Tool Registry =============
@@ -359,6 +452,9 @@ export interface Tool {
   updated_by?: string;
   created_at?: string;
   updated_at?: string;
+  mcp_transport?: string;
+  mcp_command?: string;
+  mcp_args?: string[];
 }
 
 export interface ToolLog {
@@ -1171,6 +1267,22 @@ export const linePlatformApi = {
     api.delete<ApiResponse<{ success: boolean; message: string }>>(
       `/api/v1/platforms/line/channels/${channelKey}/publish`,
     ),
+};
+
+export const skillsRagApi = {
+  upload: (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return api.post('/skills-rag/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 60000,
+    });
+  },
+  match: (query: string, topK: number = 5) =>
+    api.post('/skills-rag/match', { query, top_k: topK }),
+  list: () => api.get('/skills-rag/skills'),
+  sync: (skillNo: string) => api.post(`/skills-rag/sync/${skillNo}`),
+  check: (skillNo: string) => api.post(`/skills-rag/check/${skillNo}`),
 };
 
 export default api;

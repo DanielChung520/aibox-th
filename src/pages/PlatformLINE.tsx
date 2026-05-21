@@ -29,6 +29,8 @@ import {
   type LINEOfficialAccount,
   type LINEChannel,
 } from '../services/api';
+import { useEntityPerception } from '../hooks/useEntityPerception';
+import { pageContextManager } from '../services/PageContextManager';
 
 const { Title } = Typography;
 
@@ -40,6 +42,8 @@ export default function PlatformLINE() {
   const [detailPanelOpen, setDetailPanelOpen] = useState(false);
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [channelForm] = Form.useForm();
+
+  useEntityPerception({ defaultEntityType: 'line_platform', defaultAction: 'list' });
 
   const fetchAccounts = useCallback(async () => {
     try {
@@ -57,6 +61,10 @@ export default function PlatformLINE() {
   useEffect(() => {
     fetchAccounts();
   }, [fetchAccounts]);
+
+  useEffect(() => {
+    pageContextManager.report({ component: 'PlatformLINE', entityType: 'line_platform', action: 'list' });
+  }, []);
 
   const handleCardClick = (channel: LINEChannel) => {
     setSelectedChannel(channel);

@@ -11,6 +11,8 @@ import { Table, Button, Modal, Form, Input, InputNumber, Select, Tag, Space, App
 import { PlusOutlined, ShoppingCartOutlined, EyeOutlined, ArrowLeftOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { authStore } from '../stores/auth';
+import { useEntityPerception } from '../hooks/useEntityPerception';
+import { pageContextManager } from '../services/PageContextManager';
 
 const API_BASE = 'http://localhost:8011/order-secretary';
 
@@ -83,6 +85,7 @@ export default function PreorderBoard() {
   const [form] = Form.useForm();
 
   const API = API_BASE;
+  useEntityPerception({ defaultEntityType: 'preorder', defaultAction: 'list' });
 
   const fetchList = async () => {
     setLoading(true);
@@ -105,6 +108,10 @@ export default function PreorderBoard() {
 
   useEffect(() => {
     fetchList();
+  }, []);
+
+  useEffect(() => {
+    pageContextManager.report({ component: 'PreorderBoard', entityType: 'preorder', action: 'list' });
   }, []);
 
   const handleCreate = async () => {

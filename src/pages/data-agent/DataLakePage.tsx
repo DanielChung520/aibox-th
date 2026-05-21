@@ -10,6 +10,8 @@ import { useState, useEffect, useMemo } from 'react';
 import { Table, Card, Typography, Tag, Space, Spin, Empty, Descriptions, Alert, Tabs, theme, Input, Switch } from 'antd';
 import { DatabaseOutlined, TableOutlined, InfoCircleOutlined } from '@ant-design/icons';
 import { dataAgentApi, TableInfo, FieldInfo } from '../../services/dataAgentApi';
+import { useEntityPerception } from '../../hooks/useEntityPerception';
+import { pageContextManager } from '../../services/PageContextManager';
 
 const { Text } = Typography;
 type DataSourceType = 'sap' | 'ragic' | 'ALL';
@@ -25,6 +27,14 @@ const MODULE_COLORS: Record<string, string> = {
 
 export default function DataLakePage() {
   const { token } = theme.useToken();
+  const { dispatchEntity } = useEntityPerception({ defaultEntityType: 'datalake', defaultAction: 'list' });
+  void dispatchEntity; // Reserved for future event handler use
+
+  useEffect(() => {
+    pageContextManager.report({ component: 'DataLakePage', entityType: 'datalake', action: 'list' });
+    return () => { pageContextManager.report({ component: undefined, entityType: undefined, action: undefined }); };
+  }, []);
+
   const [tables, setTables] = useState<TableInfo[]>([]);
   const [loadingTables, setLoadingTables] = useState(false);
   const [searchText, setSearchText] = useState('');

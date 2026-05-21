@@ -91,7 +91,7 @@ async fn proxy(
     }
 
     let resp = req.send().await.map_err(|e| {
-        eprintln!("line proxy error: {e}");
+        tracing::error!("line proxy error: {e}");
         StatusCode::BAD_GATEWAY
     })?;
 
@@ -207,7 +207,7 @@ async fn line_webhook(
     Path(channel_key): Path<String>,
     headers: HeaderMap,
     body: String,
-) -> Result<impl IntoResponse, StatusCode> {
+) -> impl IntoResponse {
     let url = format!(
         "{}/webhook/line/{}",
         CONFIG.ai_services.unified_agents_url,
@@ -220,15 +220,19 @@ async fn line_webhook(
         req_builder = req_builder.header("x-line-signature", sig.to_str().unwrap_or(""));
     }
 
-    let resp = req_builder.send().await.map_err(|e| {
-        eprintln!("line webhook proxy error: {e}");
-        StatusCode::BAD_GATEWAY
-    })?;
-
-    let status = resp.status();
-    let body_bytes = resp.bytes().await.unwrap_or_default();
-
-    Ok((reqwest_to_axum_status(status), body_bytes))
+    match req_builder.send().await {
+        Ok(resp) => {
+            let status = reqwest_to_axum_status(resp.status());
+            let body_bytes: Vec<u8> = resp.bytes().await.unwrap_or_default().to_vec();
+            (status, body_bytes)
+        }
+        Err(e) => {
+            let err_msg = format!("LINE Bot 服務暫時無法使用，請稍後再試。({})", e);
+            tracing::error!("line webhook proxy error: {e}");
+            let fallback = serde_json::json!({"error": err_msg}).to_string();
+            (StatusCode::OK, fallback.into_bytes())
+        }
+    }
 }
 
 async fn line_webhook_get(

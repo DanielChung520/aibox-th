@@ -142,7 +142,7 @@ return () => { signalCollector.stop(); };
     if (func) return func.name;
     if (path.includes('users')) return '账户管理';
     if (path.includes('roles')) return '角色管理';
-    if (path.includes('params')) return '系统参数';
+    if (path.includes('params')) return '系統參數';
     return '首页';
   };
 

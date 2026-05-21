@@ -65,7 +65,6 @@ async fn proxy_agent_chat(
         if !obj.contains_key("user_id") || obj.get("user_id").and_then(|v| v.as_str()).map_or(true, |s| s.is_empty() || s == "anonymous") {
             obj.insert("user_id".to_string(), serde_json::json!(user_key));
         }
-        // 注入 agent_key：Python 端需要它來解析 LLM 配置
         if !obj.contains_key("agent_key") {
             obj.insert("agent_key".to_string(), serde_json::json!(&key));
         }

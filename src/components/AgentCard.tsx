@@ -15,7 +15,6 @@ import {
   HeartOutlined, 
   HeartFilled,
   MessageOutlined,
-  ShoppingCartOutlined,
 } from '@ant-design/icons';
 import { iconMap } from '../utils/icons';
 import { useContentTokens } from '../contexts/AppThemeProvider';
@@ -44,7 +43,6 @@ interface AgentCardProps {
   actionStyle?: React.CSSProperties;
   showMenu?: boolean;
   onCardClick?: (agentId: string) => void;
-  onPreorder?: (agentId: string) => void;
 }
 
 const statusColors: Record<string, { color: string; text: string }> = {
@@ -69,7 +67,6 @@ export default function AgentCard({
   actionStyle,
   showMenu = true,
   onCardClick,
-  onPreorder,
 }: AgentCardProps) {
   const { token } = theme.useToken();
   const contentTokens = useContentTokens();
@@ -166,20 +163,6 @@ export default function AgentCard({
               {agent.name}
             </div>
             <Tag color={statusInfo.color}>{statusInfo.text}</Tag>
-            {onPreorder && (
-              <Button
-                type="link"
-                size="small"
-                icon={<ShoppingCartOutlined />}
-                style={{ padding: '0 4px', fontSize: 12, color: contentTokens.colorPrimary }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onPreorder(agent.id);
-                }}
-              >
-                預訂購
-              </Button>
-            )}
           </div>
         </div>
         
@@ -215,15 +198,18 @@ export default function AgentCard({
         </div>
       </div>
 
-      {/* 卡片內容 */}
+      {/* 卡片內容 (限制 2 行，超出顯示 ...) */}
       <div style={{ 
         marginBottom: 16, 
         color: descColor, 
-        minHeight: 44,
-        wordBreak: 'break-word',
-        overflowWrap: 'break-word',
         lineHeight: 1.5,
-      }}>
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        display: '-webkit-box',
+        WebkitLineClamp: 2,
+        WebkitBoxOrient: 'vertical',
+        minHeight: '3em',
+      } as React.CSSProperties}>
         {agent.description || '暂无描述'}
       </div>
 

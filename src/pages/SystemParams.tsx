@@ -9,7 +9,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { App, Card, Form, Input, Button, Switch, InputNumber, Tabs, Space, Upload, Image, theme, type TabsProps, Select, Avatar, Row, Col, Typography } from 'antd';
 import { SaveOutlined, ReloadOutlined, UploadOutlined, CheckCircleFilled } from '@ant-design/icons';
-import { paramsApi, SystemParam } from '../services/api';
+import { paramsApi, SystemParam, ModelProvider, modelProviderApi } from '../services/api';
 import SystemParamsModels from './SystemParamsModels';
 import ThemeTemplateManagement from './ThemeTemplateManagement';
 import SystemParamsBasicTools from './SystemParamsBasicTools';
@@ -18,6 +18,8 @@ import DatabaseBackupPanel from './backup/DatabaseBackupPanel';
 import FloatingAssistantSettings from './FloatingAssistantSettings';
 import SystemParamsDataAgent from './SystemParamsDataAgent';
 import { MODULE_OPTIONS, normalizeGraphModuleSelection } from './data-agent/schemaGraphUtils';
+import { useEntityPerception } from '../hooks/useEntityPerception';
+import { pageContextManager } from '../services/PageContextManager';
 
 const avatarModules = import.meta.glob<{ default: string }>(
   '../assets/avatar/*.png',
@@ -49,8 +51,10 @@ export default function SystemParams() {
   const [uploading, setUploading] = useState(false);
   const [logoBase64, setLogoBase64] = useState<string>('');
   const [form] = Form.useForm();
+  const [modelProviders, setModelProviders] = useState<ModelProvider[]>([]);
 
   const [selectedAvatar, setSelectedAvatar] = useState<string>('');
+  useEntityPerception({ defaultEntityType: 'system_param', defaultAction: 'list' });
 
   const fetchParams = async () => {
     try {
@@ -86,12 +90,25 @@ export default function SystemParams() {
         localStorage.setItem('app.system_type', systemTypeParam.param_value);
       }
     } catch {
-      message.error('获取参数失败');
+      message.error('獲取參數失敗');
     }
   };
 
   useEffect(() => {
     fetchParams();
+  }, []);
+
+  useEffect(() => {
+    modelProviderApi.list().then(res => {
+      setModelProviders(res.data.data || []);
+    }).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    pageContextManager.report({ component: 'SystemParams', entityType: 'param', action: 'list' });
+    return () => {
+      pageContextManager.report({ component: 'SystemParams', entityType: 'param', action: undefined });
+    };
   }, []);
 
   const handleSave = async (category?: string) => {
@@ -124,7 +141,7 @@ export default function SystemParams() {
       message.success('保存成功');
       fetchParams();
     } catch {
-      message.error('保存失败');
+      message.error('保存失敗');
     } finally {
       setSaving(false);
     }
@@ -146,7 +163,7 @@ export default function SystemParams() {
       message.success('Logo 上传成功');
       fetchParams();
     } catch {
-      message.error('Logo 上传失败');
+      message.error('Logo 上傳失敗');
     } finally {
       setUploading(false);
     }
@@ -175,14 +192,15 @@ export default function SystemParams() {
 
   const categoryLabels: Record<string, string> = {
     basic: '基本信息',
-    theme: '主题设置',
-    window: '窗口设置',
-    behavior: '行为设置',
-    update: '更新设置',
-    backup: '备份设置',
+    theme: '主題設置',
+    window: '窗口設置',
+    behavior: '行為設置',
+    update: '更新設置',
+    backup: '備份設置',
     knowledge: '知識庫參數',
     task_chat: '任務聊天參數',
     ragic: 'Ragic 連線設定',
+    dev: '開發設定',
   };
 
   const ragicParamLabels: Record<string, string> = {
@@ -224,6 +242,22 @@ export default function SystemParams() {
       );
     }
 
+    if (param.param_key === 'dev.requirement_spec_provider') {
+      const enabledProviders = modelProviders.filter(p => p.status === 'enabled');
+      return (
+        <Select {...commonProps} style={{ width: '100%' }} placeholder="選擇 Provider">
+          {enabledProviders.map(p => (
+            <Select.Option key={p.code} value={p.code}>
+              {p.name} ({p.code})
+            </Select.Option>
+          ))}
+        </Select>
+      );
+    }
+    if (param.param_key === 'dev.requirement_spec_model') {
+      return <ModelSelectorComponent providers={modelProviders} form={form} commonProps={commonProps} />;
+    }
+
     switch (param.param_type) {
       case 'boolean':
         return <Switch {...commonProps} />;
@@ -238,6 +272,29 @@ export default function SystemParams() {
     () => avatarList.find(a => a.name === selectedAvatar),
     [selectedAvatar]
   );
+
+  function ModelSelectorComponent({ providers, form: formInstance, commonProps }: {
+    providers: ModelProvider[];
+    form: any;
+    commonProps: Record<string, any>;
+  }) {
+    const selectedProvider = Form.useWatch('dev.requirement_spec_provider', formInstance);
+    const models = useMemo(() => {
+      if (!selectedProvider) return [];
+      const provider = providers.find(p => p.code === selectedProvider);
+      if (!provider?.models) return [];
+      return provider.models
+        .filter(m => m.status === 'enabled' || m.status === 'active')
+        .map(m => ({ model_id: m.model_id, name: m.display_name || m.name || m.model_id }));
+    }, [selectedProvider, providers]);
+    return (
+      <Select {...commonProps} style={{ width: '100%' }} placeholder={selectedProvider ? '選擇模型' : '請先選擇 Provider'} allowClear>
+        {models.map(m => (
+          <Select.Option key={m.model_id} value={m.model_id}>{m.name}</Select.Option>
+        ))}
+      </Select>
+    );
+  }
 
   const buildCategoryTab = (category: string, categoryParams: SystemParam[]) => {
     if (category === 'basic') {
@@ -273,7 +330,7 @@ export default function SystemParams() {
                         disabled={uploading}
                       >
                         <Button loading={uploading} icon={<UploadOutlined />}>
-                          上传 Logo
+                          上傳 Logo
                         </Button>
                       </Upload>
                       <div style={{ fontSize: 12, color: token.colorTextQuaternary, marginTop: 4 }}>
@@ -386,13 +443,22 @@ export default function SystemParams() {
       };
     }
 
+    const sortedParams = category === 'dev'
+      ? [...categoryParams].sort((a, b) => {
+          const order = ['dev.spec_context', 'dev.requirement_spec_provider', 'dev.requirement_spec_model', 'dev.requirement_spec_max_tokens'];
+          const ai = order.indexOf(a.param_key);
+          const bi = order.indexOf(b.param_key);
+          return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+        })
+      : categoryParams;
+
     return {
       key: category,
       label: categoryLabels[category] || category,
       children: (
         <Card>
           <Form form={form} layout="vertical" style={{ maxWidth: 600 }}>
-            {categoryParams.map(param => (
+            {sortedParams.map(param => (
               <Form.Item
                 key={param.param_key}
                 name={param.param_key}

@@ -13,6 +13,8 @@ import { useNavigate } from 'react-router-dom';
 import { Button, Typography, theme } from 'antd';
 import { useContentTokens, useEffectiveTheme } from '../contexts/AppThemeProvider';
 import { authStore } from '../stores/auth';
+import { useEntityPerception } from '../hooks/useEntityPerception';
+import { pageContextManager } from '../services/PageContextManager';
 import logoDark from '../assets/EDGE-logo-icon.png';
 import logoLight from '../assets/EDGE-logo-dark.png';
 
@@ -21,12 +23,13 @@ const { Title, Text } = Typography;
 export default function Welcome() {
   const navigate = useNavigate();
   const [countdown, setCountdown] = useState(3);
-  const [appName] = useState('管理系统');
+  const [appName] = useState('管理系統');
   const navigatedRef = useRef(false);
   const contentTokens = useContentTokens();
   const effectiveTheme = useEffectiveTheme();
   const { token } = theme.useToken();
   const logoSrc = effectiveTheme === 'dark' ? logoDark : logoLight;
+  useEntityPerception({ defaultEntityType: 'welcome', defaultAction: 'view' });
 
   useEffect(() => {
     if (authStore.getState().isAuthenticated && !navigatedRef.current) {
@@ -55,6 +58,10 @@ export default function Welcome() {
       navigate('/login', { replace: true });
     }
   }, [countdown, navigate]);
+
+  useEffect(() => {
+    pageContextManager.report({ component: 'Welcome', entityType: 'welcome', action: 'view' });
+  }, []);
 
   return (
     <div style={{
@@ -118,7 +125,7 @@ export default function Welcome() {
             type="primary" 
             size="large"
             onClick={() => {
-              navigatedRef.current = true;
+               navigatedRef.current = true;
                navigate('/login', { replace: true });
             }}
             style={{ 
@@ -126,18 +133,18 @@ export default function Welcome() {
               border: 'none',
             }}
           >
-            进入登录
+            進入登錄
           </Button>
         </div>
         
         <div style={{ marginTop: '24px', color: contentTokens.textSecondary, fontSize: '12px' }}>
           <Text type="secondary" style={{ color: contentTokens.textSecondary }}>
-            {countdown} 秒后自动跳转...
+            {countdown} 秒後自動跳轉...
           </Text>
         </div>
         
         <div style={{ marginTop: '48px', color: contentTokens.textSecondary, fontSize: '12px' }}>
-          © 2026 版权所有
+          © 2026 版權所有
         </div>
       </div>
       <style>{`

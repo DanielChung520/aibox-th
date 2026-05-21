@@ -15,6 +15,8 @@ import AgentCard from '../components/AgentCard';
 import AgentFormModal from '../components/AgentFormModal';
 import { agentApi, Agent as ApiAgent } from '../services/api';
 import { authStore } from '../stores/auth';
+import { useEntityPerception } from '../hooks/useEntityPerception';
+import { pageContextManager } from '../services/PageContextManager';
 import RagicLogisticProcess from '../components/RagicLogisticProcess';
 
 const groupConfig = [
@@ -40,6 +42,8 @@ export default function BrowseAgent() {
   const [editingAgent, setEditingAgent] = useState<ApiAgent | null>(null);
   const [modalMode, setModalMode] = useState<'create' | 'edit'>('create');
 
+  useEntityPerception({ defaultEntityType: 'agent', defaultAction: 'list' });
+
   const fetchAgents = async () => {
     setLoading(true);
     try {
@@ -60,6 +64,10 @@ export default function BrowseAgent() {
 
   useEffect(() => {
     fetchAgents();
+  }, []);
+
+  useEffect(() => {
+    pageContextManager.report({ component: 'BrowseAgent', entityType: 'agent', action: 'list' });
   }, []);
 
   const mapApiToCard = (agent: ApiAgent) => ({
@@ -112,11 +120,6 @@ export default function BrowseAgent() {
     navigate(`/app/task-session/chat?agent_key=${agentId}`);
   };
 
-  // 處理預訂購
-  const handlePreorder = (agentId: string) => {
-    navigate('/app/preorder');
-  };
-
   // 處理編輯
   const handleEdit = (agentId: string) => {
     const agent = agents.find((a) => a._key === agentId);
@@ -157,7 +160,7 @@ export default function BrowseAgent() {
         status: values.status || 'online',
         group_key: values.groupKey || activeTab,
         source: isThirdParty ? 'third_party' : 'local',
-        endpoint_url: isThirdParty ? (values.endpointUrl || '') : undefined,
+        endpoint_url: values.endpointUrl || '',
         api_key: isThirdParty ? (values.apiKey || '') : undefined,
         auth_type: isThirdParty ? (values.authType || 'none') : undefined,
         llm_model: values.llmModel || '',
@@ -180,14 +183,77 @@ export default function BrowseAgent() {
       }
       
       if (modalMode === 'create') {
-        await agentApi.create(apiData);
+        const createRes = await agentApi.create(apiData);
         message.success(`新增 Agent: ${values.name}`);
+        
+        // 提取新 Agent key (confirmed path: res.data.data._key)
+        const newKey = createRes?.data?.data?._key || createRes?.data?._key;
+        
+        if (newKey) {
+          // 先刷新列表
+          fetchAgents();
+
+          const demandFields = ['goal', 'expected_effect', 'problem_description'];
+          const hasDemandData = demandFields.some(f => values[f]);
+          if (hasDemandData) {
+            try {
+              await agentApi.createDemand(newKey, {
+                goal: values.goal || '',
+                expected_effect: values.expected_effect || '',
+                problem_description: values.problem_description || '',
+              });
+            } catch (e) {
+              console.warn('Failed to create demand, continuing anyway', e);
+            }
+          }
+
+          // 嘗試獲取完整 Agent 資料，切換到編輯模式
+          try {
+            const getRes = await agentApi.get(newKey);
+            const newAgent = getRes?.data?.data;
+            if (newAgent) {
+              setEditingAgent({
+                _key: newAgent._key || '',
+                name: newAgent.name,
+                description: newAgent.description || '',
+                icon: newAgent.icon || 'RobotOutlined',
+                status: newAgent.status || 'online',
+                usage_count: newAgent.usage_count || 0,
+                group_key: newAgent.group_key || 'productivity',
+                agent_type: newAgent.agent_type,
+                source: newAgent.source,
+                endpoint_url: newAgent.endpoint_url,
+                api_key: newAgent.api_key,
+                auth_type: newAgent.auth_type,
+                llm_model: newAgent.llm_model,
+                temperature: newAgent.temperature,
+                max_tokens: newAgent.max_tokens,
+                system_prompt: newAgent.system_prompt,
+                knowledge_bases: newAgent.knowledge_bases,
+                data_sources: newAgent.data_sources,
+                tools: newAgent.tools,
+                opening_lines: newAgent.opening_lines,
+                capabilities: newAgent.capabilities,
+                visibility: newAgent.visibility || 'private',
+                visibility_roles: newAgent.visibility_roles || [],
+              });
+              setModalMode('edit');
+              message.success('Agent 已建立，可繼續設定需求');
+              return; // 不關閉 Modal，讓使用者繼續編輯
+            }
+          } catch (e) {
+            console.warn('Failed to fetch new agent, falling back to close', e);
+          }
+        }
+        
+        // fallback: get 失敗或無 key 時關閉 Modal
+        setModalOpen(false);
       } else if (editingAgent?._key) {
         await agentApi.update(editingAgent._key, apiData);
         message.success(`更新 Agent: ${values.name}`);
+        setModalOpen(false);
+        fetchAgents();
       }
-      setModalOpen(false);
-      fetchAgents();
     } catch (err: any) {
       const msg = err?.response?.data?.message || err?.message || '操作失敗';
       message.error(msg);
@@ -258,7 +324,6 @@ export default function BrowseAgent() {
                     onChat={handleChat}
                     onEdit={handleEdit}
                     onDelete={handleDelete}
-                    onPreorder={agent.name.includes('訂單') ? handlePreorder : undefined}
                   />
               </Col>
             ))}

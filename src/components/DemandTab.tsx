@@ -7,7 +7,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import { Button, Space, Form, Input, Tag, Divider, App, InputNumber, Upload, Image, Modal, Alert } from 'antd';
+import { Button, Space, Form, Input, Tag, Divider, App, InputNumber, Upload, Image, Modal, Alert, theme } from 'antd';
 import type { Demand, DemandStatus, UploadedFile, AIReview } from '../services/api';
 import { agentApi, demandApi } from '../services/api';
 import { authStore } from '../stores/auth';
@@ -38,6 +38,7 @@ const statusConfig: Record<DemandStatus, { label: string; badgeColor: string; ta
 
 export default function DemandTab({ agentKey, demandKey, onStatusChange, onDemandChange }: DemandTabProps) {
   const { message: antMessage } = App.useApp();
+  const { token } = theme.useToken();
   const [demand, setDemand] = useState<Demand | null>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -220,7 +221,7 @@ export default function DemandTab({ agentKey, demandKey, onStatusChange, onDeman
         )}
       </div>
 
-      <div style={{ display: 'flex', gap: 16, fontSize: 12, color: '#666', marginBottom: 16, padding: '8px 12px', background: '#fafafa', borderRadius: 6 }}>
+      <div style={{ display: 'flex', gap: 16, fontSize: 12, color: token.colorTextSecondary, marginBottom: 16, padding: '8px 12px', background: token.colorFillAlter, borderRadius: 6 }}>
         <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
           <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#fa8c16' }}></span>
           草稿
@@ -333,10 +334,10 @@ export default function DemandTab({ agentKey, demandKey, onStatusChange, onDeman
             <Button onClick={handleWithdraw}>撤回需求</Button>
           )}
           {status === 'in_development' && (
-            <span style={{ color: '#888' }}>開發中，請等待團隊完成...</span>
+            <span style={{ color: token.colorTextTertiary }}>開發中，請等待團隊完成...</span>
           )}
           {status === 'accepted' && (
-            <span style={{ color: '#888' }}>已承接，開發中...</span>
+            <span style={{ color: token.colorTextTertiary }}>已承接，開發中...</span>
           )}
           {status === 'pending_acceptance' && (
             <>
@@ -354,7 +355,7 @@ export default function DemandTab({ agentKey, demandKey, onStatusChange, onDeman
             </>
           )}
         </Space>
-        <div style={{ color: '#888', fontSize: 12 }}>
+        <div style={{ color: token.colorTextTertiary, fontSize: 12 }}>
           提交時間：{demand.submitted_at ? new Date(demand.submitted_at).toLocaleString('zh-TW') : '-'}
         </div>
       </div>
@@ -389,17 +390,17 @@ export default function DemandTab({ agentKey, demandKey, onStatusChange, onDeman
                 style={{ flex: 1, marginRight: 8 }}
               />
               <div style={{
-                background: aiReview.score >= 70 ? '#f6ffed' : '#fff2f0',
-                border: `1px solid ${aiReview.score >= 70 ? '#b7eb8f' : '#ffccc7'}`,
+                background: aiReview.score >= 70 ? token.colorSuccessBg : token.colorErrorBg,
+                border: `1px solid ${aiReview.score >= 70 ? token.colorSuccessBorder : token.colorErrorBorder}`,
                 borderRadius: 8,
                 padding: '12px 20px',
                 textAlign: 'center',
                 minWidth: 80,
               }}>
-                <div style={{ fontSize: 24, fontWeight: 'bold', color: aiReview.score >= 70 ? '#52c41a' : '#ff4d4f' }}>
+                <div style={{ fontSize: 24, fontWeight: 'bold', color: aiReview.score >= 70 ? token.colorSuccess : token.colorError }}>
                   {aiReview.score}
                 </div>
-                <div style={{ fontSize: 12, color: '#888' }}>綜合評分</div>
+                <div style={{ fontSize: 12, color: token.colorTextTertiary }}>綜合評分</div>
               </div>
             </div>
 
@@ -413,25 +414,25 @@ export default function DemandTab({ agentKey, demandKey, onStatusChange, onDeman
             )}
 
             <div style={{ display: 'grid', gap: 12 }}>
-              <div style={{ background: '#f5f5f5', padding: 12, borderRadius: 8 }}>
+              <div style={{ background: token.colorFillAlter, padding: 12, borderRadius: 8 }}>
                 <strong>📝 完整性：</strong>
                 <div style={{ marginTop: 4 }}>{aiReview.completeness}</div>
               </div>
 
-              <div style={{ background: '#f5f5f5', padding: 12, borderRadius: 8 }}>
+              <div style={{ background: token.colorFillAlter, padding: 12, borderRadius: 8 }}>
                 <strong>✅ 合理性：</strong>
                 <div style={{ marginTop: 4 }}>{aiReview.reasonableness}</div>
               </div>
 
-              <div style={{ background: '#f5f5f5', padding: 12, borderRadius: 8 }}>
+              <div style={{ background: token.colorFillAlter, padding: 12, borderRadius: 8 }}>
                 <strong>⚡ 可行性：</strong>
                 <div style={{ marginTop: 4 }}>{aiReview.feasibility}</div>
               </div>
 
-              <div style={{ background: '#e6f7ff', padding: 12, borderRadius: 8 }}>
+              <div style={{ background: token.colorInfoBg, padding: 12, borderRadius: 8 }}>
                 <strong>⏱️ AI 預估工時：</strong>
                 <span style={{ fontSize: 20, marginLeft: 8 }}>{aiReview.estimated_hours}</span>
-                <span style={{ color: '#888', marginLeft: 4 }}>小時</span>
+                <span style={{ color: token.colorTextTertiary, marginLeft: 4 }}>小時</span>
                 <Tag color={aiReview.confidence === 'high' ? 'green' : aiReview.confidence === 'medium' ? 'orange' : 'red'} style={{ marginLeft: 8 }}>
                   信心度：{aiReview.confidence}
                 </Tag>
@@ -446,7 +447,7 @@ export default function DemandTab({ agentKey, demandKey, onStatusChange, onDeman
               </div>
 
               {aiReview.suggestions && aiReview.suggestions.length > 0 && (
-                <div style={{ background: '#fff7e6', padding: 12, borderRadius: 8 }}>
+                <div style={{ background: token.colorWarningBg, padding: 12, borderRadius: 8 }}>
                   <strong>💡 改進建議：</strong>
                   <ul style={{ marginTop: 8, paddingLeft: 20 }}>
                     {aiReview.suggestions.map((s, i) => (
@@ -464,8 +465,9 @@ export default function DemandTab({ agentKey, demandKey, onStatusChange, onDeman
 }
 
 function DemandSummary({ demand }: { demand: Demand }) {
+  const { token } = theme.useToken();
   return (
-    <div style={{ background: '#f5f5f5', padding: 16, borderRadius: 8 }}>
+    <div style={{ background: token.colorFillAlter, padding: 16, borderRadius: 8 }}>
       <h4 style={{ marginBottom: 12 }}>📋 需求摘要</h4>
       <div style={{ display: 'grid', gap: 8 }}>
         <div><strong>目標：</strong>{demand.goal || '-'}</div>
@@ -520,7 +522,7 @@ function DemandSummary({ demand }: { demand: Demand }) {
         {demand.ai_review && (
           <>
             <Divider style={{ margin: '8px 0' }} />
-            <div style={{ background: '#e6f7ff', padding: 12, borderRadius: 8, marginTop: 8 }}>
+            <div style={{ background: token.colorInfoBg, padding: 12, borderRadius: 8, marginTop: 8 }}>
               <h4 style={{ marginBottom: 8 }}>🤖 AI 審查結果</h4>
               <div style={{ display: 'grid', gap: 6, fontSize: 13 }}>
                 <div><strong>完整性：</strong>{demand.ai_review.completeness}</div>

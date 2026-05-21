@@ -43,7 +43,7 @@ export default defineConfig(async () => ({
       },
       workbox: {
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
-        maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
+        maximumFileSizeToCacheInBytes: 50 * 1024 * 1024,
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
@@ -100,7 +100,7 @@ export default defineConfig(async () => ({
     port: 1420,
     strictPort: true,
     host: host || false,
-    allowedHosts: ["dy.ent4i.com", "localhost"],
+    allowedHosts: ["eea.ent4i.com", "localhost"],
     headers: {
       'Cross-Origin-Opener-Policy': 'same-origin',
       'Cross-Origin-Embedder-Policy': 'require-corp',
@@ -121,6 +121,19 @@ export default defineConfig(async () => ({
       '/api/v1/da/ragic': {
         target: 'http://localhost:6500',
         changeOrigin: true,
+      },
+      // SkillsRAG → Python SkillsRAG service (port 8012)
+      // Strip /skills-rag prefix since SkillsRAG routes are at root level
+      // Order Secretary / 預訂購 → Rust API Gateway (port 6500)
+      '/order-secretary': {
+        target: 'http://localhost:6500',
+        changeOrigin: true,
+      },
+      // SkillsRAG → Python SkillsRAG service (port 8012)
+      '/skills-rag': {
+        target: 'http://localhost:8012',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/skills-rag/, ''),
       },
       // All other API → Rust Gateway (port 6500)
       '/api': {

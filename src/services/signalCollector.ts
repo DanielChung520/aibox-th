@@ -12,9 +12,21 @@
 import { actionTrail, ActionEvent, ActionEventType } from './actionTrail';
 
 const SIGNIFICANT_EVENTS: Set<ActionEventType> = new Set([
+  // Existing (3)
   'page_navigate',
   'modal_open',
   'modal_close',
+  // New entity signals (4)
+  'entity_view',
+  'entity_edit',
+  'entity_create',
+  'entity_delete',
+  // New interaction signals (5)
+  'table_focus',
+  'cell_click',
+  'filter_apply',
+  'global_search',
+  'click',
 ]);
 
 const DEFAULTS = {
@@ -82,12 +94,24 @@ class SignalCollectorService {
   private handleEvent = (event: ActionEvent): void => {
     if (!SIGNIFICANT_EVENTS.has(event.type)) return;
 
+    // Skip duplicate page_navigate to same page
     if (event.type === 'page_navigate' && event.page === this.lastPushedPage) {
       return;
     }
     if (event.type === 'page_navigate') {
       this.lastPushedPage = event.page;
     }
+
+    // Dedup: if last pending signal has same type, update it instead of adding duplicate
+    const lastSignal = this.pendingSignals[this.pendingSignals.length - 1];
+    if (lastSignal && lastSignal.type === event.type) {
+      lastSignal.timestamp = event.timestamp;
+      lastSignal.page = event.page;
+      lastSignal.meta = event.meta;
+      this.schedulePush();
+      return;
+    }
+
     this.enqueue({
       type: event.type,
       timestamp: event.timestamp,
@@ -112,7 +136,7 @@ class SignalCollectorService {
 
   private async flush(): Promise<void> {
     if (this.pendingSignals.length === 0) return;
-    const batch = this.pendingSignals.splice(0);
+    const batch = this.pendingSignals.splice(0, 20); // max 20 per push
     try {
       const { default: api } = await import('./api');
       await api.post('/api/v1/aiq/signals/push', { signals: batch });

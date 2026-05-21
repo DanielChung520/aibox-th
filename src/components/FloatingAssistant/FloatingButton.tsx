@@ -47,7 +47,7 @@ export default function FloatingButton({ onClick, position, onPositionChange, av
       hasMoved: false,
     };
 
-    e.preventDefault(); // 防止默认选中行为
+    e.preventDefault(); // 防止默認選中行為
   };
 
   useEffect(() => {
@@ -66,7 +66,7 @@ export default function FloatingButton({ onClick, position, onPositionChange, av
       const dx = clientX - dragRef.current.startX;
       const dy = clientY - dragRef.current.startY;
 
-      // 如果移动距离超过3px，则认为是拖拽而不是点击
+      // 如果移動距離超過3px，則認為是拖拽而不是點擊
       if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
         dragRef.current.hasMoved = true;
       }
@@ -74,7 +74,7 @@ export default function FloatingButton({ onClick, position, onPositionChange, av
       const newX = dragRef.current.initX + dx;
       const newY = dragRef.current.initY + dy;
 
-      // 限制在屏幕范围内
+      // 限制在屏幕範圍內
       const maxX = window.innerWidth - 56;
       const maxY = window.innerHeight - 56;
       
@@ -86,7 +86,7 @@ export default function FloatingButton({ onClick, position, onPositionChange, av
 
     const handleMouseUp = () => {
       setIsDragging(false);
-      // 如果没有发生实际拖拽，则触发点击事件
+      // 如果沒有發生實際拖拽，則觸發點擊事件
       if (!dragRef.current.hasMoved) {
         onClick();
       }

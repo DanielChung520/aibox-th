@@ -1,7 +1,7 @@
 ---
-lastUpdate: 2026-04-24 10:07:45
+lastUpdate: 2026-05-09 04:30:00
 author: Daniel Chung
-version: 1.4.0
+version: 1.5.0
 ---
 
 # ABC Desktop 管理系统
@@ -9,6 +9,8 @@ version: 1.4.0
 跨平台桌面管理应用，基于 Tauri + React + Ant Design 构建，后端采用 Rust Axum + ArangoDB。
 
 **AI Agent 系统扩展**: 支持 AI 聊天、数据查询、知识库管理、MCP 工具和 BPA 流程自动化。
+
+> AI Agent 開發規範請參照 [AGENTS.md](./AGENTS.md)。
 
 ## 功能特点
 

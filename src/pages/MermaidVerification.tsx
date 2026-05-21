@@ -3,6 +3,8 @@ import { Button, message, Tag } from 'antd';
 import { CheckCircleOutlined, CloseCircleOutlined, CopyOutlined, ReloadOutlined } from '@ant-design/icons';
 import mermaid from 'mermaid';
 import { useContentTokens, useEffectiveTheme } from '../contexts/AppThemeProvider';
+import { useEntityPerception } from '../hooks/useEntityPerception';
+import { pageContextManager } from '../services/PageContextManager';
 
 const TEST_CASES = [
   {
@@ -206,6 +208,13 @@ export default function MermaidVerificationPage() {
   const [isDark, setIsDark] = useState(false);
   const contentTokens = useContentTokens();
   const effectiveTheme = useEffectiveTheme();
+  const { dispatchEntity } = useEntityPerception({ defaultEntityType: 'mermaid', defaultAction: 'list' });
+  void dispatchEntity; // Reserved for future event handler use
+
+  useEffect(() => {
+    pageContextManager.report({ component: 'MermaidVerificationPage', entityType: 'mermaid', action: 'list' });
+    return () => { pageContextManager.report({ component: undefined, entityType: undefined, action: undefined }); };
+  }, []);
 
   useEffect(() => {
     setIsDark(effectiveTheme === 'dark');

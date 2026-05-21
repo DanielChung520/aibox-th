@@ -22,6 +22,8 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { useEntityPerception } from '../hooks/useEntityPerception';
+import { pageContextManager } from '../services/PageContextManager';
 
 interface SortableRowProps {
   id: string;
@@ -69,6 +71,7 @@ export default function FunctionManagement() {
   const [authForm] = Form.useForm();
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set());
   const [flatGroups, setFlatGroups] = useState<Function[]>([]);
+  const { dispatchEntity } = useEntityPerception({ defaultEntityType: 'function', defaultAction: 'list' });
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -106,6 +109,13 @@ export default function FunctionManagement() {
     fetchRoles();
   }, []);
 
+  useEffect(() => {
+    pageContextManager.report({ component: 'FunctionManagement', entityType: 'function', action: 'list' });
+    return () => {
+      pageContextManager.report({ component: 'FunctionManagement', entityType: 'function', action: undefined });
+    };
+  }, []);
+
   const fetchRoles = async () => {
     try {
       const response = await roleApi.list();
@@ -123,12 +133,14 @@ export default function FunctionManagement() {
   };
 
   const handleEdit = (record: Function) => {
+    dispatchEntity(record._key, 'edit');
     setEditingFunction(record);
     form.setFieldsValue(record);
     setModalVisible(true);
   };
 
   const handleDelete = async (key: string) => {
+    dispatchEntity(key, 'delete');
     try {
       await functionApi.delete(key);
       fetchFunctions();
@@ -139,6 +151,7 @@ export default function FunctionManagement() {
   };
 
   const handleAuth = async (record: Function) => {
+    dispatchEntity(record._key, 'edit');
     setAuthFunction(record);
     try {
       const response = await functionApi.getRoles(record._key);

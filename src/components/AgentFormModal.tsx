@@ -15,6 +15,7 @@ import { authStore } from '../stores/auth';
 import DemandTab from './DemandTab';
 import { trackModal, trackAgentAction } from '../utils/analytics';
 import { pageContextManager } from '../services/PageContextManager';
+import { actionTrail } from '../services/actionTrail';
 
 interface Agent {
   id: string;
@@ -76,6 +77,8 @@ const authTypeOptions = [
   { value: 'oauth2', label: 'OAuth 2.0' },
 ];
 
+
+
 interface AgentFormModalProps {
   open: boolean;
   agent?: Agent | null;
@@ -101,7 +104,7 @@ export default function AgentFormModal({
   const [form] = Form.useForm();
   const user = authStore.getState().user;
   const userRoleNames: string[] = (user as any)?.role_names || [];
-  const canManageIntents = userRoleNames.includes('系统管理员') || userRoleNames.includes('顾问');
+  const canManageIntents = userRoleNames.includes('系統管理員') || userRoleNames.includes('顧問');
   const [iconPickerVisible, setIconPickerVisible] = useState(false);
   const [isThirdParty, setIsThirdParty] = useState(false);
   const [roles, setRoles] = useState<{ value: string; label: string }[]>([]);
@@ -117,6 +120,7 @@ export default function AgentFormModal({
   const [demandKey, setDemandKey] = useState<string | null>(null);
   const [demandStatusColor, setDemandStatusColor] = useState<string>('#fa8c16');
   const [currentDemand, setCurrentDemand] = useState<any>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   const loadIntents = (agentKey: string) => {
     setIntentsLoading(true);
@@ -182,6 +186,11 @@ export default function AgentFormModal({
       };
       trackModal('AgentFormModal', 'open', { mode, agent_key: agent?._key || agent?.id, agent_name: agent?.name });
       window.dispatchEvent(new CustomEvent('modal-context-change', { detail }));
+      actionTrail.record('modal_open', {
+        modal: 'AgentFormModal',
+        agent_key: agent?._key || '',
+        agent_name: agent?.name || '',
+      });
       pageContextManager.report({
         component: 'AgentFormModal',
         componentName: agent?.name,
@@ -209,6 +218,10 @@ export default function AgentFormModal({
         };
         trackModal('AgentFormModal', 'close', { mode, agent_key: agent?._key || agent?.id, agent_name: agent?.name });
         window.dispatchEvent(new CustomEvent('modal-context-change', { detail }));
+        actionTrail.record('modal_close', {
+          modal: 'AgentFormModal',
+          agent_key: agent?._key || '',
+        });
         pageContextManager.report({ component: undefined, action: undefined });
       }
     };
@@ -276,12 +289,20 @@ export default function AgentFormModal({
   }, [open, agent, mode, form, groupKey]);
 
   const handleSubmit = async () => {
+    setSubmitting(true);
     try {
       const values = await form.validateFields();
       trackAgentAction(mode === 'create' ? 'create' : 'update', agent?._key || agent?.id || '', agent?.name);
+      actionTrail.record('entity_edit', {
+        entity_type: 'agent_demand',
+        action: 'update',
+        agent_key: agent?._key || '',
+      });
       onSubmit(values);
     } catch (err) {
       message.error('請填寫必填欄位');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -356,16 +377,16 @@ export default function AgentFormModal({
       children: (
         <>
           <Form.Item name="source" label="來源" valuePropName="checked">
-            <Switch 
-              checkedChildren="第三方" 
-              unCheckedChildren="本機" 
+            <Switch
+              checkedChildren="第三方"
+              unCheckedChildren="本機"
               defaultChecked={false}
               onChange={(checked) => setIsThirdParty(checked)}
             />
           </Form.Item>
-          <Form.Item 
-            name="endpointUrl" 
-            label="Endpoint URL" 
+          <Form.Item
+            name="endpointUrl"
+            label="Endpoint URL"
             rules={[{ required: true, message: '請輸入 Endpoint URL' }]}
           >
             <Input placeholder={isThirdParty ? 'https://api.example.com/agent' : 'http://localhost:8000'} />
@@ -826,9 +847,9 @@ width="60vw"
                  刪除
                </Button>
              )}
-             <Button onClick={onCancel}>取消</Button>
-             <Button type="primary" onClick={handleSubmit}>
-               {mode === 'create' ? '建立' : '儲存'}
+             <Button onClick={onCancel} disabled={submitting}>取消</Button>
+             <Button type="primary" onClick={handleSubmit} loading={submitting} disabled={submitting}>
+                {mode === 'create' ? '建立' : '儲存'}
              </Button>
            </Space>
          }
@@ -879,6 +900,25 @@ width="60vw"
                     onStatusChange={setDemandStatusColor}
                     onDemandChange={setCurrentDemand}
                   />
+                ),
+              }] : mode === 'create' ? [{
+                key: 'demand',
+                label: '需求',
+                children: (
+                  <div style={{ padding: '8px 0' }}>
+                    <div style={{ marginBottom: 16, color: '#888', fontSize: 13 }}>
+                      💡 先填寫核心需求，建立後可繼續完善
+                    </div>
+                    <Form.Item name="goal" label="需求目標">
+                      <Input.TextArea rows={2} placeholder="例如：做一個內部 IT 客服，幫員工快速解決 IT 問題" />
+                    </Form.Item>
+                    <Form.Item name="expected_effect" label="預期效果">
+                      <Input.TextArea rows={2} placeholder="例如：員工問題能在 5 分鐘內得到回覆，80% 問題能自動回答" />
+                    </Form.Item>
+                    <Form.Item name="problem_description" label="問題描述">
+                      <Input.TextArea rows={3} placeholder="描述現有的問題或痛點..." />
+                    </Form.Item>
+                  </div>
                 ),
               }] : []),
             ]}

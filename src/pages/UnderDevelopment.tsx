@@ -8,13 +8,22 @@
  * - 2026-03-17 23:27:55 | Daniel Chung | 1.0.0 | 初始版本
  */
 
+import { useEffect } from 'react';
 import { Typography } from 'antd';
 import { useContentTokens } from '../contexts/AppThemeProvider';
+import { useEntityPerception } from '../hooks/useEntityPerception';
+import { pageContextManager } from '../services/PageContextManager';
 
 const { Title } = Typography;
 
 export default function UnderDevelopment() {
   const contentTokens = useContentTokens();
+  useEntityPerception({ defaultEntityType: 'placeholder', defaultAction: 'view' });
+
+  useEffect(() => {
+    pageContextManager.report({ component: 'UnderDevelopment', action: 'view' });
+  }, []);
+
   return (
     <div style={{ 
       display: 'flex', 
@@ -23,8 +32,8 @@ export default function UnderDevelopment() {
       height: '100%',
       flexDirection: 'column'
     }}>
-      <Title level={2} style={{ color: contentTokens.colorWarning }}>🚧 开发中</Title>
-      <Title level={4} type="secondary">此功能正在开发中，敬请期待...</Title>
+      <Title level={2} style={{ color: contentTokens.colorWarning }}>🚧 開發中</Title>
+      <Title level={4} type="secondary">此功能正在開發中，敬請期待...</Title>
     </div>
   );
 }

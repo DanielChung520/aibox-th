@@ -8,7 +8,7 @@
 
 import { PAGE_TYPE_MAP, resolvePageContext, type IntentGuess, type PageContext } from '../components/FloatingAssistant/types';
 import type { ActionEvent } from './actionTrail';
-import type { AssistantContextPayload, AssistantContextFocus, AssistantContextRecentAction } from '../types/assistantContext';
+import type { AssistantContextPayload, AssistantContextFocus, AssistantContextRecentAction, AssistantContextBehaviorStats } from '../types/assistantContext';
 
 interface BuildAssistantContextInput {
   pathname?: string;
@@ -132,7 +132,7 @@ function pickRecentActions(recentActions: ActionEvent[] | undefined): AssistantC
 
   const items = recentActions
     .filter((event) => !event.type.startsWith('intent_'))
-    .slice(-5)
+    .slice(-20)
     .map((event) => ({
       type: event.type,
       at: event.timestamp,
@@ -141,6 +141,24 @@ function pickRecentActions(recentActions: ActionEvent[] | undefined): AssistantC
     }));
 
   return items.length > 0 ? items : undefined;
+}
+
+function buildBehaviorStats(recentActions: ActionEvent[] | undefined): AssistantContextBehaviorStats | undefined {
+  if (!recentActions || recentActions.length === 0) return undefined;
+  const nonIntent = recentActions.filter(e => !e.type.startsWith('intent_'));
+  if (nonIntent.length === 0) return undefined;
+
+  const typeCounts: Record<string, number> = {};
+  for (const action of nonIntent) {
+    typeCounts[action.type] = (typeCounts[action.type] || 0) + 1;
+  }
+  const entries = Object.entries(typeCounts).sort((a, b) => b[1] - a[1]);
+
+  return {
+    mostFrequentType: entries[0][0],
+    totalRecentActions: nonIntent.length,
+    actionTypes: entries.map(([type]) => type),
+  };
 }
 
 export function buildAssistantContext(input: BuildAssistantContextInput): AssistantContextPayload {
@@ -166,5 +184,6 @@ export function buildAssistantContext(input: BuildAssistantContextInput): Assist
       strategy: guess.strategy,
     })),
     recentActions: pickRecentActions(input.recentActions),
+    behaviorStats: buildBehaviorStats(input.recentActions),
   };
 }

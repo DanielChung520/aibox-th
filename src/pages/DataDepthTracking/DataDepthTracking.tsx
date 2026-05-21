@@ -1,11 +1,11 @@
 /**
  * @file        資料深度追蹤主頁面
- * @description 整合場景選擇、輸入、圖譜、表格、報告等子元件
+ * @description 左右分區：左側場景選擇+輸入，右側結果展示
  * @lastUpdate  2026-05-17
  */
 import React, { useState, useCallback } from 'react';
-import { Typography, Layout, Row, Col, Spin, message, notification, Button } from 'antd';
-import { SaveOutlined } from '@ant-design/icons';
+import { Row, Col, Card, Spin, message, notification, Button, Tag, Empty } from 'antd';
+import { SaveOutlined, ArrowLeftOutlined } from '@ant-design/icons';
 import { useContentTokens } from '../../contexts/AppThemeProvider';
 import ScenarioSelector from './components/ScenarioSelector';
 import TraceInputForm from './components/TraceInputForm';
@@ -15,8 +15,6 @@ import ResultSummary from './components/ResultSummary';
 import ReportSaveModal from './components/ReportSaveModal';
 import { dataAgentApi } from '../../services/dataAgentApi';
 import type { RecordTraceNode, RecordTraceEdge } from '../../services/dataAgentApi_types';
-
-const { Title } = Typography;
 
 interface TraceResultData {
   nodes: RecordTraceNode[]; edges: RecordTraceEdge[];
@@ -79,59 +77,96 @@ const DataDepthTracking: React.FC = () => {
   }, []);
 
   return (
-    <Layout style={{ padding: 24, background: 'transparent', minHeight: '100%' }}>
-      <Title level={3} style={{ marginBottom: 24, color: tokens?.colorTextBase }}>資料深度追蹤</Title>
-      <Row gutter={[24, 24]} style={{ marginBottom: 24 }}>
-        <Col xs={24} md={6}>
-          <ScenarioSelector selectedScenario={selectedScenario} onSelect={setSelectedScenario} />
+    <div style={{ padding: 2, height: '100%', overflow: 'auto' }}>
+      <Row gutter={8} style={{ height: '100%' }}>
+        {/* Left Panel: Scenario + Input */}
+        <Col xs={24} md={8} style={{ height: '100%', overflow: 'hidden' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, height: '100%', overflow: 'auto' }}>
+            <Card
+              title={<><Tag color="blue">場景</Tag> 選擇追蹤類型</>}
+              size="small"
+              style={{ borderRadius: 10 }}
+            >
+              <ScenarioSelector selectedScenario={selectedScenario} onSelect={setSelectedScenario} />
+            </Card>
+            {selectedScenario && (
+              <Card
+                title={<><Tag color="green">參數</Tag> 輸入追蹤條件</>}
+                size="small"
+                style={{ borderRadius: 10 }}
+              >
+                <TraceInputForm scenario={selectedScenario} onTrace={handleTrace} loading={loading} />
+              </Card>
+            )}
+            {selectedScenario && traceResult && (
+              <Card size="small" style={{ borderRadius: 10 }}>
+                <Button block icon={<ArrowLeftOutlined />} onClick={() => { setTraceResult(null); setActiveNodeId(null); }}>
+                  重新查詢
+                </Button>
+              </Card>
+            )}
+          </div>
         </Col>
-        <Col xs={24} md={18}>
-          <TraceInputForm scenario={selectedScenario} onTrace={handleTrace} loading={loading} />
+
+        {/* Right Panel: Results */}
+        <Col xs={24} md={16} style={{ height: '100%' }}>
+          {loading && (
+            <Card style={{ borderRadius: 10, height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Spin size="large" />
+              <div style={{ marginTop: 16, color: tokens?.textSecondary }}>正在追蹤中...</div>
+            </Card>
+          )}
+
+          {!loading && !traceResult && (
+            <Card style={{ borderRadius: 10, height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Empty description="請先在左側選擇場景並輸入參數" />
+            </Card>
+          )}
+
+          {traceResult && !loading && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16, height: '100%', overflow: 'auto' }}>
+              <Card style={{ borderRadius: 10 }}>
+                <ResultSummary
+                  nodeCount={traceResult.summary.node_count}
+                  edgeCount={traceResult.summary.edge_count}
+                  maxDepth={traceResult.summary.max_depth}
+                  totalTimeMs={traceResult.summary.total_time_ms}
+                  nodes={traceResult.nodes}
+                />
+              </Card>
+              <Card
+                title="關聯圖譜"
+                style={{ borderRadius: 10 }}
+                extra={
+                  <Button size="small" type="primary" icon={<SaveOutlined />} onClick={() => setReportModalOpen(true)}>
+                    儲存報告
+                  </Button>
+                }
+              >
+                <TraceGraphView
+                  nodes={traceResult.nodes}
+                  edges={traceResult.edges}
+                  onNodeClick={handleGraphNodeClick}
+                  loading={false}
+                />
+              </Card>
+              <Card title="追蹤明細" style={{ borderRadius: 10 }}>
+                {traceResult.nodes.length > 0 ? (
+                  <TraceResultTable
+                    nodes={traceResult.nodes}
+                    onRowClick={handleRowClick}
+                    loading={false}
+                    activeRagicId={activeNodeId}
+                  />
+                ) : (
+                  <Empty description="無追蹤資料" />
+                )}
+              </Card>
+            </div>
+          )}
         </Col>
       </Row>
-      {loading && (
-        <div style={{ textAlign: 'center', padding: 80 }}>
-          <Spin size="large" tip="正在追蹤中..." />
-        </div>
-      )}
-      {traceResult && !loading && (
-        <>
-          <Row gutter={[24, 24]} style={{ marginBottom: 16 }}>
-            <Col span={24}>
-              <ResultSummary
-                nodeCount={traceResult.summary.node_count}
-                edgeCount={traceResult.summary.edge_count}
-                maxDepth={traceResult.summary.max_depth}
-                totalTimeMs={traceResult.summary.total_time_ms}
-                nodes={traceResult.nodes}
-              />
-            </Col>
-          </Row>
-          <Row gutter={[24, 24]}>
-            <Col xs={24} lg={14}>
-              <TraceGraphView
-                nodes={traceResult.nodes}
-                edges={traceResult.edges}
-                onNodeClick={handleGraphNodeClick}
-                loading={false}
-              />
-            </Col>
-            <Col xs={24} lg={10}>
-              <TraceResultTable
-                nodes={traceResult.nodes}
-                onRowClick={handleRowClick}
-                loading={false}
-                activeRagicId={activeNodeId}
-              />
-            </Col>
-          </Row>
-          <div style={{ marginTop: 16, textAlign: 'right' }}>
-            <Button type="primary" icon={<SaveOutlined />} onClick={() => setReportModalOpen(true)}>
-              儲存報告
-            </Button>
-          </div>
-        </>
-      )}
+
       <ReportSaveModal
         open={reportModalOpen}
         onClose={() => setReportModalOpen(false)}
@@ -147,7 +182,7 @@ const DataDepthTracking: React.FC = () => {
         scenario={selectedScenario || ''}
         loading={false}
       />
-    </Layout>
+    </div>
   );
 };
 

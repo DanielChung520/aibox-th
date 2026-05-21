@@ -305,6 +305,7 @@ export default function SchemaPage() {
         previewMode={dataPreviewMode}
         onPreviewModeChange={handlePreviewModeChange}
         onCancel={() => setDataModalVisible(false)}
+        account="dawnlink"
       />
 
       <SchemaSettingsDrawer open={settingsOpen} onClose={() => setSettingsOpen(false)} />

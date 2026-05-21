@@ -11,7 +11,9 @@ pub mod ai_proxy;
 pub mod billing;
 pub mod chat;
 pub mod heartbeat;
+pub mod pdca;
 pub mod service_ctl;
+pub mod todos;
 
 #[allow(unused_imports)]
 pub use ai_proxy::AiProxy;
@@ -20,4 +22,8 @@ pub use billing::BillingService;
 #[allow(unused_imports)]
 pub use heartbeat::HeartbeatService;
 #[allow(unused_imports)]
+pub use pdca::{PDCAController, PdcaVerdict};
+#[allow(unused_imports)]
 pub use service_ctl::ServiceController;
+#[allow(unused_imports)]
+pub use todos::TodosEngine;

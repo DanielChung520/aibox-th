@@ -13,6 +13,8 @@ import type { UploadProps } from 'antd';
 import { Ontology, OntologyLayer, ontologyApi } from '../../services/api';
 import { useContentTokens } from '../../contexts/AppThemeProvider';
 import OntologyGraphViewer from './components/OntologyGraphViewer';
+import { useEntityPerception } from '../../hooks/useEntityPerception';
+import { pageContextManager } from '../../services/PageContextManager';
 
 interface Basic5W1HItem {
   key: string;
@@ -44,6 +46,13 @@ export default function OntologyList() {
   
   const { message } = App.useApp();
   const tokens = useContentTokens();
+  const { dispatchEntity } = useEntityPerception({ defaultEntityType: 'ontology', defaultAction: 'list' });
+  void dispatchEntity; // Reserved for future event handler use
+
+  useEffect(() => {
+    pageContextManager.report({ component: 'OntologyList', entityType: 'ontology', action: 'list' });
+    return () => { pageContextManager.report({ component: undefined, entityType: undefined, action: undefined }); };
+  }, []);
 
   const loadOntologies = useCallback(async () => {
     setLoading(true);

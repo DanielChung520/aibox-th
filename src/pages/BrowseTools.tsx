@@ -22,6 +22,8 @@ import { toolApi, Tool, authApi } from '../services/api';
 import { authStore } from '../stores/auth';
 import { useContentTokens } from '../contexts/AppThemeProvider';
 import { iconMap } from '../utils/icons';
+import { useEntityPerception } from '../hooks/useEntityPerception';
+import { pageContextManager } from '../services/PageContextManager';
 
 const groupConfig = [
   { key: 'all', label: '全部' },
@@ -50,6 +52,8 @@ export default function BrowseTools() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingTool, setEditingTool] = useState<Tool | null>(null);
   const [modalMode, setModalMode] = useState<'create' | 'edit'>('create');
+
+  useEntityPerception({ defaultEntityType: 'tool', defaultAction: 'list' });
 
   // 重新獲取用戶資料（如果 token 存在但 user 為空）
   useEffect(() => {
@@ -87,6 +91,10 @@ export default function BrowseTools() {
 
   useEffect(() => {
     fetchTools();
+  }, []);
+
+  useEffect(() => {
+    pageContextManager.report({ component: 'BrowseTools', entityType: 'tool', action: 'list' });
   }, []);
 
   const isAuthorized = (tool: Tool): boolean => {
@@ -186,6 +194,10 @@ export default function BrowseTools() {
         visibility: values.visibility || 'public',
         visibility_roles: values.visibility_roles || [],
         visibility_accounts: values.visibility_accounts || [],
+        mcp_transport: values.mcp_transport || undefined,
+        mcp_command: values.mcp_command || undefined,
+        mcp_args: values.mcp_args || undefined,
+        auth_config: values.auth_config,
       };
       if (modalMode === 'create') {
         apiData.created_by = currentUser?.username || 'unknown';

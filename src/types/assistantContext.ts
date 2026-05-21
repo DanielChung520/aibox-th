@@ -42,6 +42,12 @@ export interface AssistantContextRecentAction {
   summary?: string;
 }
 
+export interface AssistantContextBehaviorStats {
+  mostFrequentType: string;
+  totalRecentActions: number;
+  actionTypes: string[];
+}
+
 export interface AssistantContextPayload {
   page: AssistantContextPage;
   focus?: AssistantContextFocus;
@@ -49,4 +55,5 @@ export interface AssistantContextPayload {
   entity?: AssistantContextFocus;
   intentHints?: AssistantContextIntentHint[];
   recentActions?: AssistantContextRecentAction[];
+  behaviorStats?: AssistantContextBehaviorStats;
 }

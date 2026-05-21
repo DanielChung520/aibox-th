@@ -22,16 +22,16 @@ function StatusSwitch({ userKey, status, onStatusChange, message }: { userKey: s
     const newStatus = checked ? 'enabled' : 'disabled';
     try {
       await userApi.update(userKey, { status: newStatus });
-      message.success(`用户已${checked ? '启用' : '禁用'}`);
+      message.success(`用戶已${checked ? '啟用' : '禁用'}`);
       onStatusChange(userKey, newStatus);
     } catch (err) {
-      message.error('操作失败');
+      message.error('操作失敗');
     }
   };
   return (
     <Switch
       checked={status === 'enabled'}
-      checkedChildren="启用"
+      checkedChildren="啟用"
       unCheckedChildren="禁用"
       onChange={handleChange}
     />
@@ -57,7 +57,7 @@ export default function UserManagement() {
       const response = await userApi.list();
       setUsers(response.data.data || []);
     } catch (error) {
-      message.error('获取用户列表失败');
+      message.error('獲取用戶列表失敗');
     } finally {
       setLoading(false);
     }
@@ -74,7 +74,7 @@ export default function UserManagement() {
       const response = await roleApi.list();
       setRoles(response.data.data || []);
     } catch (error) {
-      message.error('获取角色列表失败');
+      message.error('獲取角色列表失敗');
     }
   };
 
@@ -163,10 +163,10 @@ export default function UserManagement() {
   const handleDelete = async (key: string) => {
     try {
       await userApi.delete(key);
-      message.success('删除成功');
+      message.success('刪除成功');
       fetchUsers();
     } catch (error) {
-      message.error('删除失败');
+      message.error('刪除失敗');
     }
   };
 
@@ -182,12 +182,12 @@ export default function UserManagement() {
           password_hash: values.password,
           status: values.status || 'enabled',
         });
-        message.success('创建成功');
+        message.success('創建成功');
       }
       setModalVisible(false);
       fetchUsers();
     } catch (error: any) {
-      message.error(error.response?.data?.message || '操作失败');
+      message.error(error.response?.data?.message || '操作失敗');
     }
   };
 
@@ -201,16 +201,16 @@ export default function UserManagement() {
     try {
       const values = await passwordForm.validateFields();
       await userApi.resetPassword(editingUser!._key, values.password);
-      message.success('密码重置成功');
+      message.success('密碼重置成功');
       setPasswordModalVisible(false);
     } catch (error) {
-      message.error('密码重置失败');
+      message.error('密碼重置失敗');
     }
   };
 
   const columns = [
     {
-      title: '用户名',
+      title: '用戶名',
       dataIndex: 'username',
       key: 'username',
     },
@@ -248,7 +248,7 @@ export default function UserManagement() {
       },
     },
     {
-      title: '创建时间',
+      title: '創建時間',
       dataIndex: 'created_at',
       key: 'created_at',
       render: (date: string) => new Date(date).toLocaleString(),
@@ -263,24 +263,24 @@ export default function UserManagement() {
             icon={<EditOutlined />} 
             onClick={() => handleEdit(record)}
           >
-            编辑
+            編輯
           </Button>
           <Button 
             type="link" 
             icon={<KeyOutlined />}
             onClick={() => handleResetPassword(record)}
           >
-            重置密码
+            重置密碼
           </Button>
           {record.username !== 'admin' && (
             <Popconfirm
-              title="确定删除此用户吗？"
+              title="確定刪除此用戶嗎？"
               onConfirm={() => handleDelete(record._key)}
-              okText="确定"
+              okText="確定"
               cancelText="取消"
             >
               <Button type="link" danger icon={<DeleteOutlined />}>
-                删除
+                刪除
               </Button>
             </Popconfirm>
           )}
@@ -293,7 +293,7 @@ export default function UserManagement() {
     <div>
       <div style={{ marginBottom: 16 }}>
         <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
-          新增用户
+          新增用戶
         </Button>
       </div>
 
@@ -309,7 +309,7 @@ export default function UserManagement() {
       />
 
       <Modal
-         title={editingUser ? '编辑用户' : '新增用户'}
+         title={editingUser ? '編輯用戶' : '新增用戶'}
          open={modalVisible}
          onOk={handleSubmit}
          onCancel={() => setModalVisible(false)}
@@ -320,8 +320,8 @@ export default function UserManagement() {
          <Form form={form} layout="vertical">
           <Form.Item
             name="username"
-            label="用户名"
-            rules={[{ required: true, message: '请输入用户名' }]}
+            label="用戶名"
+            rules={[{ required: true, message: '請輸入用戶名' }]}
           >
             <Input disabled={!!editingUser} />
           </Form.Item>
@@ -329,10 +329,10 @@ export default function UserManagement() {
           {!editingUser && (
             <Form.Item
               name="password"
-              label="密码"
+              label="密碼"
               rules={[
-                { required: true, message: '请输入密码' },
-                { min: 6, message: '密码至少6位' }
+                { required: true, message: '請輸入密碼' },
+                { min: 6, message: '密碼至少6位' }
               ]}
             >
               <Input.Password />
@@ -342,7 +342,7 @@ export default function UserManagement() {
           <Form.Item
             name="name"
             label="姓名"
-            rules={[{ required: true, message: '请输入姓名' }]}
+            rules={[{ required: true, message: '請輸入姓名' }]}
           >
             <Input />
           </Form.Item>
@@ -350,9 +350,9 @@ export default function UserManagement() {
           <Form.Item
             name="role_keys"
             label="角色"
-            rules={[{ required: true, message: '请选择角色' }]}
+            rules={[{ required: true, message: '請選擇角色' }]}
           >
-            <Select mode="multiple" placeholder="请选择角色">
+            <Select mode="multiple" placeholder="請選擇角色">
               {roles.map(role => (
                 <Select.Option key={role._key} value={role._key}>
                   {role.name}
@@ -361,16 +361,16 @@ export default function UserManagement() {
             </Select>
           </Form.Item>
           
-          <Form.Item name="status" label="状态" initialValue="enabled">
+          <Form.Item name="status" label="狀態" initialValue="enabled">
             <Select>
-              <Select.Option value="enabled">启用</Select.Option>
+              <Select.Option value="enabled">啟用</Select.Option>
               <Select.Option value="disabled">禁用</Select.Option>
             </Select>
           </Form.Item>
 
           <Form.Item name="tier" label="会员等级" initialValue="general">
             <Select>
-              <Select.Option value="general">一般用户</Select.Option>
+              <Select.Option value="general">一般用戶</Select.Option>
               <Select.Option value="vip">VIP</Select.Option>
             </Select>
           </Form.Item>
@@ -378,7 +378,7 @@ export default function UserManagement() {
       </Modal>
 
        <Modal
-         title="重置密码"
+         title="重置密碼"
          open={passwordModalVisible}
          onOk={handlePasswordSubmit}
          onCancel={() => setPasswordModalVisible(false)}
@@ -388,10 +388,10 @@ export default function UserManagement() {
          <Form form={passwordForm} layout="vertical">
           <Form.Item
             name="password"
-            label="新密码"
+            label="新密碼"
             rules={[
-              { required: true, message: '请输入新密码' },
-              { min: 6, message: '密码至少6位' }
+              { required: true, message: '請輸入新密碼' },
+              { min: 6, message: '密碼至少6位' }
             ]}
           >
             <Input.Password />
@@ -399,16 +399,16 @@ export default function UserManagement() {
           
           <Form.Item
             name="confirmPassword"
-            label="确认密码"
+            label="確認密碼"
             dependencies={['password']}
             rules={[
-              { required: true, message: '请确认密码' },
+              { required: true, message: '請確認密碼' },
               ({ getFieldValue }) => ({
                 validator(_, value) {
                   if (!value || getFieldValue('password') === value) {
                     return Promise.resolve();
                   }
-                  return Promise.reject(new Error('两次输入密码不一致'));
+                  return Promise.reject(new Error('兩次輸入密碼不一致'));
                 },
               }),
             ]}

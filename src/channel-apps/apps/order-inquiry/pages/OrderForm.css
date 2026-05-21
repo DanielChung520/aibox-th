@@ -1,0 +1,521 @@
+/**
+ * @file        OrderForm.css
+ * @description OrderForm page styles — BEM naming, mobile-first
+ * @lastUpdate  2026-05-21 17:00:00
+ * @author      Daniel Chung
+ * @version     1.0.0
+ */
+
+/* ─── Design Tokens (scoped) ─────────────────────────────────────────────── */
+.order-form {
+  --of-text-primary: #111827;
+  --of-text-secondary: #6b7280;
+  --of-text-tertiary: #9ca3af;
+  --of-bg-card: #ffffff;
+  --of-bg-muted: #f9fafb;
+  --of-bg-hover: #f3f4f6;
+  --of-border: #e5e7eb;
+  --of-border-light: #f3f4f6;
+  --of-accent: #3b82f6;
+  --of-accent-hover: #2563eb;
+  --of-accent-light: #eff6ff;
+  --of-success: #059669;
+  --of-success-light: #d1fae5;
+  --of-error: #dc2626;
+  --of-error-light: #fef2f2;
+  --of-radius-sm: 6px;
+  --of-radius-md: 12px;
+  --of-radius-lg: 16px;
+  --of-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --of-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
+  --of-transition: 0.2s ease;
+  --of-font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    Helvetica, Arial, sans-serif;
+
+  font-family: var(--of-font);
+  color: var(--of-text-primary);
+}
+
+/* ─── Step Header ────────────────────────────────────────────────────────── */
+
+.order-form__step-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.order-form__step-indicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  background: var(--of-accent);
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.order-form__step-indicator--complete {
+  background: var(--of-success);
+}
+
+.order-form__step-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--of-text-primary);
+  margin: 0;
+}
+
+/* ─── Progress Bar ───────────────────────────────────────────────────────── */
+
+.order-form__progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 20px;
+  padding: 0 4px;
+}
+
+.order-form__progress-step {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--of-text-tertiary);
+  white-space: nowrap;
+}
+
+.order-form__progress-step--active {
+  color: var(--of-accent);
+  font-weight: 600;
+}
+
+.order-form__progress-step--done {
+  color: var(--of-success);
+}
+
+.order-form__progress-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--of-border);
+  flex-shrink: 0;
+}
+
+.order-form__progress-dot--active {
+  background: var(--of-accent);
+  box-shadow: 0 0 0 3px var(--of-accent-light);
+}
+
+.order-form__progress-dot--done {
+  background: var(--of-success);
+}
+
+.order-form__progress-line {
+  flex: 1;
+  height: 2px;
+  background: var(--of-border);
+  border-radius: 1px;
+  min-width: 16px;
+}
+
+.order-form__progress-line--done {
+  background: var(--of-success);
+}
+
+/* ─── Product List ───────────────────────────────────────────────────────── */
+
+.order-form__product-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.order-form__product {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  background: var(--of-bg-card);
+  border: 1px solid var(--of-border-light);
+  border-radius: var(--of-radius-md);
+  padding: 14px 16px;
+  box-shadow: var(--of-shadow-sm);
+  transition: box-shadow var(--of-transition), border-color var(--of-transition);
+}
+
+.order-form__product:hover {
+  box-shadow: var(--of-shadow-md);
+  border-color: var(--of-border);
+}
+
+.order-form__product--selected {
+  border-color: var(--of-accent);
+  background: var(--of-accent-light);
+}
+
+.order-form__checkbox {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  margin-top: 2px;
+  accent-color: var(--of-accent);
+  cursor: pointer;
+}
+
+.order-form__product-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.order-form__product-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--of-text-primary);
+  margin-bottom: 2px;
+  line-height: 1.4;
+}
+
+.order-form__product-spec {
+  font-size: 13px;
+  color: var(--of-text-secondary);
+  margin-bottom: 4px;
+  line-height: 1.4;
+}
+
+.order-form__product-stock {
+  font-size: 12px;
+  color: var(--of-text-tertiary);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.order-form__product-stock--low {
+  color: var(--of-error);
+  font-weight: 600;
+}
+
+.order-form__qty-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  margin-top: 4px;
+}
+
+.order-form__qty-label {
+  font-size: 12px;
+  color: var(--of-text-secondary);
+  white-space: nowrap;
+}
+
+.order-form__qty-input {
+  width: 64px;
+  height: 34px;
+  border: 1px solid var(--of-border);
+  border-radius: var(--of-radius-sm);
+  padding: 0 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--of-text-primary);
+  background: var(--of-bg-card);
+  text-align: center;
+  outline: none;
+  transition: border-color var(--of-transition), box-shadow var(--of-transition);
+  font-family: var(--of-font);
+}
+
+.order-form__qty-input:focus {
+  border-color: var(--of-accent);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+.order-form__qty-input:disabled {
+  background: var(--of-bg-muted);
+  color: var(--of-text-tertiary);
+  cursor: not-allowed;
+}
+
+/* Remove spinner arrows for cleaner look */
+.order-form__qty-input::-webkit-inner-spin-button,
+.order-form__qty-input::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.order-form__qty-input[type='number'] {
+  -moz-appearance: textfield;
+}
+
+/* ─── Selected Count ─────────────────────────────────────────────────────── */
+
+.order-form__selected-count {
+  font-size: 13px;
+  color: var(--of-text-secondary);
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  background: var(--of-bg-muted);
+  border-radius: var(--of-radius-sm);
+  text-align: center;
+}
+
+.order-form__selected-count strong {
+  color: var(--of-accent);
+  font-weight: 700;
+}
+
+/* ─── Actions ────────────────────────────────────────────────────────────── */
+
+.order-form__actions {
+  position: sticky;
+  bottom: 0;
+  padding: 12px 0 0;
+  background: transparent;
+}
+
+.order-form__back-btn,
+.order-form__submit-btn {
+  display: block;
+  width: 100%;
+  height: 48px;
+  border: none;
+  border-radius: var(--of-radius-md);
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background var(--of-transition), opacity var(--of-transition);
+  font-family: var(--of-font);
+}
+
+.order-form__submit-btn {
+  background: var(--of-accent);
+  color: #fff;
+}
+
+.order-form__submit-btn:hover:not(:disabled) {
+  background: var(--of-accent-hover);
+}
+
+.order-form__submit-btn:active:not(:disabled) {
+  opacity: 0.85;
+}
+
+.order-form__submit-btn:disabled {
+  background: var(--of-border);
+  color: var(--of-text-tertiary);
+  cursor: not-allowed;
+}
+
+.order-form__back-btn {
+  margin-top: 8px;
+  background: var(--of-bg-muted);
+  color: var(--of-text-secondary);
+  border: 1px solid var(--of-border-light);
+}
+
+.order-form__back-btn:hover {
+  background: var(--of-bg-hover);
+  color: var(--of-text-primary);
+}
+
+/* ─── Step 2: Review ─────────────────────────────────────────────────────── */
+
+.order-form__summary {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.order-form__summary-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--of-bg-card);
+  border: 1px solid var(--of-border-light);
+  border-radius: var(--of-radius-md);
+  padding: 14px 16px;
+  box-shadow: var(--of-shadow-sm);
+}
+
+.order-form__summary-item-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.order-form__summary-item-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--of-text-primary);
+  margin-bottom: 2px;
+  line-height: 1.3;
+}
+
+.order-form__summary-item-spec {
+  font-size: 12px;
+  color: var(--of-text-secondary);
+}
+
+.order-form__summary-item-qty {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--of-accent);
+  flex-shrink: 0;
+}
+
+/* ─── Notes ──────────────────────────────────────────────────────────────── */
+
+.order-form__notes {
+  margin-bottom: 16px;
+}
+
+.order-form__notes-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--of-text-secondary);
+  margin-bottom: 6px;
+}
+
+.order-form__notes-textarea {
+  display: block;
+  width: 100%;
+  min-height: 80px;
+  padding: 10px 14px;
+  border: 1px solid var(--of-border);
+  border-radius: var(--of-radius-sm);
+  font-size: 14px;
+  color: var(--of-text-primary);
+  background: var(--of-bg-card);
+  resize: vertical;
+  outline: none;
+  transition: border-color var(--of-transition), box-shadow var(--of-transition);
+  font-family: var(--of-font);
+  line-height: 1.5;
+}
+
+.order-form__notes-textarea:focus {
+  border-color: var(--of-accent);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+.order-form__notes-textarea::placeholder {
+  color: var(--of-text-tertiary);
+}
+
+/* ─── Result ─────────────────────────────────────────────────────────────── */
+
+.order-form__result {
+  text-align: center;
+  padding: 32px 16px;
+}
+
+.order-form__result-icon {
+  font-size: 48px;
+  line-height: 1;
+  margin-bottom: 16px;
+}
+
+.order-form__result-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--of-text-primary);
+  margin-bottom: 8px;
+}
+
+.order-form__result-message {
+  font-size: 14px;
+  color: var(--of-text-secondary);
+  line-height: 1.6;
+  margin-bottom: 20px;
+}
+
+.order-form__result-id {
+  display: inline-block;
+  padding: 8px 16px;
+  background: var(--of-bg-muted);
+  border: 1px solid var(--of-border-light);
+  border-radius: var(--of-radius-sm);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--of-text-primary);
+  font-family: 'SF Mono', 'Menlo', 'Monaco', 'Courier New', monospace;
+  margin-bottom: 20px;
+}
+
+/* ─── Loading ────────────────────────────────────────────────────────────── */
+
+.order-form__loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 16px;
+  gap: 12px;
+}
+
+.order-form__spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--of-border);
+  border-top-color: var(--of-accent);
+  border-radius: 50%;
+  animation: of-spin 0.7s linear infinite;
+}
+
+@keyframes of-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.order-form__loading-text {
+  font-size: 14px;
+  color: var(--of-text-secondary);
+}
+
+/* ─── Empty ──────────────────────────────────────────────────────────────── */
+
+.order-form__empty {
+  text-align: center;
+  padding: 48px 16px;
+  color: var(--of-text-tertiary);
+  font-size: 14px;
+}
+
+/* ─── Error ──────────────────────────────────────────────────────────────── */
+
+.order-form__error {
+  padding: 12px 16px;
+  background: var(--of-error-light);
+  border: 1px solid #fecaca;
+  border-radius: var(--of-radius-sm);
+  color: var(--of-error);
+  font-size: 13px;
+  line-height: 1.5;
+  margin-bottom: 16px;
+}
+
+/* ─── Submitting overlay ─────────────────────────────────────────────────── */
+
+.order-form__submitting-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.8);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  z-index: 100;
+  font-size: 14px;
+  color: var(--of-text-secondary);
+}

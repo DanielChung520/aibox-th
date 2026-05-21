@@ -44,7 +44,7 @@ const ScenarioSelector: React.FC<ScenarioSelectorProps> = ({ selectedScenario, o
         const IconComponent = ICON_MAP[scenario.icon];
 
         return (
-          <Col xs={12} md={6} key={scenario.id}>
+          <Col xs={12} md={12} key={scenario.id}>
             <Card
               hoverable
               size="small"

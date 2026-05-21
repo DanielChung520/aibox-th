@@ -1,7 +1,7 @@
 /**
  * @file        Data Agent API 服務層 - 型別定義
  * @description DA 的 Schema、Intents、Query 等型別介面定義
- * @lastUpdate  2026-04-24 10:18:00
+ * @lastUpdate  2026-05-01 10:31:57
  * @author      Daniel Chung
  */
 
@@ -356,4 +356,68 @@ export interface RagicNLQueryResponse {
   intent: RagicNLIntentMatch | null;
   post_error: RagicNLPostError | null;
   metadata: RagicNLQueryMetadata | null;
+}
+
+// ---------------------------------------------------------------------------
+// FK Edge Info — describes an expandable FK edge from a record
+// ---------------------------------------------------------------------------
+
+export interface FkEdgeInfo {
+  from_field_id: string;
+  from_field_name: string;
+  from_field_value: string;
+  target_table_key: string;
+  target_table_name: string;
+  relation_type: string;
+}
+
+export interface FkPreviewResponse {
+  record: Record<string, unknown> | null;
+  table_name: string;
+  fk_edges: FkEdgeInfo[];
+}
+
+export interface FkEdgeNode {
+  table_key: string;
+  table_name: string;
+  ragic_id: string;
+  fields: Record<string, unknown>;
+}
+
+export interface FkEdgeResponse {
+  nodes: FkEdgeNode[];
+  fk_previews: Record<string, FkEdgeInfo[]>;
+  relation_type: string;
+  via_field_name: string;
+}
+
+// ---------------------------------------------------------------------------
+// Record Trace / Lineage (POST /api/v1/da/trace/record)
+// ---------------------------------------------------------------------------
+
+export interface RecordTraceNode {
+  table_key: string;
+  table_name: string;
+  ragic_id: string;
+  fields: Record<string, unknown>;
+  depth: number;
+}
+
+export interface RecordTraceEdge {
+  from_ragic_id: string;
+  from_table_key: string;
+  to_ragic_id: string;
+  to_table_key: string;
+  via_field_id: string;
+  via_field_name: string;
+  relation_type: string;
+}
+
+export interface RecordTraceResponse {
+  nodes: RecordTraceNode[];
+  edges: RecordTraceEdge[];
+  root_ragic_id: string;
+  root_table_key: string;
+  total_records: number;
+  total_time_ms: number;
 }

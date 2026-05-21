@@ -3,6 +3,8 @@ import { Typography, Empty, Spin, Modal, Button, Checkbox } from 'antd';
 import { MessageOutlined, DeleteOutlined, CheckOutlined, StopOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useContentTokens } from '../contexts/AppThemeProvider';
+import { useEntityPerception } from '../hooks/useEntityPerception';
+import { pageContextManager } from '../services/PageContextManager';
 import { chatStore } from '../stores/chatStore';
 import type { ChatSession } from '../services/api';
 
@@ -17,6 +19,12 @@ export default function TaskSessionHistory() {
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
   const [deleteTarget, setDeleteTarget] = useState<ChatSession | null>(null);
   const [batchModalOpen, setBatchModalOpen] = useState(false);
+
+  useEntityPerception({ defaultEntityType: 'task_session', defaultAction: 'history' });
+
+  useEffect(() => {
+    pageContextManager.report({ component: 'TaskSessionHistory', entityType: 'task_session', action: 'history' });
+  }, []);
 
   useEffect(() => {
     setLoading(true);

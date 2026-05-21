@@ -45,6 +45,10 @@ struct TrailQuery {
     component: Option<String>,
     from: Option<u64>,
     to: Option<u64>,
+    page_num: Option<u32>,
+    page_size: Option<u32>,
+    event_type: Option<String>,
+    sort: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -54,6 +58,14 @@ struct TrailLine {
     timestamp: u64,
     page: String,
     meta: serde_json::Value,
+}
+
+#[derive(Debug, Serialize)]
+struct PaginatedTrailResponse {
+    data: Vec<serde_json::Value>,
+    total: usize,
+    page: u32,
+    page_size: u32,
 }
 
 fn extract_account(headers: &HeaderMap) -> Result<String, StatusCode> {
@@ -208,7 +220,7 @@ async fn query_trail(
         .map_err(|_| StatusCode::BAD_GATEWAY)?;
 
     if !resp.status().is_success() {
-        return Ok(Json(ApiResponse::success(Vec::<serde_json::Value>::new())));
+        return Ok(Json(ApiResponse::success(serde_json::Value::Null)));
     }
 
     let text = resp.text().await.unwrap_or_default();
@@ -235,7 +247,56 @@ async fn query_trail(
         });
     }
 
-    Ok(Json(ApiResponse::success(events)))
+    if let Some(ref event_type) = q.event_type {
+        events.retain(|e| {
+            e.get("type")
+                .or_else(|| e.get("event_type"))
+                .and_then(|v| v.as_str())
+                .map(|t| t == event_type)
+                .unwrap_or(false)
+        });
+    }
+
+    let sort_desc = q.sort.as_deref().map(|s| s == "desc").unwrap_or(true);
+    events.sort_by(|a, b| {
+        let ts_a = a.get("timestamp").and_then(|v| v.as_u64()).unwrap_or(0);
+        let ts_b = b.get("timestamp").and_then(|v| v.as_u64()).unwrap_or(0);
+        if sort_desc {
+            ts_b.cmp(&ts_a)
+        } else {
+            ts_a.cmp(&ts_b)
+        }
+    });
+
+    let total = events.len();
+
+    // Pagination (backward compatible: no params = return all)
+    let (page, page_size) = match (q.page_num, q.page_size) {
+        (Some(pn), Some(ps)) => {
+            let ps = ps.min(200).max(1);
+            (pn.max(1), ps)
+        }
+        _ => (1, total as u32),
+    };
+
+    let data: Vec<serde_json::Value> = if total > 0 && page_size > 0 {
+        let start = ((page - 1) as usize) * page_size as usize;
+        if start < total {
+            let end = (start + page_size as usize).min(total);
+            events[start..end].to_vec()
+        } else {
+            Vec::new()
+        }
+    } else {
+        Vec::new()
+    };
+
+    Ok(Json(ApiResponse::success(serde_json::json!(PaginatedTrailResponse {
+        data,
+        total,
+        page,
+        page_size,
+    }))))
 }
 
 pub fn create_action_trail_router() -> Router {

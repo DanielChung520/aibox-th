@@ -36,6 +36,14 @@ PAGE_TYPE_MAP: dict[str, str] = {
     "/app/knowledge/ontology": "knowledge_management",
     "/app/knowledge/management": "knowledge_management",
     "/app/intent-orchestration": "system_management",
+    "/app/requirements": "business_management",
+    "/app/action-board": "business_management",
+    "/app/preorder": "business_management",
+    "/app/knowledge/todos": "task_management",
+    "/app/todo-board": "task_management",
+    "/app/platforms": "platform",
+    "/app/mermaid-verification": "development",
+    "/app/knowledge/skills": "knowledge_management",
 }
 
 
@@ -91,6 +99,31 @@ class PerceptionEngine:
 
                 anchor_changed = _upsert_anchor(context, anchor) or anchor_changed
                 batch_confidence = max(batch_confidence, anchor.confidence)
+
+            # Track click counts per page
+            for signal in signals:
+                if signal.type == "click" or signal.type == "cell_click":
+                    page_path = signal.page
+                    context.behavior_snapshot.click_counts[page_path] = \
+                        context.behavior_snapshot.click_counts.get(page_path, 0) + 1
+
+                # Track recent searches
+                if signal.type == "global_search":
+                    keyword = _meta_string(signal.meta, "keyword")
+                    if keyword and keyword not in context.behavior_snapshot.recent_searches:
+                        context.behavior_snapshot.recent_searches.append(keyword)
+                        context.behavior_snapshot.recent_searches = \
+                            context.behavior_snapshot.recent_searches[-10:]  # Keep last 10
+
+                # Track filter patterns
+                if signal.type == "filter_apply":
+                    filters = signal.meta.get("filters")
+                    if filters and isinstance(filters, dict):
+                        pattern = ",".join(f"{k}={v}" for k, v in filters.items())
+                        if pattern not in context.behavior_snapshot.filter_patterns:
+                            context.behavior_snapshot.filter_patterns.append(pattern)
+                            context.behavior_snapshot.filter_patterns = \
+                                context.behavior_snapshot.filter_patterns[-10:]
 
             context.signal_accumulation.total_signals += len(signals)
             if anchor_changed:
@@ -234,6 +267,47 @@ def _anchor_from_signal(signal: SignalEvent) -> Anchor | None:
                 value=table_name,
                 confidence=0.75,
                 source="behavior",
+                timestamp=signal.timestamp,
+            )
+
+    if signal.type == "entity_view":
+        entity_type = _meta_string(signal.meta, "entity_type") or "unknown"
+        return Anchor(
+            anchor_type="entity",
+            value=entity_type,
+            confidence=0.7,
+            source="behavior",
+            timestamp=signal.timestamp,
+        )
+
+    if signal.type == "entity_edit":
+        entity_type = _meta_string(signal.meta, "entity_type") or "unknown"
+        return Anchor(
+            anchor_type="entity",
+            value=entity_type,
+            confidence=0.85,
+            source="behavior",
+            timestamp=signal.timestamp,
+        )
+
+    if signal.type == "cell_click":
+        field_name = _meta_string(signal.meta, "fieldName") or _meta_string(signal.meta, "field") or ""
+        return Anchor(
+            anchor_type="data_point",
+            value=f"cell:{field_name}" if field_name else "cell",
+            confidence=0.5,
+            source="behavior",
+            timestamp=signal.timestamp,
+        )
+
+    if signal.type == "global_search":
+        keyword = _meta_string(signal.meta, "keyword") or ""
+        if keyword:
+            return Anchor(
+                anchor_type="search_intent",
+                value=keyword,
+                confidence=0.6,
+                source="language",
                 timestamp=signal.timestamp,
             )
 

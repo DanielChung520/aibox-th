@@ -11,20 +11,46 @@ use axum::{
     extract::Path,
     http::StatusCode,
     response::IntoResponse,
-    routing::{get, post, put, delete},
+    routing::{get, patch, post, put, delete},
     Json, Router,
 };
 use chrono::Datelike;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::{db::get_db, models::ApiResponse};
 
 pub fn create_skill_router() -> Router {
     Router::new()
-        .route("/api/v1/skills", get(list_skills).post(create_skill))
-        .route("/api/v1/skills/{id}", get(get_skill).put(update_skill).delete(delete_skill))
-        .route("/api/v1/skills/by-no/{skill_no}", get(get_skill_by_no))
-        .route("/api/v1/skills/{id}/analyze", post(analyze_skill))
+        .route("/api/v1/action-scripts", get(list_skills).post(create_skill))
+        .route("/api/v1/action-scripts/{id}", get(get_skill).put(update_skill).delete(delete_skill))
+        .route("/api/v1/action-scripts/by-no/{skill_no}", get(get_skill_by_no).patch(update_skill_by_no))
+        .route("/api/v1/action-scripts/{id}/analyze", post(analyze_skill))
+        .route("/api/v1/action-scripts/generate-steps", post(generate_steps))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct GenerateStepsRequest {
+    pub name: String,
+    pub description: Option<String>,
+    pub goal: Option<String>,
+    pub domain: Option<String>,
+    pub tags: Option<Vec<String>>,
+    #[serde(default)]
+    pub force: Option<bool>,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Serialize)]
+pub struct StepSuggestion {
+    pub title: String,
+    pub description: Option<String>,
+    #[serde(rename = "type")]
+    pub step_type: Option<String>,
+    pub prompt: Option<String>,
+    pub tool_name: Option<String>,
+    pub agent_name: Option<String>,
+    pub note: Option<String>,
 }
 
 async fn generate_skill_no() -> String {
@@ -36,7 +62,7 @@ async fn generate_skill_no() -> String {
     let pattern = format!("{}%", prefix);
     let count: f64 = db
         .aql_bind_vars(
-            "FOR s IN skill_specs FILTER s.skill_no LIKE @pattern RETURN 1",
+            "FOR s IN action_scripts FILTER s.skill_no LIKE @pattern RETURN 1",
             [("pattern", serde_json::json!(pattern))].into(),
         )
         .await
@@ -49,7 +75,7 @@ async fn generate_skill_no() -> String {
 async fn list_skills() -> Result<impl IntoResponse, StatusCode> {
     let db = get_db();
     let docs: Vec<Value> = db
-        .aql_str("FOR s IN skill_specs SORT s.created_at DESC RETURN s")
+        .aql_str("FOR s IN action_scripts SORT s.created_at DESC RETURN s")
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(Json(ApiResponse::success(docs)))
@@ -62,7 +88,7 @@ async fn create_skill(
         return Err(StatusCode::BAD_REQUEST);
     }
     let db = get_db();
-    let col = db.collection("skill_specs").await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let col = db.collection("action_scripts").await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let skill_no = generate_skill_no().await;
     let now = chrono::Utc::now().to_rfc3339();
     let mut doc = payload.clone();
@@ -88,7 +114,7 @@ async fn get_skill(
     let db = get_db();
     let docs: Vec<Value> = db
         .aql_bind_vars(
-            "FOR s IN skill_specs FILTER s._key == @key LIMIT 1 RETURN s",
+            "FOR s IN action_scripts FILTER s._key == @key LIMIT 1 RETURN s",
             [("key", serde_json::json!(id))].into(),
         )
         .await
@@ -105,7 +131,7 @@ async fn update_skill(
         return Err(StatusCode::BAD_REQUEST);
     }
     let db = get_db();
-    let col = db.collection("skill_specs").await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let col = db.collection("action_scripts").await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let mut update_data = payload.clone();
     if let Some(obj) = update_data.as_object_mut() {
         obj.insert("updated_at".to_string(), serde_json::json!(chrono::Utc::now().to_rfc3339()));
@@ -120,7 +146,7 @@ async fn delete_skill(
     Path(id): Path<String>,
 ) -> Result<impl IntoResponse, StatusCode> {
     let db = get_db();
-    let col = db.collection("skill_specs").await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let col = db.collection("action_scripts").await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     col.remove_document::<Value>(&id, Default::default(), None)
         .await
         .map_err(|_| StatusCode::NOT_FOUND)?;
@@ -133,13 +159,42 @@ async fn get_skill_by_no(
     let db = get_db();
     let docs: Vec<Value> = db
         .aql_bind_vars(
-            "FOR s IN skill_specs FILTER s.skill_no == @no LIMIT 1 RETURN s",
+            "FOR s IN action_scripts FILTER s.skill_no == @no LIMIT 1 RETURN s",
             [("no", serde_json::json!(skill_no))].into(),
         )
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let doc = docs.into_iter().next().ok_or(StatusCode::NOT_FOUND)?;
     Ok(Json(ApiResponse::success(doc)))
+}
+
+async fn update_skill_by_no(
+    Path(skill_no): Path<String>,
+    Json(payload): Json<Value>,
+) -> Result<impl IntoResponse, StatusCode> {
+    let db = get_db();
+
+    let docs: Vec<Value> = db
+        .aql_bind_vars(
+            "FOR s IN action_scripts FILTER s.skill_no == @skill_no LIMIT 1 RETURN s._key",
+            [("skill_no", serde_json::json!(skill_no))].into(),
+        )
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let key = docs.into_iter().next()
+        .and_then(|v| v.as_str().map(|s| s.to_string()))
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    let col = db.collection("action_scripts").await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let mut update_data = payload.clone();
+    if let Some(obj) = update_data.as_object_mut() {
+        obj.insert("updated_at".to_string(), serde_json::json!(chrono::Utc::now().to_rfc3339()));
+    }
+    col.update_document(&key, update_data, Default::default())
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(Json(ApiResponse::success(serde_json::json!({"status": "updated", "key": key}))))
 }
 
 async fn analyze_skill(
@@ -151,7 +206,7 @@ async fn analyze_skill(
 
     let docs: Vec<Value> = db
         .aql_bind_vars(
-            "FOR s IN skill_specs FILTER s._key == @key LIMIT 1 RETURN s",
+            "FOR s IN action_scripts FILTER s._key == @key LIMIT 1 RETURN s",
             [("key", serde_json::json!(id))].into(),
         )
         .await
@@ -495,7 +550,7 @@ async fn analyze_skill(
         .get("implementation").and_then(|i| i.get("name")).and_then(|v| v.as_str())
         .or_else(|| spec_json.get("name").and_then(|v| v.as_str()))
         .unwrap_or("");
-    let col = db.collection("skill_specs").await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let col = db.collection("action_scripts").await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     col.update_document(
         &id,
         serde_json::json!({
@@ -512,4 +567,220 @@ async fn analyze_skill(
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     Ok(Json(ApiResponse::success("spec_generated")))
+}
+
+async fn generate_steps(
+    Json(req): Json<GenerateStepsRequest>,
+) -> Result<impl IntoResponse, StatusCode> {
+    let db = get_db();
+
+    let model: String = db
+        .aql_bind_vars(
+            "FOR p IN system_params FILTER p.param_key == @key LIMIT 1 RETURN p.param_value",
+            [("key", serde_json::json!("skills.llm_model"))].into(),
+        )
+        .await
+        .ok()
+        .and_then(|mut v: Vec<String>| v.pop())
+        .unwrap_or_else(|| "qwen3:32b".to_string());
+
+    let temperature: f64 = db
+        .aql_bind_vars(
+            "FOR p IN system_params FILTER p.param_key == @key LIMIT 1 RETURN p.param_value",
+            [("key", serde_json::json!("skills.temperature"))].into(),
+        )
+        .await
+        .ok()
+        .and_then(|mut v: Vec<String>| v.pop())
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(0.7);
+
+    let max_tokens: usize = db
+        .aql_bind_vars(
+            "FOR p IN system_params FILTER p.param_key == @key LIMIT 1 RETURN p.param_value",
+            [("key", serde_json::json!("skills.max_tokens"))].into(),
+        )
+        .await
+        .ok()
+        .and_then(|mut v: Vec<String>| v.pop())
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(4096);
+
+    let mut api_base = std::env::var("OLLAMA_BASE_URL").unwrap_or_else(|_| "http://localhost:11434".to_string());
+    let mut api_key = String::new();
+
+    let providers: Vec<Value> = db
+        .aql_bind_vars(
+            "FOR p IN model_providers FILTER p.status == 'enabled' RETURN p",
+            [].into(),
+        )
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    'provider_loop: for p in &providers {
+        if let Some(models) = p.get("models").and_then(|v| v.as_array()) {
+            for m in models {
+                if let Some(mid) = m.get("model_id").and_then(|v| v.as_str()) {
+                    if mid == model {
+                        if let Some(url) = p.get("base_url").and_then(|v| v.as_str()) {
+                            api_base = url.trim_end_matches('/').to_string();
+                        }
+                        if let Some(k) = p.get("api_key").and_then(|v| v.as_str()) {
+                            api_key = k.to_string();
+                        }
+                        break 'provider_loop;
+                    }
+                }
+            }
+        }
+    }
+
+    let is_ollama = api_base.contains("localhost") || api_base.contains("127.0.0.1");
+
+    let domain_label = req.domain.as_deref().unwrap_or("");
+    let tags_str = req.tags.as_ref().map(|t| t.join(", ")).unwrap_or_default();
+    let force_hint = if req.force.unwrap_or(false) {
+        "\n## 強制模式：忽略設計檢查，直接產生步驟。\n"
+    } else {
+        ""
+    };
+    let prompt = format!(
+        r#"你是一個技能流程設計專家。請根據以下技能資訊，產生執行步驟或回報設計問題。
+
+## 技能資訊
+技能名稱：{name}
+描述：{desc}
+完成目標：{goal}
+業務領域：{domain}
+標籤：{tags}
+{force_hint}
+## 第一步：設計檢查（必須優先執行）
+檢查以下項目，**任何一項有問題就回報警告**：
+
+A. 單一職責：完成目標是否描述多個**不相關**的功能？
+   - 例如「查詢訂購品項或查詢訂單狀態」→ 這是兩個功能 ❌
+   - 例如「拍照、比對、寫入系統」→ 這是同一流程中的步驟 ✅
+   - 判斷標準：這些功能是否能獨立運作？是否需要不同的查詢邏輯或資料源？
+
+B. 描述與目標一致性：描述內容是否支持完成目標？
+   - 描述應該具體說明目標的範圍和方式
+   - 如果描述與目標無關或矛盾 → 問題
+
+C. 目標具體性：完成目標是否具體到可以產出執行步驟？
+   - 例如「處理訂單」→ 太模糊，需要更具體的行為描述
+   - 例如「接收 LINE 圖片 → 辨識食材 → 查詢庫存 → 回覆結果」→ 夠具體
+
+D. 領域匹配：業務領域與標籤是否與目標合理對應？
+
+## 第二步：回傳格式
+
+### 如果發現設計問題，回傳 JSON 物件：
+{{ "_warning": true, "issues": [{{ "type": "single_responsibility|coherence|specificity|mismatch", "detail": "具體問題說明", "severity": "error|warning" }}], "suggestion": "如何改善的建議" }}
+
+### 如果沒有問題，回傳 JSON 陣列（3~8 個步驟）：
+[{{ "title": "步驟標題", "description": "步驟描述", "type": "llm_prompt|script|manual|agent|tool", "prompt": "若 type 為 llm_prompt 則填寫", "tool_name": "若 type 為 tool 則填寫", "agent_name": "若 type 為 agent 則填寫" }}]
+
+步驟類型說明：llm_prompt=LLM 推理, script=程式碼執行, manual=人工操作, agent=呼叫 Agent, tool=呼叫工具
+
+## 約束
+- 每個步驟的 title 必須簡潔明確
+- 步驟順序要符合業務邏輯
+- 最後一步應是確認/完成動作
+- 只回傳 JSON，不要其他文字"#,
+        name = req.name,
+        desc = req.description.as_deref().unwrap_or(""),
+        goal = req.goal.as_deref().unwrap_or(""),
+        domain = domain_label,
+        tags = tags_str,
+        force_hint = force_hint,
+    );
+
+    let result: Value = if let Ok(client) = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(60))
+        .build()
+    {
+        let llm_req = if is_ollama {
+            client
+                .post(format!("{}/api/chat", api_base))
+                .json(&serde_json::json!({
+                    "model": model,
+                    "messages": [{"role": "user", "content": prompt}],
+                    "stream": false,
+                    "format": "json",
+                    "options": {
+                        "temperature": temperature,
+                        "num_predict": max_tokens as i32,
+                    },
+                }))
+        } else {
+            let mut req = client
+                .post(format!("{}/chat/completions", api_base))
+                .json(&serde_json::json!({
+                    "model": model,
+                    "messages": [{"role": "user", "content": prompt}],
+                    "stream": false,
+                    "temperature": temperature,
+                    "max_tokens": max_tokens,
+                }));
+            if !api_key.is_empty() {
+                req = req.header("Authorization", format!("Bearer {}", api_key));
+            }
+            req
+        };
+
+        if let Ok(resp) = llm_req.send().await {
+            if resp.status().is_success() {
+                let body: Value = resp.json().await.unwrap_or_default();
+                let content = if is_ollama {
+                    body.get("message")
+                        .and_then(|m| m.get("content"))
+                        .and_then(|c| c.as_str())
+                        .map(|s| s.to_string())
+                } else {
+                    body.get("choices")
+                        .and_then(|c| c.get(0))
+                        .and_then(|c| c.get("message"))
+                        .and_then(|m| m.get("content"))
+                        .and_then(|c| c.as_str())
+                        .map(|s| s.to_string())
+                };
+                if let Some(content) = content {
+                    let trimmed = content.trim();
+                    if let Ok(val) = serde_json::from_str::<Value>(trimmed) {
+                        val
+                    } else if let Some(start) = trimmed.find('{') {
+                        if let Some(end) = trimmed.rfind('}') {
+                            serde_json::from_str::<Value>(&trimmed[start..=end]).unwrap_or_default()
+                        } else {
+                            Value::Null
+                        }
+                    } else if let Some(start) = trimmed.find('[') {
+                        if let Some(end) = trimmed.rfind(']') {
+                            serde_json::from_str::<Value>(&trimmed[start..=end]).unwrap_or_default()
+                        } else {
+                            Value::Null
+                        }
+                    } else {
+                        Value::Null
+                    }
+                } else {
+                    Value::Null
+                }
+            } else {
+                Value::Null
+            }
+        } else {
+            Value::Null
+        }
+    } else {
+        Value::Null
+    };
+
+    let final_result = if result.is_null() {
+        serde_json::json!([])
+    } else {
+        result
+    };
+
+    Ok(Json(ApiResponse::success(final_result)))
 }

@@ -51,6 +51,7 @@ import { authStore } from './stores/auth';
 import AppUpdater from './components/AppUpdater';
 import FloatingAssistantButton from './components/FloatingAssistantButton';
 import AIAssistantWindow from './pages/AIAssistantWindow';
+import ChannelAppRouter from './channel-apps/ChannelAppRouter';
 import { setupAssistantBridge } from './services/assistantBridge';
 import { setupPageViewTracking, setupBeforeUnload } from './utils/analytics';
 import { actionTrail } from './services/actionTrail';
@@ -219,6 +220,7 @@ function AppContent() {
             <Route path="/" element={<Welcome />} />
             <Route path="/login" element={<Login />} />
             <Route path="/ai-assistant" element={<AIAssistantWindow />} />
+            <Route path="/channel/*" element={<ChannelAppRouter />} />
 
             <Route
               path="/app"
@@ -250,6 +252,8 @@ function AppContent() {
 
               <Route path="data-agent/playground" element={<QueryPlayground />} />
               <Route path="data-agent/datalake" element={<DataLakePage />} />
+              <Route path="data-agent/data-depth-trace" element={<DataDepthTracking />} />
+              <Route path="data-agent/preorder" element={<PreorderBoard />} />
               <Route path="knowledge/ontology" element={<OntologyList />} />
               <Route path="knowledge/management" element={<KnowledgeBaseManagement />} />
               <Route path="knowledge/management/:id" element={<KnowledgeBaseDetail />} />
@@ -257,7 +261,6 @@ function AppContent() {
               <Route path="knowledge/todos" element={<TodoBoard />} />
               <Route path="intent-orchestration" element={<IntentCatalog />} />
               <Route path="mermaid-verification" element={<MermaidVerification />} />
-              <Route path="eea-erp/data-depth-trace" element={<DataDepthTracking />} />
               <Route path="esg/dashboard" element={<ESGDashboard />} />
               <Route path="esg/standards" element={<ESGStandards />} />
               <Route path="esg/records" element={<ESGRecords />} />

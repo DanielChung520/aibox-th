@@ -36,7 +36,16 @@ export type ActionEventType =
   | 'entity_filter'
   | 'entity_export'
   | 'entity_import'
-  | 'entity_execute';
+  | 'entity_execute'
+  | 'click'            // 通用點擊（來自 globalActionTracker）
+  | 'input_focus'      // 輸入框 focus
+  | 'row_select'       // 表格行選取
+  | 'tab_switch'       // 頁籤切換（Ant Design Tabs）
+  | 'bulk_action'      // 批量操作（批量刪除/匯出）
+  | 'toggle_switch'    // 開關切換（Switch 元件）
+  | 'date_picker'      // 日期選擇
+  | 'dropdown_select' // 下拉選單選擇
+  | 'table_focus';     // 表格 focus
 
 export interface ActionEvent {
   type: ActionEventType;
@@ -47,7 +56,7 @@ export interface ActionEvent {
 
 type TrailListener = (event: ActionEvent) => void;
 
-const MAX_BUFFER = 200;
+const MAX_BUFFER = 500;
 const DWELL_THRESHOLD_MS = 3000;
 const FLUSH_INTERVAL_MS = 30_000;
 const FLUSH_THRESHOLD = 100;

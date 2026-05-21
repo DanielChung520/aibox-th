@@ -18,6 +18,8 @@ import {
 import { intentCatalogApi, IntentCatalogEntry } from '../services/intentCatalogApi';
 import { paramsApi } from '../services/api';
 import DataAgentTables from './DataAgentTables';
+import { useEntityPerception } from '../hooks/useEntityPerception';
+import { pageContextManager } from '../services/PageContextManager';
 
 const { Text } = Typography;
 const { TextArea } = Input;
@@ -506,6 +508,15 @@ function OrchestratorPanel() {
 }
 
 export default function IntentCatalog() {
+  useEntityPerception({ defaultEntityType: 'intent', defaultAction: 'list' });
+
+  useEffect(() => {
+    pageContextManager.report({ component: 'IntentCatalog', entityType: 'intent', action: 'list' });
+    return () => {
+      pageContextManager.report({ component: 'IntentCatalog', entityType: 'intent', action: undefined });
+    };
+  }, []);
+
   return (
     <div style={{ padding: 24, height: '100%', overflow: 'auto' }}>
       <Tabs

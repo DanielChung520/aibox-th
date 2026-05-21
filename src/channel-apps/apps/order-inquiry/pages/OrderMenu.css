@@ -1,0 +1,127 @@
+/* ============================================
+   OrderMenu — order-inquiry mini app main menu
+   Mobile-first, BEM naming
+   ============================================ */
+
+.order-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+/* ---- Card ---- */
+.order-menu__card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px 18px;
+  background: #ffffff;
+  border: 1px solid #f3f4f6;
+  border-radius: 14px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+  cursor: pointer;
+  transition: box-shadow 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+.order-menu__card:hover {
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+  border-color: #e5e7eb;
+}
+
+.order-menu__card:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+/* ---- Card Icon ---- */
+.order-menu__card-icon {
+  font-size: 32px;
+  line-height: 1;
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f9fafb;
+  border-radius: 12px;
+}
+
+/* ---- Card Body ---- */
+.order-menu__card-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* ---- Card Title ---- */
+.order-menu__card-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #111827;
+  line-height: 1.4;
+}
+
+/* ---- Card Description ---- */
+.order-menu__card-desc {
+  font-size: 13px;
+  color: #6b7280;
+  line-height: 1.5;
+}
+
+/* ---- Tablet and up ---- */
+@media (min-width: 768px) {
+  .order-menu {
+    padding: 24px;
+  }
+
+  .order-menu__card {
+    padding: 24px 20px;
+  }
+
+  .order-menu__card-icon {
+    font-size: 36px;
+    width: 56px;
+    height: 56px;
+  }
+
+  .order-menu__card-title {
+    font-size: 17px;
+  }
+
+  .order-menu__card-desc {
+    font-size: 14px;
+  }
+}
+
+/* ---- Dark mode support ---- */
+@media (prefers-color-scheme: dark) {
+  .order-menu__card {
+    background: #1f2937;
+    border-color: #374151;
+  }
+
+  .order-menu__card:hover {
+    border-color: #4b5563;
+  }
+
+  .order-menu__card-icon {
+    background: #374151;
+  }
+
+  .order-menu__card-title {
+    color: #f9fafb;
+  }
+
+  .order-menu__card-desc {
+    color: #9ca3af;
+  }
+}

@@ -19,11 +19,12 @@ use axum::{
     extract::{Path, Query},
     http::{header::AUTHORIZATION, HeaderMap, Method, StatusCode},
     response::IntoResponse,
-    routing::{get, post, put, patch, delete},
+    routing::{any, get, post, put, patch, delete},
     Json, Router,
     middleware,
 };
 use tower_http::cors::{Any, CorsLayer};
+use tower_http::services::ServeDir;
 
 pub mod sse;
 pub mod ws;
@@ -44,6 +45,7 @@ pub mod knowledge;
 pub mod ontology;
 pub mod themes;
 pub mod web_search;
+pub mod esg;
 pub mod weather;
 pub mod intent;
 pub mod orch_intents;
@@ -62,6 +64,7 @@ pub mod platforms;
 pub mod agent_chat;
 pub mod ragic;
 pub mod mcp;
+pub mod order_secretary;
 pub mod skills;
 pub mod todos;
 
@@ -105,6 +108,16 @@ async fn sync_tool_intents(
         })?;
 
     Ok(Json(ApiResponse::success("已更新工具意圖".to_string())))
+}
+
+/// SPA fallback for `/channel/*` routes.
+/// Serves `index.html` for client-side routing paths (e.g. `/channel/demo`).
+/// Static assets (JS/CSS) are handled by `ServeDir` before reaching this fallback.
+async fn serve_channel_spa() -> impl IntoResponse {
+    match tokio::fs::read_to_string("../dist/index.html").await {
+        Ok(html) => (StatusCode::OK, [("content-type", "text/html; charset=utf-8")], html),
+        Err(_) => (StatusCode::NOT_FOUND, [("content-type", "text/plain; charset=utf-8")], "Not Found".to_string()),
+    }
 }
 
 pub fn create_router() -> Router {
@@ -216,13 +229,19 @@ pub fn create_router() -> Router {
         .merge(orch_intents::create_orch_intents_router())
         .merge(intent_catalog::create_intent_catalog_router())
         .merge(leads::create_leads_router())
+        .merge(esg::create_esg_router())
         .merge(action_trail::create_action_trail_router())
         .merge(intent_guess::create_intent_guess_router())
         .merge(intent_logs::create_intent_logs_router())
         .merge(aiq::create_aiq_router())
         .merge(ragic::create_ragic_router())
         .merge(mcp::create_mcp_router())
+        .merge(order_secretary::create_order_secretary_router())
         .route("/api/v1/events", post(post_events))
+        .nest_service("/channel",
+            ServeDir::new("../dist")
+                .fallback(any(serve_channel_spa))
+        )
         .layer(middleware::from_fn(logging_middleware))
         .layer(cors)
 }
@@ -2708,8 +2727,8 @@ async fn analyze_agent_requirement(
         model_for_url = model.split(':').next().unwrap_or(&model).to_string();
     }
 
-    // Read max_tokens
-    let max_tokens: usize = db
+    // Read max_tokens, cap at 128000 for remote providers
+    let mut max_tokens: usize = db
         .aql_bind_vars(
             "FOR p IN system_params FILTER p.param_key == @key LIMIT 1 RETURN p.param_value",
             [("key", serde_json::json!("dev.requirement_spec_max_tokens"))].into(),
@@ -2719,6 +2738,10 @@ async fn analyze_agent_requirement(
         .and_then(|mut v: Vec<String>| v.pop())
         .and_then(|s| s.parse().ok())
         .unwrap_or(4000);
+    // Remote (non-Ollama) providers typically cap at 128K tokens
+    if !is_ollama && max_tokens > 128000 {
+        max_tokens = 128000;
+    }
 
     let revision = payload.get("revision").and_then(|v| v.as_str()).unwrap_or("");
     let revision_hint = if revision.is_empty() {
@@ -2946,6 +2969,7 @@ Agent 名稱：{agent_name}
         serde_json::json!({
             "status": "spec_ready",
             "dev_spec": spec_json,
+            "analyze_error": "",
             "analyzed_at": chrono::Utc::now().to_rfc3339(),
             "updated_at": chrono::Utc::now().to_rfc3339(),
         }),

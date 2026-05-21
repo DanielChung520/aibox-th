@@ -21,6 +21,7 @@ import { FloatingAssistantConfig, PageContext, IntentGuess } from './types';
 import { intentEngine } from '../../services/intentEngine';
 import { actionTrail } from '../../services/actionTrail';
 import type { ActionEvent } from '../../services/actionTrail';
+import { fetchActionHistory } from '../../services/actionTrailApi';
 import { authStore } from '../../stores/auth';
 import { aiqChatStore } from '../../stores/chatStore';
 import type { ChatMessage as ApiChatMessage } from '../../services/api';
@@ -181,6 +182,7 @@ export default function ChatModal({
         .sort((a, b) => b.timestamp - a.timestamp);
       setActionHistory(events);
       setCurrentView('actionTrail');
+      fetchActionHistory({ page: 1, pageSize: 50, sort: 'desc' }).catch(() => {});
     }
   };
 

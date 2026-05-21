@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { Table, Button, Modal, Form, Input, Select, Popconfirm, Switch, Tag, App } from 'antd';
 import { CheckCircleOutlined, CloseCircleOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import { leadApi, Lead } from '../services/api';
+import { useEntityPerception } from '../hooks/useEntityPerception';
+import { pageContextManager } from '../services/PageContextManager';
 
 export default function LeadManagement() {
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -13,6 +15,7 @@ export default function LeadManagement() {
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [noteForm] = Form.useForm();
   const { message } = App.useApp();
+  const { dispatchEntity } = useEntityPerception({ defaultEntityType: 'lead', defaultAction: 'list' });
 
   const fetchLeads = useCallback(async () => {
     setLoading(true);
@@ -30,6 +33,10 @@ export default function LeadManagement() {
   }, [page, statusFilter]);
 
   useEffect(() => { fetchLeads(); }, [fetchLeads]);
+
+  useEffect(() => {
+    pageContextManager.report({ component: 'LeadManagement', entityType: 'lead', action: 'list' });
+  }, []);
 
   const openDetail = (lead: Lead) => {
     setSelectedLead(lead);
@@ -148,6 +155,9 @@ export default function LeadManagement() {
         columns={columns}
         rowKey="_key"
         loading={loading}
+        onRow={(record) => ({
+          onClick: () => dispatchEntity(record._key, 'view'),
+        })}
         pagination={{ current: page, total, pageSize: 20, showTotal: (t) => `共 ${t} 筆`, onChange: (p) => setPage(p) }}
         scroll={{ x: 1400 }}
       />

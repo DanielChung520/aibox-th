@@ -25,7 +25,10 @@ API_PORT="${PORT:-6500}"
 # 注意：已整合到 unified_agents 的服務（da/ka/memory/backup/mcp）不再單獨啟動
 AI_SERVICES=(
   "aitask:8001:aitask.main:app"
+  "skills_rag:8012:skills_rag.main:app"
+  "mcp_tools:8004:mcp_tools.main:app"
   "bpa_mm_agent:8005:bpa.mm_agent.main:app"
+  "aiq_agent:8009:aiq_agent.main:app"
   "unified_agents:8011:unified_agents.main:app"
 )
 
@@ -122,6 +125,46 @@ stop_api() {
     rm -f "$PID_DIR/api.pid"
   fi
   kill_port "$API_PORT"
+}
+
+# ─── Web Static Site (port 3505) ────────────────────────────────────────────
+
+start_web() {
+  echo "═══════════════════════════════════════"
+  echo " Web Static Site (port 3505)"
+  echo "═══════════════════════════════════════"
+
+  kill_port 3505
+
+  local web_dir="$SCRIPT_DIR/web"
+  if [ ! -d "$web_dir" ]; then
+    echo "  ⚠️  $web_dir not found, skipping web server"
+    return 0
+  fi
+
+  cd "$web_dir"
+  python3 -m http.server 3505 --bind 0.0.0.0 > /tmp/abc-web.log 2>&1 &
+  echo $! > "$PID_DIR/web.pid"
+
+  sleep 2
+  if lsof -ti :3505 > /dev/null 2>&1; then
+    echo "  ✅ Web Server started on http://localhost:3505"
+  else
+    echo "  ❌ Web Server failed to start"
+  fi
+}
+
+stop_web() {
+  if [ -f "$PID_DIR/web.pid" ]; then
+    local pid
+    pid=$(cat "$PID_DIR/web.pid")
+    if kill -0 "$pid" 2>/dev/null; then
+      echo "  -> Stopping Web Server (PID: $pid)"
+      kill "$pid" 2>/dev/null || true
+    fi
+    rm -f "$PID_DIR/web.pid"
+  fi
+  kill_port 3505
 }
 
 # ─── Static File Server (port 6000) ─────────────────────────────────────────
@@ -370,11 +413,15 @@ do_single() {
       [ "$action" = "stop" ] || [ "$action" = "restart" ] && stop_celery
       [ "$action" = "start" ] || [ "$action" = "restart" ] && start_celery
       ;;
+    web)
+      [ "$action" = "stop" ] || [ "$action" = "restart" ] && stop_web
+      [ "$action" = "start" ] || [ "$action" = "restart" ] && start_web
+      ;;
     *)
       local entry
       entry=$(find_ai_service "$target") || {
         echo "❌ Unknown service: $target"
-        echo "   Available: api, static, $(printf '%s' "${AI_SERVICES[*]}" | tr ' ' '\n' | cut -d: -f1 | tr '\n' ' ')"
+        echo "   Available: api, static, web, $(printf '%s' "${AI_SERVICES[*]}" | tr ' ' '\n' | cut -d: -f1 | tr '\n' ' ')"
         return 1
       }
       IFS=':' read -r name port module <<< "$entry"
@@ -420,6 +467,18 @@ status() {
     else
       echo "❌ Not running"
     fi
+  fi
+
+  # --- Web Static Site: HTTP 可達性 ---
+  printf "  %-22s (port %s): " "Web Server" "3505"
+  if health_check "http://localhost:3505/" 2; then
+    local web_pid
+    web_pid=$(lsof -ti :3505 2>/dev/null | head -1)
+    echo "✅ Healthy (PID: $web_pid)"
+  elif lsof -ti :3505 > /dev/null 2>&1; then
+    echo "⚠️  Port open but not responding"
+  else
+    echo "❌ Not running"
   fi
 
   # --- Static Server: HTTP 可達性 ---
@@ -574,6 +633,7 @@ case "${1:-status}" in
     else
       start_api
       start_static
+      start_web
       start_all_ai
       start_celery
       echo ""
@@ -589,6 +649,7 @@ case "${1:-status}" in
     else
       stop_api
       stop_static
+      stop_web
       stop_all_ai
       stop_celery
       echo "  ✅ All services stopped"
@@ -600,11 +661,13 @@ case "${1:-status}" in
     else
       stop_api
       stop_static
+      stop_web
       stop_all_ai
       stop_celery
       sleep 2
       start_api
       start_static
+      start_web
       start_all_ai
       start_celery
       echo ""
@@ -651,11 +714,14 @@ case "${1:-status}" in
     echo "Available services:"
     echo "  api               Rust API Gateway (port $API_PORT)"
     echo "  static            Static File Server (port 6000)"
+    echo "  web               Web Static Site (port 3505)"
     echo "  celery            Celery Worker (async task queue)"
     for entry in "${AI_SERVICES[@]}"; do
       IFS=':' read -r name port module <<< "$entry"
       if [ "$name" = "unified_agents" ]; then
         printf "  %-18s  Unified entry (port %s) - replaces da/ka/memory/backup/mcp\n" "$name" "$port"
+      elif [ "$name" = "aiq_agent" ]; then
+        printf "  %-18s  AIQ 意圖引擎 (port %s)\n" "$name" "$port"
       else
         printf "  %-18s  Python AI service (port %s)\n" "$name" "$port"
       fi

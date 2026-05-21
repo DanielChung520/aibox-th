@@ -17,6 +17,7 @@ import { authStore } from '../stores/auth';
 import { aiqChatStore } from '../stores/chatStore';
 import { pageContextManager } from '../services/PageContextManager';
 import { actionTrail, type ActionEvent } from '../services/actionTrail';
+import { fetchActionHistory } from '../services/actionTrailApi';
 import { intentEngine } from '../services/intentEngine';
 import { paramsApi } from '../services/api';
 import { AdminDropdown } from '../components/FloatingAssistant/AdminDropdown';
@@ -232,6 +233,8 @@ function AIAssistantWindow() {
         .sort((a, b) => b.timestamp - a.timestamp);
       setActionHistory(events);
       setCurrentView('actionTrail');
+      // Pre-warm backend history (ChatHistoryPanel will display it)
+      fetchActionHistory({ page: 1, pageSize: 50, sort: 'desc' }).catch(() => {});
     }
   }, []);
 

@@ -49,6 +49,26 @@ export const ENTITY_TYPES = {
     pageTypes: ['data_table', 'form_crud'],
   },
 
+  // 業務管理
+  requirement: {
+    name: '需求',
+    nameEn: 'Requirement',
+    fields: ['goal', 'status', 'version', 'account', 'submitted_at'],
+    pageTypes: ['data_table'],
+  },
+  action: {
+    name: '行動腳本',
+    nameEn: 'ActionScript',
+    fields: ['skill_no', 'title', 'status', 'skill_type', 'version'],
+    pageTypes: ['data_table'],
+  },
+  preorder: {
+    name: '預訂購',
+    nameEn: 'Preorder',
+    fields: ['preorder_id', 'user_name', 'status', 'source', 'message_date'],
+    pageTypes: ['data_table'],
+  },
+
   // 資料管理（Data Agent）
   table: {
     name: '資料表',
@@ -109,6 +129,14 @@ export const ENTITY_TYPES = {
     pageTypes: ['data_table'],
   },
 
+  // 任務會話（統一 task_session 涵蓋 chat/history/scheduled）
+  task_session: {
+    name: '任務會話',
+    nameEn: 'TaskSession',
+    fields: ['title', 'message_count', 'created_at', 'updated_at'],
+    pageTypes: ['chat', 'data_table'],
+  },
+
   // 瀏覽探索
   agent: {
     name: 'AI Agent',
@@ -123,12 +151,86 @@ export const ENTITY_TYPES = {
     pageTypes: ['browse'],
   },
 
+  // 平台整合
+  line_platform: {
+    name: 'LINE Channel',
+    nameEn: 'LinePlatform',
+    fields: ['channel_name', 'channel_id', 'publication_status'],
+    pageTypes: ['platform'],
+  },
+  bot: {
+    name: 'Bot',
+    nameEn: 'Bot',
+    fields: ['bot_name', 'platform', 'status'],
+    pageTypes: ['platform'],
+  },
+
   // 意圖編排
   intent: {
     name: '意圖',
     nameEn: 'Intent',
     fields: ['intent_id', 'name', 'agent_scope', 'status'],
     pageTypes: ['data_table', 'form_crud'],
+  },
+
+  // 頁面層級
+  placeholder: {
+    name: '預留頁面',
+    nameEn: 'Placeholder',
+    fields: [],
+    pageTypes: [],
+  },
+  welcome: {
+    name: '歡迎頁',
+    nameEn: 'Welcome',
+    fields: [],
+    pageTypes: [],
+  },
+  login: {
+    name: '登入頁',
+    nameEn: 'Login',
+    fields: [],
+    pageTypes: [],
+  },
+
+  // 數據湖
+  datalake: {
+    name: '數據湖',
+    nameEn: 'DataLake',
+    fields: ['table_name', 'data_source', 'record_count'],
+    pageTypes: ['data_query', 'data_table'],
+  },
+
+  // 技能
+  skill: {
+    name: '技能',
+    nameEn: 'Skill',
+    fields: ['skill_no', 'title', 'status', 'skill_type', 'version'],
+    pageTypes: ['data_table'],
+  },
+
+  // 待辦事項
+  todo: {
+    name: '待辦事項',
+    nameEn: 'Todo',
+    fields: ['title', 'status', 'priority', 'assignee'],
+    pageTypes: ['data_table'],
+  },
+
+  // Mermaid 圖表驗證
+  mermaid: {
+    name: 'Mermaid 圖表',
+    nameEn: 'Mermaid',
+    fields: ['test_case', 'status', 'error'],
+    pageTypes: ['data_table'],
+  },
+
+  // 儀表板
+  dashboard: {
+    name: '儀表板',
+    nameEn: 'Dashboard',
+    fields: ['metric', 'value', 'period'],
+    pageTypes: ['dashboard'],
   },
 
   // 備份
@@ -168,7 +270,10 @@ export type EntityAction =
   | 'filter'     // 篩選
   | 'export'     // 匯出
   | 'import'     // 匯入
-  | 'execute';   // 執行（如執行 SQL）
+  | 'execute'    // 執行（如執行 SQL）
+  | 'chat'       // 對話
+  | 'history'    // 歷史紀錄
+  | 'scheduled'; // 排程任務
 
 export type ResponseStrategy =
   | 'direct_llm'
@@ -228,9 +333,9 @@ export const PAGE_ENTITY_MAP: Record<string, EntityTypeKey[]> = {
   '/app/lead-management':         ['lead'],
   '/app/browse-agent':            ['agent'],
   '/app/browse-tools':            ['tool'],
-  '/app/task-session/chat':       ['chat_session'],
-  '/app/task-session/history':    ['chat_session'],
-  '/app/task-session/scheduled':  ['scheduled_task'],
+  '/app/task-session/chat':       ['task_session', 'chat_session'],
+  '/app/task-session/history':    ['task_session', 'chat_session'],
+  '/app/task-session/scheduled':  ['task_session', 'scheduled_task'],
   '/app/data-agent/schema':       ['table', 'column'],
   '/app/data-agent/playground':    ['query'],
   '/app/data-agent/datalake':      ['datalake_dataset'],

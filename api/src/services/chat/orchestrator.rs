@@ -134,6 +134,13 @@ fn build_assistant_context_prompt(context: &AssistantContextPayload) -> String {
             lines.push(format!("- 最近操作：{line}"));
         }
     }
+    if let Some(stats) = &context.behavior_stats {
+        let types_str = stats.action_types.join(", ");
+        lines.push(format!(
+            "- 操作統計：最近共 {} 次操作，最頻繁操作為「{}」，操作類型：{}",
+            stats.total_recent_actions, stats.most_frequent_type, types_str,
+        ));
+    }
 
     lines.join("\n")
 }

@@ -1,0 +1,179 @@
+/* ============================================
+   ProductBrowser — browse available products
+   Mobile-first, pure CSS, BEM naming
+   ============================================ */
+
+/* ─── Root ─────────────────────────────────── */
+
+.product-browser {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ─── Search ───────────────────────────────── */
+
+.product-browser__search {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  padding-bottom: 4px;
+}
+
+.product-browser__search-input {
+  display: block;
+  width: 100%;
+  padding: 10px 14px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #111827;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  box-sizing: border-box;
+  -webkit-appearance: none;
+}
+
+.product-browser__search-input::placeholder {
+  color: #9ca3af;
+}
+
+.product-browser__search-input:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+}
+
+/* ─── Loading ──────────────────────────────── */
+
+.product-browser__loading {
+  text-align: center;
+  padding: 40px 16px;
+  font-size: 15px;
+  color: #6b7280;
+}
+
+/* ─── Error ────────────────────────────────── */
+
+.product-browser__error {
+  padding: 14px 16px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 10px;
+  font-size: 14px;
+  color: #dc2626;
+  line-height: 1.5;
+}
+
+/* ─── Empty ────────────────────────────────── */
+
+.product-browser__empty {
+  text-align: center;
+  padding: 48px 16px;
+  font-size: 15px;
+  color: #9ca3af;
+  line-height: 1.6;
+}
+
+/* ─── List ─────────────────────────────────── */
+
+.product-browser__list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* ─── Card ─────────────────────────────────── */
+
+.product-browser__card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 14px 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+  border: 1px solid #f3f4f6;
+  transition: box-shadow 0.2s ease;
+}
+
+.product-browser__card:active {
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+/* ─── Name ─────────────────────────────────── */
+
+.product-browser__name {
+  font-size: 16px;
+  font-weight: 600;
+  color: #111827;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ─── Spec ─────────────────────────────────── */
+
+.product-browser__spec {
+  font-size: 13px;
+  color: #6b7280;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ─── Stock Row ────────────────────────────── */
+
+.product-browser__stock-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+/* ─── Stock ────────────────────────────────── */
+
+.product-browser__stock {
+  font-size: 22px;
+  font-weight: 700;
+  color: #3b82f6;
+  line-height: 1.2;
+}
+
+/* ─── Unit ─────────────────────────────────── */
+
+.product-browser__unit {
+  font-size: 14px;
+  font-weight: 500;
+  color: #6b7280;
+  line-height: 1.2;
+}
+
+/* ─── Tablet and up ────────────────────────── */
+
+@media (min-width: 768px) {
+  .product-browser {
+    gap: 20px;
+  }
+
+  .product-browser__list {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+  }
+
+  .product-browser__card {
+    padding: 16px 20px;
+  }
+
+  .product-browser__name {
+    font-size: 17px;
+  }
+
+  .product-browser__stock {
+    font-size: 24px;
+  }
+}

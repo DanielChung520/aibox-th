@@ -65,7 +65,7 @@ class LinearMCPClient:
 async def execute_linear_mcp(
     operation: str, **kwargs: Any
 ) -> dict[str, Any]:
-    api_key = os.getenv("LINEAR_API_KEY", "")
+    api_key = kwargs.pop("api_key", None) or os.getenv("LINEAR_API_KEY", "")
     if not api_key:
         return {"error": "LINEAR_API_KEY not set. Please configure your Linear API key."}
     client = LinearMCPClient(api_key=api_key)

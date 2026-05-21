@@ -117,6 +117,10 @@ export default function ToolFormModal({
         visibility: tool.visibility || 'public',
         visibility_roles: tool.visibility_roles || [],
         visibility_accounts: tool.visibility_accounts || [],
+        mcp_transport: (tool as any).mcp_transport || '',
+        mcp_command: (tool as any).mcp_command || '',
+        mcp_args: (tool as any).mcp_args || [],
+        api_key: ((tool.auth_config || {}) as any).api_key || '',
       });
       setVisibility(tool.visibility || 'public');
       setNlExamples((tool as any).nl_examples || []);
@@ -172,7 +176,14 @@ export default function ToolFormModal({
       delete (submitData as Record<string, unknown>).input_schema_str;
       delete (submitData as Record<string, unknown>).output_schema_str;
 
-      onSubmit(submitData);
+      const sd = submitData as Record<string, unknown>;
+      const apiKey = sd.api_key as string;
+      delete sd.api_key;
+      if (values.tool_type === 'mcp' && apiKey) {
+        sd.auth_config = { ...(typeof values.auth_config === 'object' && values.auth_config ? values.auth_config : {}), api_key: apiKey };
+      }
+
+      onSubmit(submitData as Partial<Tool>);
     } catch (err) {
       message.error('請填寫必填欄位');
     }
@@ -244,11 +255,51 @@ export default function ToolFormModal({
   const executionTab = (
     <>
       <Form.Item name="endpoint_url" label="Endpoint URL">
-        <Input placeholder="http://localhost:8004/execute" disabled={readOnly} />
+        <Input placeholder="http://localhost:8004/execute 或 MCP Server URL" disabled={readOnly} />
       </Form.Item>
       <Form.Item name="timeout_ms" label="超時設定 (ms)">
         <InputNumber min={1000} max={300000} step={1000} addonAfter="ms" style={{ width: '100%' }} disabled={readOnly} />
       </Form.Item>
+
+      <Form.Item noStyle shouldUpdate={(prev, cur) => prev.tool_type !== cur.tool_type}>
+        {({ getFieldValue }) => {
+          const tt = getFieldValue('tool_type');
+          if (tt !== 'mcp') return null;
+          return (
+            <Form.Item name="api_key" label="API Key">
+              <Input.Password placeholder="MCP Server 的 API Key" disabled={readOnly} />
+            </Form.Item>
+          );
+        }}
+      </Form.Item>
+
+      <Form.Item noStyle shouldUpdate={(prev, cur) => prev.tool_type !== cur.tool_type}>
+        {({ getFieldValue }) => {
+          const tt = getFieldValue('tool_type');
+          if (tt !== 'mcp') return null;
+          return (
+            <>
+              <Form.Item name="mcp_transport" label="MCP Transport">
+                <Select placeholder="選擇 MCP 傳輸方式" allowClear disabled={readOnly}
+                  options={[
+                    { value: 'streamable-http', label: 'Streamable HTTP' },
+                    { value: 'stdio', label: 'Stdio' },
+                    { value: 'sse', label: 'SSE' },
+                  ]}
+                />
+              </Form.Item>
+              <Form.Item name="mcp_command" label="MCP 啟動指令（Stdio 模式）">
+                <Input placeholder="例如: npx" disabled={readOnly} />
+              </Form.Item>
+              <Form.Item name="mcp_args" label="MCP 啟動參數">
+                <Select mode="tags" placeholder="指令參數，按 Enter 輸入"
+                  tokenSeparators={[',', ' ']} disabled={readOnly} />
+              </Form.Item>
+            </>
+          );
+        }}
+      </Form.Item>
+
       <Form.Item name="input_schema_str" label="輸入 Schema (JSON)">
         <TextArea rows={4} placeholder={'{"type":"object","properties":{...}}'} disabled={readOnly} />
       </Form.Item>

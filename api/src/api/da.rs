@@ -106,6 +106,42 @@ pub fn create_da_router() -> Router {
             "/api/v1/da/ragic/query/multi-step",
             post(ragic_multi_step_query_proxy),
         )
+        .route(
+            "/api/v1/da/trace/record",
+            post(ragic_trace_record_proxy),
+        )
+        .route(
+            "/api/v1/da/trace/fk-preview",
+            post(ragic_fk_preview_proxy),
+        )
+        .route(
+            "/api/v1/da/trace/fk-edge",
+            post(ragic_fk_edge_proxy),
+        )
+        .route(
+            "/api/v1/da/trace-engine/scenario/{scenario_id}",
+            post(trace_engine_scenario_proxy),
+        )
+        .route(
+            "/api/v1/da/trace-engine/nl-parse",
+            post(trace_engine_nl_parse_proxy),
+        )
+        .route(
+            "/api/v1/da/trace-engine/report/save",
+            post(trace_engine_report_save_proxy),
+        )
+        .route(
+            "/api/v1/da/trace-engine/report/{report_id}",
+            get(trace_engine_get_report_proxy).delete(trace_engine_delete_report_proxy),
+        )
+        .route(
+            "/api/v1/da/trace-engine/reports",
+            get(trace_engine_list_reports_proxy),
+        )
+        .route(
+            "/api/v1/da/trace-engine/health",
+            get(trace_engine_health_proxy),
+        )
 }
 
 async fn list_modules() -> Result<impl IntoResponse, StatusCode> {
@@ -1363,6 +1399,322 @@ pub async fn ragic_multi_step_query_proxy(
         Err(e) => (
             StatusCode::BAD_GATEWAY,
             Json(json!({ "code": 502, "message": format!("failed to execute ragic multi-step query: {}", e) })),
+        )
+            .into_response(),
+    }
+}
+
+pub async fn ragic_trace_record_proxy(
+    Json(payload): Json<Value>,
+) -> Response {
+    let url = format!(
+        "{}/da/ragic/trace/record",
+        CONFIG.ai_services.unified_agents_url
+    );
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(120))
+        .build();
+
+    let Ok(client) = client else {
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    };
+
+    match client.post(&url).json(&payload).send().await {
+        Ok(resp) => {
+            let status = map_reqwest_status(resp.status());
+            let body: serde_json::Value = resp.json().await.unwrap_or_else(|_| {
+                json!({ "code": status.as_u16(), "message": "invalid JSON response from unified_agents" })
+            });
+            (status, Json(body)).into_response()
+        }
+        Err(e) => (
+            StatusCode::BAD_GATEWAY,
+            Json(json!({ "code": 502, "message": format!("failed to trace record: {}", e) })),
+        )
+            .into_response(),
+    }
+}
+
+pub async fn ragic_fk_preview_proxy(
+    Json(payload): Json<Value>,
+) -> Response {
+    let url = format!(
+        "{}/da/ragic/trace/fk-preview",
+        CONFIG.ai_services.unified_agents_url
+    );
+    let Ok(client) = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+    else {
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    };
+    match client.post(&url).json(&payload).send().await {
+        Ok(resp) => {
+            let status = map_reqwest_status(resp.status());
+            let body: serde_json::Value = resp.json().await.unwrap_or_else(|_| {
+                json!({ "code": status.as_u16(), "message": "invalid JSON response from unified_agents" })
+            });
+            (status, Json(body)).into_response()
+        }
+        Err(e) => (
+            StatusCode::BAD_GATEWAY,
+            Json(json!({ "code": 502, "message": format!("fk-preview failed: {}", e) })),
+        )
+            .into_response(),
+    }
+}
+
+pub async fn ragic_fk_edge_proxy(
+    Json(payload): Json<Value>,
+) -> Response {
+    let url = format!(
+        "{}/da/ragic/trace/fk-edge",
+        CONFIG.ai_services.unified_agents_url
+    );
+    let Ok(client) = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+    else {
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    };
+    match client.post(&url).json(&payload).send().await {
+        Ok(resp) => {
+            let status = map_reqwest_status(resp.status());
+            let body: serde_json::Value = resp.json().await.unwrap_or_else(|_| {
+                json!({ "code": status.as_u16(), "message": "invalid JSON response from unified_agents" })
+            });
+            (status, Json(body)).into_response()
+        }
+        Err(e) => (
+            StatusCode::BAD_GATEWAY,
+            Json(json!({ "code": 502, "message": format!("fk-edge failed: {}", e) })),
+        )
+            .into_response(),
+    }
+}
+
+pub async fn trace_engine_scenario_proxy(
+    Path(scenario_id): Path<String>,
+    Json(payload): Json<Value>,
+) -> Response {
+    let url = format!(
+        "{}/da/trace-engine/scenario/{}",
+        CONFIG.ai_services.unified_agents_url,
+        urlencoding::encode(&scenario_id),
+    );
+
+    let Ok(client) = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(120))
+        .build()
+    else {
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    };
+
+    match client.post(&url).json(&payload).send().await {
+        Ok(resp) => {
+            let status = map_reqwest_status(resp.status());
+            let body: serde_json::Value = resp.json().await.unwrap_or_else(|_| {
+                json!({ "code": status.as_u16(), "message": "invalid JSON response from unified_agents" })
+            });
+            (status, Json(body)).into_response()
+        }
+        Err(e) => (
+            StatusCode::BAD_GATEWAY,
+            Json(json!({ "code": 502, "message": format!("trace-engine scenario failed: {}", e) })),
+        )
+            .into_response(),
+    }
+}
+
+pub async fn trace_engine_nl_parse_proxy(
+    Json(payload): Json<Value>,
+) -> Response {
+    let url = format!(
+        "{}/da/trace-engine/nl-parse",
+        CONFIG.ai_services.unified_agents_url
+    );
+
+    let Ok(client) = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+    else {
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    };
+
+    match client.post(&url).json(&payload).send().await {
+        Ok(resp) => {
+            let status = map_reqwest_status(resp.status());
+            let body: serde_json::Value = resp.json().await.unwrap_or_else(|_| {
+                json!({ "code": status.as_u16(), "message": "invalid JSON response from unified_agents" })
+            });
+            (status, Json(body)).into_response()
+        }
+        Err(e) => (
+            StatusCode::BAD_GATEWAY,
+            Json(json!({ "code": 502, "message": format!("trace-engine nl-parse failed: {}", e) })),
+        )
+            .into_response(),
+    }
+}
+
+pub async fn trace_engine_report_save_proxy(
+    Json(payload): Json<Value>,
+) -> Response {
+    let url = format!(
+        "{}/da/trace-engine/report/save",
+        CONFIG.ai_services.unified_agents_url
+    );
+
+    let Ok(client) = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+    else {
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    };
+
+    match client.post(&url).json(&payload).send().await {
+        Ok(resp) => {
+            let status = map_reqwest_status(resp.status());
+            let body: serde_json::Value = resp.json().await.unwrap_or_else(|_| {
+                json!({ "code": status.as_u16(), "message": "invalid JSON response from unified_agents" })
+            });
+            (status, Json(body)).into_response()
+        }
+        Err(e) => (
+            StatusCode::BAD_GATEWAY,
+            Json(json!({ "code": 502, "message": format!("trace-engine report save failed: {}", e) })),
+        )
+            .into_response(),
+    }
+}
+
+pub async fn trace_engine_get_report_proxy(
+    Path(report_id): Path<String>,
+) -> Response {
+    let url = format!(
+        "{}/da/trace-engine/report/{}",
+        CONFIG.ai_services.unified_agents_url,
+        urlencoding::encode(&report_id),
+    );
+
+    let Ok(client) = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+    else {
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    };
+
+    match client.get(&url).send().await {
+        Ok(resp) => {
+            let status = map_reqwest_status(resp.status());
+            let body: serde_json::Value = resp.json().await.unwrap_or_else(|_| {
+                json!({ "code": status.as_u16(), "message": "invalid JSON response from unified_agents" })
+            });
+            (status, Json(body)).into_response()
+        }
+        Err(e) => (
+            StatusCode::BAD_GATEWAY,
+            Json(json!({ "code": 502, "message": format!("trace-engine get report failed: {}", e) })),
+        )
+            .into_response(),
+    }
+}
+
+pub async fn trace_engine_list_reports_proxy(
+    Query(params): Query<HashMap<String, String>>,
+) -> Response {
+    let scenario = params.get("scenario").map(|s| s.as_str()).unwrap_or("");
+    let page = params.get("page").map(|p| p.as_str()).unwrap_or("1");
+    let limit = params.get("limit").map(|l| l.as_str()).unwrap_or("20");
+
+    let url = format!(
+        "{}/da/trace-engine/reports?scenario={}&page={}&limit={}",
+        CONFIG.ai_services.unified_agents_url,
+        urlencoding::encode(scenario),
+        urlencoding::encode(page),
+        urlencoding::encode(limit),
+    );
+
+    let Ok(client) = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+    else {
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    };
+
+    match client.get(&url).send().await {
+        Ok(resp) => {
+            let status = map_reqwest_status(resp.status());
+            let body: serde_json::Value = resp.json().await.unwrap_or_else(|_| {
+                json!({ "code": status.as_u16(), "message": "invalid JSON response from unified_agents" })
+            });
+            (status, Json(body)).into_response()
+        }
+        Err(e) => (
+            StatusCode::BAD_GATEWAY,
+            Json(json!({ "code": 502, "message": format!("trace-engine list reports failed: {}", e) })),
+        )
+            .into_response(),
+    }
+}
+
+pub async fn trace_engine_delete_report_proxy(
+    Path(report_id): Path<String>,
+) -> Response {
+    let url = format!(
+        "{}/da/trace-engine/report/{}",
+        CONFIG.ai_services.unified_agents_url,
+        urlencoding::encode(&report_id),
+    );
+
+    let Ok(client) = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+    else {
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    };
+
+    match client.delete(&url).send().await {
+        Ok(resp) => {
+            let status = map_reqwest_status(resp.status());
+            let body: serde_json::Value = resp.json().await.unwrap_or_else(|_| {
+                json!({ "code": status.as_u16(), "message": "invalid JSON response from unified_agents" })
+            });
+            (status, Json(body)).into_response()
+        }
+        Err(e) => (
+            StatusCode::BAD_GATEWAY,
+            Json(json!({ "code": 502, "message": format!("trace-engine delete report failed: {}", e) })),
+        )
+            .into_response(),
+    }
+}
+
+pub async fn trace_engine_health_proxy() -> Response {
+    let url = format!(
+        "{}/da/trace-engine/health",
+        CONFIG.ai_services.unified_agents_url
+    );
+
+    let Ok(client) = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .build()
+    else {
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    };
+
+    match client.get(&url).send().await {
+        Ok(resp) => {
+            let status = map_reqwest_status(resp.status());
+            let body: serde_json::Value = resp.json().await.unwrap_or_else(|_| {
+                json!({ "code": status.as_u16(), "message": "invalid JSON response from unified_agents" })
+            });
+            (status, Json(body)).into_response()
+        }
+        Err(e) => (
+            StatusCode::BAD_GATEWAY,
+            Json(json!({ "code": 502, "message": format!("trace-engine health check failed: {}", e) })),
         )
             .into_response(),
     }

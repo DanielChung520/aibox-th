@@ -243,8 +243,6 @@ const handleEntityInteract = (e: Event) => {
   useEffect(() => {
     fetchConfig();
 
-    actionTrail.startAutoFlush();
-
     paramsApi.get('basic.avatar')
       .then(res => {
         const name = res.data?.data?.param_value;
@@ -276,20 +274,19 @@ const handleEntityInteract = (e: Event) => {
     window.addEventListener('avatar-changed', handleAvatarChanged);
     window.addEventListener('modal-context-change', handleModalContextChange);
     return () => {
-      actionTrail.stopAutoFlush();
       window.removeEventListener('floating-assistant-config-update', handleConfigUpdate);
       window.removeEventListener('avatar-changed', handleAvatarChanged);
       window.removeEventListener('modal-context-change', handleModalContextChange);
     };
   }, []);
 
-  // 默认位置：右下角，距离边缘 20px
+      // 默認位置：右下角，距離邊緣 20px
   const [buttonPosition, setButtonPosition] = useState({
     x: window.innerWidth - 56 - 20,
     y: window.innerHeight - 56 - 20,
   });
 
-  // 弹窗默认位置：按钮上方，略偏左
+      // 彈窗默認位置：按鈕上方，略偏左
   const [modalPosition, setModalPosition] = useState({
     x: Math.max(0, window.innerWidth - config.modalWidth - 20),
     y: Math.max(0, window.innerHeight - config.modalHeight - 80 - 20),
@@ -314,7 +311,7 @@ const handleEntityInteract = (e: Event) => {
     });
   };
 
-  // 监听窗口大小改变，防止组件跑出屏幕
+      // 監聽窗口大小改變，防止組件跑出屏幕
   useEffect(() => {
     const handleResize = () => {
       setButtonPosition(prev => ({

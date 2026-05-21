@@ -245,3 +245,66 @@ async def trace_record(req: TraceRecordRequest) -> TraceRecordResponse:
     except Exception as e:
         logger.exception("Record trace failed")
         raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+# ---------------------------------------------------------------------------
+# Progressive FK edge expansion
+# ---------------------------------------------------------------------------
+
+
+class FkPreviewRequest(BaseModel):
+    table_key: str
+    record_id: str
+    account: str
+
+
+class FkPreviewResponse(BaseModel):
+    code: int = 0
+    data: Optional[dict[str, object]] = None
+    error: Optional[str] = None
+
+
+class FkEdgeRequest(BaseModel):
+    table_key: str
+    record_id: str
+    field_id: str
+    field_value: str
+    account: str
+    via_field_name: str = ""
+
+
+class FkEdgeResponse(BaseModel):
+    code: int = 0
+    data: Optional[dict[str, object]] = None
+    error: Optional[str] = None
+
+
+@router.post("/trace/fk-preview", response_model=FkPreviewResponse)
+async def fk_preview(req: FkPreviewRequest) -> FkPreviewResponse:
+    try:
+        result = await _record_tracer.fk_preview(
+            table_key=req.table_key,
+            record_id=req.record_id,
+            account=req.account,
+        )
+        return FkPreviewResponse(data=result)
+    except Exception as e:
+        logger.exception("FK preview failed")
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.post("/trace/fk-edge", response_model=FkEdgeResponse)
+async def fk_edge(req: FkEdgeRequest) -> FkEdgeResponse:
+    try:
+        result = await _record_tracer.expand_fk_edge(
+            table_key=req.table_key,
+            record_id=req.record_id,
+            field_id=req.field_id,
+            field_value=req.field_value,
+            account=req.account,
+            via_field_name=req.via_field_name,
+        )
+        return FkEdgeResponse(data=result)
+    except Exception as e:
+        logger.exception("FK edge expansion failed")
+        raise HTTPException(status_code=500, detail=str(e)) from e

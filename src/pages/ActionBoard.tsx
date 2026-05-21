@@ -1,6 +1,6 @@
 /**
- * @file        技能看板
- * @description 技能規格管理，支援 CRUD、狀態流、版本管控
+ * @file        行動腳本看板
+ * @description 行動腳本規格管理，支援 CRUD、狀態流、版本管控
  *             狀態流：draft → spec → developing → testing → live → deprecated
  * @lastUpdate  2026-04-29 14:00:00
  * @author      AI Agent
@@ -12,9 +12,11 @@ import { Table, Button, Modal, Form, Input, Select, Tag, Space, App, Spin, Descr
 import { PlusOutlined, CodeOutlined, ArrowLeftOutlined, EditOutlined, DeleteOutlined, PlayCircleOutlined, FileTextOutlined } from '@ant-design/icons';
 import { MarkdownContent } from '../components/FloatingAssistant/ChatMarkdown';
 import { useNavigate } from 'react-router-dom';
-import type { SkillSpec } from '../services/api';
-import { skillApi } from '../services/api';
+import type { ActionScript } from '../services/api';
+import { actionApi } from '../services/api';
 import { authStore } from '../stores/auth';
+import { useEntityPerception } from '../hooks/useEntityPerception';
+import { pageContextManager } from '../services/PageContextManager';
 
 const statusFlow: Record<string, { label: string; color: string; next: string[] }> = {
   draft: { label: '草稿', color: 'default', next: ['spec'] },
@@ -41,20 +43,20 @@ function renderList(val: any): string[] {
   return [];
 }
 
-export default function SkillBoard() {
+export default function ActionBoard() {
   const { message } = App.useApp();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
-  const [data, setData] = useState<SkillSpec[]>([]);
+  const [data, setData] = useState<ActionScript[]>([]);
   const [detailOpen, setDetailOpen] = useState(false);
-  const [selected, setSelected] = useState<SkillSpec | null>(null);
+  const [selected, setSelected] = useState<ActionScript | null>(null);
   const [editOpen, setEditOpen] = useState(false);
-  const [editing, setEditing] = useState<SkillSpec | null>(null);
+  const [editing, setEditing] = useState<ActionScript | null>(null);
   const [confirmLoading, setConfirmLoading] = useState(false);
   const [specOpen, setSpecOpen] = useState(false);
   const [specContent, setSpecContent] = useState<string>('');
   const [analyzing, setAnalyzing] = useState<string | null>(null);
-  const [specRecord, setSpecRecord] = useState<SkillSpec | null>(null);
+  const [specRecord, setSpecRecord] = useState<ActionScript | null>(null);
   const [revisionOpen, setRevisionOpen] = useState(false);
   const [revisionText, setRevisionText] = useState('');
   const [regenerating, setRegenerating] = useState(false);
@@ -62,11 +64,12 @@ export default function SkillBoard() {
 
   const user = authStore.getState().user;
   const userName = user?.name || user?.username || 'system';
+  useEntityPerception({ defaultEntityType: 'action', defaultAction: 'list' });
 
   const fetchList = async () => {
     setLoading(true);
     try {
-      const res = await skillApi.list();
+      const res = await actionApi.list();
       setData(res.data.data || []);
     } catch {
       message.error('載入技能列表失敗');
@@ -77,13 +80,17 @@ export default function SkillBoard() {
 
   useEffect(() => { fetchList(); }, []);
 
+  useEffect(() => {
+    pageContextManager.report({ component: 'ActionBoard', entityType: 'action', action: 'list' });
+  }, []);
+
   const openCreate = () => {
     setEditing(null);
     form.resetFields();
     setEditOpen(true);
   };
 
-  const openEdit = (record: SkillSpec) => {
+  const openEdit = (record: ActionScript) => {
     setEditing(record);
     const formVals: any = { ...record };
     if (Array.isArray(formVals.tags)) formVals.tags = (formVals.tags || []).join(', ');
@@ -105,17 +112,17 @@ export default function SkillBoard() {
       if (typeof payload.linked_intents === 'string') payload.linked_intents = payload.linked_intents.split(',').map((s: string) => s.trim()).filter(Boolean);
       setConfirmLoading(true);
       if (editing?._key) {
-        await skillApi.update(editing._key, payload);
+        await actionApi.update(editing._key, payload);
         message.success('更新成功');
       } else {
-        await skillApi.create({ ...payload, created_by: userName });
+        await actionApi.create({ ...payload, created_by: userName });
         message.success('新增成功');
       }
       setEditOpen(false);
       fetchList();
     } catch (err: any) {
       const errMsg = err?.response?.data?.message || err?.message || '儲存失敗';
-      console.error('[SkillBoard] 儲存失敗:', errMsg, err?.response?.data);
+      console.error('[ActionBoard] 儲存失敗:', errMsg, err?.response?.data);
       message.error(errMsg);
     } finally {
       setConfirmLoading(false);
@@ -124,7 +131,7 @@ export default function SkillBoard() {
 
   const handleDelete = async (key: string) => {
     try {
-      await skillApi.delete(key);
+      await actionApi.delete(key);
       message.success('已刪除');
       fetchList();
     } catch {
@@ -134,7 +141,7 @@ export default function SkillBoard() {
 
   const handleStatusChange = async (key: string, newStatus: string) => {
     try {
-      await skillApi.update(key, { status: newStatus } as any);
+      await actionApi.update(key, { status: newStatus } as any);
       message.success('狀態已更新');
       fetchList();
     } catch {
@@ -142,12 +149,12 @@ export default function SkillBoard() {
     }
   };
 
-  const handleAnalyze = async (record: SkillSpec) => {
+  const handleAnalyze = async (record: ActionScript) => {
     setAnalyzing(record._key);
     try {
-      const res = await skillApi.analyze(record._key);
+      const res = await actionApi.analyze(record._key);
       if (res.data.code === 200) {
-        message.success('技能規格產生成功');
+        message.success('行動腳本規格產生成功');
         fetchList();
       } else {
         message.error('分析失敗');
@@ -159,12 +166,12 @@ export default function SkillBoard() {
     }
   };
 
-  const buildSpecMarkdown = (record: SkillSpec): string => {
+  const buildSpecMarkdown = (record: ActionScript): string => {
     const spec = (record as any).dev_spec || {};
     const biz = spec.business || {};
     const impl = spec.implementation || {};
     const lines: string[] = [];
-    lines.push(`# 技能規格書：${record.title || record.name || record.skill_no}`);
+    lines.push(`# 行動腳本規格書：${record.title || record.name || record.skill_no}`);
     lines.push('');
     if (biz.summary) lines.push(`> ${biz.summary}`);
     lines.push('');
@@ -264,7 +271,7 @@ export default function SkillBoard() {
     return lines.join('\n');
   };
 
-  const handleShowSpec = (record: SkillSpec) => {
+  const handleShowSpec = (record: ActionScript) => {
     setSpecRecord(record);
     setSpecContent(buildSpecMarkdown(record));
     setSpecOpen(true);
@@ -275,11 +282,11 @@ export default function SkillBoard() {
     setRegenerating(true);
     setRevisionOpen(false);
     try {
-      await skillApi.analyze(specRecord._key, { revision: revisionText.trim() });
+      await actionApi.analyze(specRecord._key, { revision: revisionText.trim() });
       message.success('規格書已重新產生');
       setRevisionText('');
       // Fetch updated record
-      const res = await skillApi.get(specRecord._key);
+      const res = await actionApi.get(specRecord._key);
       const updated = res.data.data;
       if (updated) {
         setSpecRecord(updated);
@@ -297,7 +304,7 @@ export default function SkillBoard() {
       title: '技能編號',
       dataIndex: 'skill_no',
       width: 80,
-      render: (no: string, record: SkillSpec) => (
+      render: (no: string, record: ActionScript) => (
         <Button type="link" style={{ padding: 0 }} onClick={() => { setSelected(record); setDetailOpen(true); }}>
           {no}
         </Button>
@@ -308,7 +315,7 @@ export default function SkillBoard() {
       dataIndex: 'title',
       width: 100,
       ellipsis: true,
-      render: (t: string, record: SkillSpec) => (
+      render: (t: string, record: ActionScript) => (
         <Button type="link" style={{ padding: 0 }} onClick={() => { setSelected(record); setDetailOpen(true); }}>
           {t || record.name || '-'}
         </Button>
@@ -362,7 +369,7 @@ export default function SkillBoard() {
       title: '狀態',
       dataIndex: 'status',
       width: 70,
-      render: (s: string, record: SkillSpec) => {
+      render: (s: string, record: ActionScript) => {
         const cfg = statusFlow[s] || { label: s, color: 'default', next: [] };
         return (
           <Select
@@ -392,7 +399,7 @@ export default function SkillBoard() {
     {
       title: '操作',
       width: 100,
-      render: (_: any, record: SkillSpec) => (
+      render: (_: any, record: ActionScript) => (
         <Space size={4}>
           {(record.status === 'draft' || record.status === 'spec') && (
             <Button type="primary" size="small" icon={<PlayCircleOutlined />} loading={analyzing === record._key} onClick={() => handleAnalyze(record)}>分析</Button>
@@ -414,7 +421,7 @@ export default function SkillBoard() {
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/app/browse-agent')}>返回</Button>
-          <h2 style={{ margin: 0 }}><CodeOutlined /> 技能看板</h2>
+          <h2 style={{ margin: 0 }}><CodeOutlined /> 行動腳本看板</h2>
         </div>
         <Space>
           <Button onClick={fetchList}>刷新</Button>
@@ -509,7 +516,7 @@ export default function SkillBoard() {
       </Modal>
 
       {/* 規格書 Modal */}
-      <Modal title="📄 技能規格書" open={specOpen} onCancel={() => setSpecOpen(false)} footer={[
+      <Modal title="📄 行動腳本規格書" open={specOpen} onCancel={() => setSpecOpen(false)} footer={[
         <Button key="close" onClick={() => setSpecOpen(false)}>關閉</Button>,
         <Button key="regenerate" loading={regenerating} onClick={() => { setRevisionText(''); setRevisionOpen(true); }}>重新產生</Button>,
         <Button key="copy" type="primary" onClick={() => { navigator.clipboard.writeText(specContent).then(() => message.success('已複製規格書')); }}>複製 Markdown</Button>,

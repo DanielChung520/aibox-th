@@ -76,7 +76,7 @@ async fn ensure_collections(db: &Database<ReqwestClient>) -> Result<(), String> 
         .map(|c| c.name)
         .collect();
 
-    let docs = ["users", "roles", "system_params", "functions", "role_functions", "agents", "tools", "tool_logs", "model_providers", "theme_templates", "knowledge_roots", "knowledge_files", "ontologies", "job_logs", "knowledge_graphs", "knowledge_graph_edges", "chat_sessions", "chat_messages", "orch_intents", "intent_catalog", "leads", "da_tables", "da_expressions", "ragic_cache_meta", "user_profiles", "agent_demands"];
+    let docs = ["users", "roles", "system_params", "functions", "role_functions", "agents", "tools", "tool_logs", "model_providers", "theme_templates", "knowledge_roots", "knowledge_files", "ontologies", "job_logs", "knowledge_graphs", "knowledge_graph_edges", "chat_sessions", "chat_messages", "orch_intents", "intent_catalog", "leads", "da_tables", "da_expressions", "ragic_cache_meta", "user_profiles", "agent_demands", "todos", "todo_steps", "todo_logs", "esg_emission_factors", "esg_carbon_records", "esg_indicator_definitions"];
     for name in docs {
         if !existing.contains(&name.to_string()) {
             db.create_collection(name)
@@ -533,6 +533,9 @@ async fn seed_functions(db: &Database<ReqwestClient>) -> Result<(), String> {
         ("agent.tools", "工具市集", "sub_function", Some("agent"), Some("/app/browse-tools"), Some("ToolOutlined"), None, 2),
         ("dev", "系統開發", "group", None, None, Some("CodeOutlined"), None, 4),
         ("dev.requirements", "需求看板", "sub_function", Some("dev"), Some("/app/requirements"), Some("ProjectOutlined"), None, 1),
+        ("esg", "ESG 管理", "group", None, None, Some("SafetyOutlined"), None, 5),
+        ("esg.standards", "ISO/IFAS 標準對照管理", "sub_function", Some("esg"), Some("/app/esg/standards"), Some("FileTextOutlined"), None, 1),
+        ("esg.records", "收集記錄", "sub_function", Some("esg"), Some("/app/esg/records"), Some("DatabaseOutlined"), None, 2),
     ];
 
     let now = Utc::now().to_rfc3339();
@@ -851,6 +854,10 @@ pub struct Tool {
     pub updated_by: Option<String>,
     pub created_at: String,
     pub updated_at: String,
+    // MCP tool fields
+    pub mcp_transport: Option<String>,
+    pub mcp_command: Option<String>,
+    pub mcp_args: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -876,6 +883,9 @@ pub struct CreateToolRequest {
     pub visibility_roles: Option<Vec<String>>,
     pub visibility_accounts: Option<Vec<String>>,
     pub created_by: Option<String>,
+    pub mcp_transport: Option<String>,
+    pub mcp_command: Option<String>,
+    pub mcp_args: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1007,6 +1017,13 @@ pub struct AssistantContextRecentAction {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AssistantContextBehaviorStats {
+    pub most_frequent_type: String,
+    pub total_recent_actions: i32,
+    pub action_types: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AssistantContextPayload {
     pub page: AssistantContextPage,
     pub focus: Option<AssistantContextFocus>,
@@ -1014,6 +1031,7 @@ pub struct AssistantContextPayload {
     pub entity: Option<AssistantContextFocus>,
     pub intent_hints: Option<Vec<AssistantContextIntentHint>>,
     pub recent_actions: Option<Vec<AssistantContextRecentAction>>,
+    pub behavior_stats: Option<AssistantContextBehaviorStats>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1024,4 +1042,64 @@ pub struct SendMessageRequest {
     pub temperature: Option<f64>,
     pub max_tokens: Option<i32>,
     pub assistant_context: Option<AssistantContextPayload>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TodoItem {
+    #[serde(rename = "_key")]
+    pub _key: Option<String>,
+    pub todo_no: String,
+    pub title: String,
+    pub description: Option<String>,
+    pub skill_key: Option<String>,
+    pub skill_no: Option<String>,
+    pub status: String,
+    pub priority: i32,
+    pub current_step_index: i32,
+    pub total_steps: i32,
+    pub progress: i32,
+    pub input_data: Option<serde_json::Value>,
+    pub output_data: Option<serde_json::Value>,
+    pub pdca_verdict: String,
+    pub pdca_summary: Option<String>,
+    pub assigned_to: Option<String>,
+    pub assigned_role: Option<String>,
+    pub tags: Vec<String>,
+    pub error_message: Option<String>,
+    pub created_by: Option<String>,
+    pub started_at: Option<String>,
+    pub completed_at: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TodoStep {
+    #[serde(rename = "_key")]
+    pub _key: Option<String>,
+    pub todo_key: String,
+    pub step_index: i32,
+    pub step_title: String,
+    pub step_type: String,
+    pub step_config: Option<serde_json::Value>,
+    pub status: String,
+    pub result: Option<serde_json::Value>,
+    pub error: Option<String>,
+    pub duration_ms: Option<i64>,
+    pub started_at: Option<String>,
+    pub completed_at: Option<String>,
+    pub pdca_verdict: Option<String>,
+    pub pdca_comment: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TodoLog {
+    #[serde(rename = "_key", skip_serializing_if = "Option::is_none")]
+    pub _key: Option<String>,
+    pub todo_key: String,
+    pub step_index: Option<i32>,
+    pub log_type: String,
+    pub message: String,
+    pub details: Option<serde_json::Value>,
+    pub created_at: String,
 }

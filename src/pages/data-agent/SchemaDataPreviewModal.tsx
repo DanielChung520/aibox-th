@@ -1,22 +1,25 @@
 /**
  * @file        Data Agent Schema 資料預覽
  * @description Schema 頁面的資料預覽 Modal — DuckDB-WASM 驅動，本地篩選/排序/翻頁
- * @lastUpdate  2026-04-24 10:20:08
+ * @lastUpdate  2026-05-01 10:31:57
  * @author      Daniel Chung
- * @version     2.3.0
+ * @version     2.4.0
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import type { ReactNode } from 'react';
-import { Modal, Table, App, Input, Button, Space, DatePicker, InputNumber, Select, Tooltip, Segmented } from 'antd';
-import { SearchOutlined, FilterOutlined, ReloadOutlined, DatabaseOutlined, FileOutlined, QuestionCircleOutlined } from '@ant-design/icons';
+import { Modal, Table, App, Input, Button, Space, DatePicker, InputNumber, Select, Tooltip, Segmented, Drawer, Descriptions, Tag } from 'antd';
+import { SearchOutlined, FilterOutlined, ReloadOutlined, DatabaseOutlined, FileOutlined, QuestionCircleOutlined, FileTextOutlined, ApartmentOutlined } from '@ant-design/icons';
 import type { InputRef, TableColumnType } from 'antd';
 import type { FilterDropdownProps } from 'antd/es/table/interface';
 import dayjs from 'dayjs';
 import { dataAgentApi, FieldInfo } from '../../services/dataAgentApi';
+import type { TableInfo } from '../../services/dataAgentApi_types';
 import { duckdbWasm } from '../../services/duckdbWasm';
 import { useEffectiveTheme } from '../../contexts/AppThemeProvider';
 import { actionTrail } from '../../services/actionTrail';
+import SchemaReportModal from './SchemaReportModal';
+import RecordLineageGraphModal from './RecordLineageGraphModal';
 
 interface SchemaDataPreviewModalProps {
   visible: boolean;
@@ -25,6 +28,7 @@ interface SchemaDataPreviewModalProps {
   previewMode?: 'paged' | 'all';
   onPreviewModeChange?: (mode: 'paged' | 'all') => void;
   onCancel: () => void;
+  account?: string;
 }
 
 const PAGE_SIZE_OPTIONS = [20, 50, 100];
@@ -56,6 +60,7 @@ export default function SchemaDataPreviewModal({
   previewMode: externalMode,
   onPreviewModeChange,
   onCancel,
+  account = 'dawnlink',
 }: SchemaDataPreviewModalProps) {
   const { message } = App.useApp();
   const effectiveTheme = useEffectiveTheme();
@@ -77,10 +82,41 @@ export default function SchemaDataPreviewModal({
   const [cachedAt, setCachedAt] = useState<string | null>(null);
   const [loadingProgress, setLoadingProgress] = useState('');
   const [fetchMode, setFetchMode] = useState<'paged' | 'all'>(externalMode ?? 'paged');
+  const [reportVisible, setReportVisible] = useState(false);
+  const [selectedRecord, setSelectedRecord] = useState<Record<string, unknown> | null>(null);
+  const [recordDetailVisible, setRecordDetailVisible] = useState(false);
+  const [lineageGraphOpen, setLineageGraphOpen] = useState(false);
   const searchInputRef = useRef<InputRef>(null);
   const tableRef = useRef<HTMLDivElement>(null);
 
-  const renderCellValue = useCallback((field: FieldInfo, value: unknown, record: Record<string, unknown>): ReactNode => {
+  const getRecordId = (record: Record<string, unknown>): string => {
+    return String(record['_ragicId'] ?? record['ragic_id'] ?? record['_id'] ?? record['id'] ?? '');
+  };
+
+  const getRecordDisplayTitle = (record: Record<string, unknown>): string => {
+    const rid = getRecordId(record);
+    const nameKeys = ['name', 'Name', '名稱', '品名', '品項', '料號', '編號', '代號', '代碼', '型號', '描述'];
+    for (const key of nameKeys) {
+      for (const [k, v] of Object.entries(record)) {
+        if (k.includes(key) && v != null && String(v).trim() && String(v).trim().length < 60) {
+          return String(v).trim();
+        }
+      }
+    }
+    return rid || '未知記錄';
+  };
+
+  const handleRowClick = useCallback((record: Record<string, unknown>) => {
+    setSelectedRecord(record);
+    setRecordDetailVisible(true);
+    actionTrail.record('modal_open', { tableId, recordId: getRecordId(record), action: 'record_detail' });
+  }, [tableId]);
+
+  const handleOpenLineageGraph = useCallback(() => {
+    setLineageGraphOpen(true);
+  }, []);
+
+  const renderCellValue = useCallback((_field: FieldInfo, value: unknown, _record: Record<string, unknown>): ReactNode => {
     if (value == null) return '-';
 
     if (isRagicLinkValue(value)) {
@@ -100,15 +136,6 @@ export default function SchemaDataPreviewModal({
       }
 
       return text || '-';
-    }
-
-    const recordUrl = typeof record._ragicRecordUrl === 'string' ? record._ragicRecordUrl : '';
-    if (field.linked_to && recordUrl) {
-      return (
-        <a href={recordUrl} target="_blank" rel="noopener noreferrer">
-          連結
-        </a>
-      );
     }
 
     return String(value);
@@ -567,6 +594,13 @@ export default function SchemaDataPreviewModal({
           style={{ width: 300 }}
         />
         <Space size="middle">
+          <Tooltip title="智慧報表">
+            <Button
+              icon={<FileTextOutlined />}
+              size="small"
+              onClick={() => setReportVisible(true)}
+            />
+          </Tooltip>
           <Space size={4}>
             <Segmented
               size="small"
@@ -610,9 +644,11 @@ export default function SchemaDataPreviewModal({
           loading={loading}
           size="small"
           scroll={{ x: 'max-content', y: 'calc(80vh - 180px)' }}
-          onRow={(_record, rowIdx) => ({
+          onRow={(record, rowIdx) => ({
             onMouseEnter: () => actionTrail.startDwell(`${tableId}_row_${rowIdx}`, { tableId, rowIdx }),
             onMouseLeave: () => actionTrail.clearDwell(`${tableId}_row_${rowIdx}`),
+            onClick: () => handleRowClick(record),
+            style: { cursor: 'pointer' },
           })}
           onChange={(_pagination, filters, sorter) => {
             if (sorter && !Array.isArray(sorter) && sorter.field) {
@@ -635,6 +671,68 @@ export default function SchemaDataPreviewModal({
           columns={tableColumns}
         />
       </div>
+      <SchemaReportModal
+        open={reportVisible}
+        tableInfo={{ table_id: tableId, table_name: tableName } as TableInfo}
+        onClose={() => setReportVisible(false)}
+      />
+
+      {/* Record detail drawer */}
+      <Drawer
+        title={
+          <Space>
+            <span>記錄明細</span>
+            {selectedRecord && (
+              <Tag color="blue">{getRecordDisplayTitle(selectedRecord)}</Tag>
+            )}
+          </Space>
+        }
+        placement="right"
+        width={480}
+        open={recordDetailVisible}
+        onClose={() => { setRecordDetailVisible(false); setSelectedRecord(null); }}
+        extra={
+          selectedRecord && getRecordId(selectedRecord) ? (
+            <Tooltip title="查看此記錄的資料血緣圖譜">
+              <Button
+                icon={<ApartmentOutlined />}
+                type="primary"
+                onClick={handleOpenLineageGraph}
+              >
+                資料血緣
+              </Button>
+            </Tooltip>
+          ) : null
+        }
+      >
+        {selectedRecord ? (
+          <Descriptions column={1} size="small" bordered>
+            {Object.entries(selectedRecord).map(([key, value]) => {
+              const fieldInfo = dataFields.find(f => f.field_id === key);
+              const label = fieldInfo?.field_name || key;
+              const displayValue = value == null ? '-' : String(value);
+              return (
+                <Descriptions.Item key={key} label={label}>
+                  {displayValue}
+                </Descriptions.Item>
+              );
+            })}
+          </Descriptions>
+        ) : (
+          <div style={{ color: '#999', textAlign: 'center', padding: 40 }}>無記錄資料</div>
+        )}
+      </Drawer>
+
+      {/* Record lineage graph modal */}
+      {selectedRecord && getRecordId(selectedRecord) ? (
+        <RecordLineageGraphModal
+          open={lineageGraphOpen}
+          onClose={() => setLineageGraphOpen(false)}
+          tableKey={tableId}
+          recordId={getRecordId(selectedRecord)}
+          account={account}
+        />
+      ) : null}
     </Modal>
   );
 }

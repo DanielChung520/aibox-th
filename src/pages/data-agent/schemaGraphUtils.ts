@@ -1,9 +1,9 @@
 /**
  * @file        Schema 圖譜共用工具
  * @description 型別定義、色彩常量、G6/3D 資料轉換函式
- * @lastUpdate  2026-04-24 12:56:23
+ * @lastUpdate  2026-05-01 10:31:57
  * @author      Daniel Chung
- * @version     1.9.0
+ * @version     1.10.0
  */
 
 import type { NodeData, EdgeData } from '@antv/g6';
@@ -321,6 +321,124 @@ export function buildG6NodeConfig() {
       inactive: { fillOpacity: 0.15, strokeOpacity: 0.15, labelOpacity: 0.15 },
     },
   };
+}
+
+/**
+ * Convert RecordTraceResponse to ParsedGraph for G6/SchemaGraph3D rendering.
+ * Nodes = records (label = table_name | primary field value), Edges = FK relationships.
+ */
+export function convertRecordTraceToGraph(data: {
+  nodes: Array<{ table_key: string; table_name: string; ragic_id: string; fields: Record<string, unknown>; depth: number }>;
+  edges: Array<{ from_ragic_id: string; from_table_key: string; to_ragic_id: string; to_table_key: string; via_field_id: string; via_field_name: string; relation_type: string }>;
+  root_ragic_id: string;
+}): ParsedGraph {
+  const g6Nodes: G6Node[] = [];
+  const fgNodes: GraphNode[] = [];
+
+  for (const n of data.nodes) {
+    const label = getNodeDisplayLabel(n);
+    const isRoot = n.ragic_id === data.root_ragic_id;
+    g6Nodes.push({ id: n.ragic_id, data: { label, depth: n.depth, isRoot, table_name: n.table_name } });
+    fgNodes.push({ id: n.ragic_id, label, module: n.table_name, color: isRoot ? ROOT_NODE_COLOR : undefined });
+  }
+
+  const g6Edges: G6Edge[] = [];
+  const fgLinks: GraphLink[] = [];
+  for (const e of data.edges) {
+    const edgeId = `${e.from_ragic_id}→${e.to_ragic_id}`;
+    const label = e.via_field_name || '';
+    g6Edges.push({ id: edgeId, source: e.from_ragic_id, target: e.to_ragic_id, data: { label } });
+    fgLinks.push({ id: edgeId, source: e.from_ragic_id, target: e.to_ragic_id, label });
+  }
+
+  return { g6Nodes, g6Edges, fgNodes, fgLinks };
+}
+
+/** Derive a human-readable label from a record trace node. */
+export function getNodeDisplayLabel(node: {
+  table_name: string;
+  fields: Record<string, unknown>;
+  ragic_id: string;
+}): string {
+  const tableName = node.table_name || '';
+  if (!node.fields || Object.keys(node.fields).length === 0) {
+    return tableName ? `${tableName}\n${node.ragic_id}` : node.ragic_id;
+  }
+  const primaryValue = findPrimaryDisplayValue(node.fields);
+  if (primaryValue) return `${tableName}\n${primaryValue}`;
+  return tableName || node.ragic_id;
+}
+
+/** Find a human-readable value from record fields (prefers [name] fields). */
+function findPrimaryDisplayValue(fields: Record<string, unknown>): string | null {
+  const entries = Object.entries(fields);
+  if (entries.length === 0) return null;
+  const nameKeys = ['name', 'Name', '名稱', '品名', '品項', '料號', '編號', '代號', '代碼', '型號'];
+  for (const key of nameKeys) {
+    for (const [k, v] of entries) {
+      if (k.includes(key) && v != null && String(v).trim()) {
+        return String(v).trim();
+      }
+    }
+  }
+  for (const [, v] of entries) {
+    if (typeof v === 'string' && v.trim() && v.length < 50) {
+      return v.trim();
+    }
+  }
+  return null;
+}
+
+/** Color for root record node (warm orange). */
+export const ROOT_NODE_COLOR = '#ff6a00';
+
+/** Color for ghost (unexplored) nodes — muted teal. */
+export const GHOST_NODE_COLOR = '#94a3b8';
+
+/**
+ * Build G6 config for ghost nodes (dashed border, semi-transparent).
+ * Ghost nodes represent unexplored FK pathway endpoints.
+ */
+export function buildGhostNodeConfig() {
+  return {
+    style: {
+      size: 22,
+      labelText: (d: NodeData) => getLabelFromData(d, String(d.id)),
+      labelFill: '#94a3b8', labelFontSize: 10, labelPlacement: 'bottom' as const,
+      labelOpacity: 0.6,
+      fill: GHOST_NODE_COLOR, fillOpacity: 0.2,
+      stroke: GHOST_NODE_COLOR, lineWidth: 1.5, lineDash: [5, 4],
+    },
+    state: {
+      inactive: { fillOpacity: 0.06, strokeOpacity: 0.15, labelOpacity: 0.08 },
+    },
+  };
+}
+
+/**
+ * Build G6 config for ghost (unexplored) edges — dashed, thinner.
+ * Ghost edges represent FK connections that haven't been traversed yet.
+ */
+export function buildGhostEdgeConfig() {
+  return {
+    style: {
+      labelText: (d: EdgeData) => getLabelFromData(d),
+      labelFill: '#94a3b8', labelFontSize: 9,
+      labelBackground: true, labelBackgroundFill: 'rgba(255,255,255,0.85)',
+      labelBackgroundRadius: 2, labelBackgroundPadding: [1, 3] as [number, number],
+      labelOpacity: 0.6,
+      stroke: '#cbd5e1', lineWidth: 1, strokeOpacity: 0.5,
+      lineDash: [6, 4], endArrow: true,
+    },
+    state: {
+      inactive: { strokeOpacity: 0.06, labelOpacity: 0.1 },
+    },
+  };
+}
+
+/** Check if a node ID is a ghost node (prefixed with "ghost_"). */
+export function isGhostNode(nodeId: string): boolean {
+  return nodeId.startsWith('ghost_');
 }
 
 export function buildG6EdgeConfig() {

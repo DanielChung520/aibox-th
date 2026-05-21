@@ -6,8 +6,11 @@
  * @version     1.0.0
  */
 
+import { useEffect } from 'react';
 import { Typography, Card, Row, Col, Empty } from 'antd';
 import { useParams } from 'react-router-dom';
+import { useEntityPerception } from '../hooks/useEntityPerception';
+import { pageContextManager } from '../services/PageContextManager';
 
 
 const { Title, Text } = Typography;
@@ -53,6 +56,12 @@ const PLATFORM_META: Record<string, {
 export default function PlatformBotPage() {
   const { platform } = useParams<{ platform: string }>();
   const meta = PLATFORM_META[platform || ''];
+
+  useEntityPerception({ defaultEntityType: 'bot', defaultAction: 'list' });
+
+  useEffect(() => {
+    pageContextManager.report({ component: 'PlatformBotPage', entityType: 'bot', action: 'list' });
+  }, []);
 
   if (!meta) {
     return (

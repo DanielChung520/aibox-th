@@ -18,6 +18,8 @@ import KBFileList from './components/KBFileList';
 import KBFileUpload from './components/KBFileUpload';
 import KBNodeRelPanel from './components/KBNodeRelPanel';
 import KBSettingsModal from './components/KBSettingsModal';
+import { useEntityPerception } from '../../hooks/useEntityPerception';
+import { pageContextManager } from '../../services/PageContextManager';
 
 const { Title, Text } = Typography;
 
@@ -27,6 +29,13 @@ export default function KnowledgeBaseDetail() {
   const { message } = App.useApp();
   const { token } = theme.useToken();
   const { contentTokens } = useContext(ThemeContext);
+  const { dispatchEntity } = useEntityPerception({ defaultEntityType: 'knowledge_base', defaultAction: 'list' });
+  void dispatchEntity; // Reserved for future event handler use
+
+  useEffect(() => {
+    pageContextManager.report({ component: 'KnowledgeBaseDetail', entityType: 'knowledge_base', action: 'list' });
+    return () => { pageContextManager.report({ component: undefined, entityType: undefined, action: undefined }); };
+  }, []);
 
   const [files, setFiles] = useState<KnowledgeFile[]>([]);
   const [filesLoading, setFilesLoading] = useState(false);

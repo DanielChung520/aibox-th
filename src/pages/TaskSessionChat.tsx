@@ -16,6 +16,8 @@ import { chatStore } from '../stores/chatStore';
 import { chatOrchestrator } from '../stores/chatOrchestrator';
 import { subscribeSessionFileStatus, type SSEConnection } from '../services/sseManager';
 import { agentApi, Agent, ChatMessage } from '../services/api';
+import { useEntityPerception } from '../hooks/useEntityPerception';
+import { pageContextManager } from '../services/PageContextManager';
 import MessageBubble from '../components/MessageBubble';
 import ToolCallDisplay from '../components/ToolCallDisplay';
 
@@ -46,6 +48,12 @@ export default function TaskSessionChat() {
   const [agentSessionId, setAgentSessionId] = useState<string>('');
   const [agentLoading, setAgentLoading] = useState(false);
   const [agentLoaded, setAgentLoaded] = useState(false);
+
+  useEntityPerception({ defaultEntityType: 'task_session', defaultAction: 'chat' });
+
+  useEffect(() => {
+    pageContextManager.report({ component: 'TaskSessionChat', entityType: 'task_session', action: 'chat' });
+  }, []);
 
   // 為每個 Agent 建立/取用固定 session_id（跨頁面重整一致）
   useEffect(() => {
