@@ -1,0 +1,250 @@
+# ============================================================================
+# @file        docker/docker-compose.yml
+# @description ABC Desktop - Complete deployment stack for Ubuntu
+# @lastUpdate  2026-05-22
+# @author      Daniel Chung
+# @version     1.0.0
+# ============================================================================
+#
+# Usage:
+#   docker compose -f docker/docker-compose.yml up -d
+#   docker compose -f docker/docker-compose.yml down
+#
+# Context: /Users/daniel/GitHub/AIBox (parent of docker/)
+# Working dir: /Users/daniel/GitHub/AIBox/docker
+# ============================================================================
+
+networks:
+  aibox-net:
+    driver: bridge
+
+volumes:
+  arango-data:
+  qdrant-data:
+  redis-data:
+  seaweed-aibox-master-data:
+  seaweed-aibox-volume-data:
+  seaweed-aibox-filer-data:
+  ollama-data:
+
+# ─── YAML Anchors (shared config) ──────────────────────────────────────────
+x-python-defaults: &python-defaults
+  build:
+    context: ..
+    dockerfile: docker/Dockerfile.python
+  volumes:
+    - ../ai-services:/app
+  depends_on:
+    - arangodb
+    - redis
+  restart: unless-stopped
+  networks:
+    - aibox-net
+
+x-python-env: &python-env
+  ARANGO_URL: http://arangodb:8529
+  ARANGO_DATABASE: abc_desktop
+  ARANGO_USER: root
+  ARANGO_PASSWORD: abc_desktop_2026
+  OLLAMA_BASE_URL: http://ollama:11434
+  QDRANT_URL: http://qdrant:6333
+  REDIS_URL: redis://redis:6379/0
+
+services:
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Infrastructure Services
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  arangodb:
+    image: arangodb:3.12
+    ports:
+      - "8529:8529"
+    environment:
+      ARANGO_ROOT_PASSWORD: abc_desktop_2026
+      ARANGO_NO_AUTH: "1"
+    volumes:
+      - arango-data:/var/lib/arangodb3
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://127.0.0.1:8529/_api/version || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - aibox-net
+
+  qdrant:
+    image: qdrant/qdrant:v1.16.3
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant-data:/qdrant/storage
+    restart: unless-stopped
+    networks:
+      - aibox-net
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - aibox-net
+
+  seaweedfs-master:
+    image: chrislusf/seaweedfs:latest
+    ports:
+      - "9333:9333"
+      - "9334:9334"
+      - "19333:19333"
+    command: master -mdir=/data
+    volumes:
+      - seaweed-aibox-master-data:/data
+    restart: unless-stopped
+    networks:
+      - aibox-net
+
+  seaweedfs-volume:
+    image: chrislusf/seaweedfs:latest
+    ports:
+      - "8080:8080"
+    command: volume -dir=/data -max=5 -mserver=seaweedfs-master:9333 -port=8080
+    volumes:
+      - seaweed-aibox-volume-data:/data
+    depends_on:
+      - seaweedfs-master
+    restart: unless-stopped
+    networks:
+      - aibox-net
+
+  seaweedfs-filer:
+    image: chrislusf/seaweedfs:latest
+    ports:
+      - "8333:8333"
+      - "8888:8888"
+    command: filer -port=8888 -s3 -s3.port=8333 -master=seaweedfs-master:9333
+    volumes:
+      - seaweed-aibox-filer-data:/data
+    depends_on:
+      - seaweedfs-master
+    restart: unless-stopped
+    networks:
+      - aibox-net
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # LLM Service (with GPU support)
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    restart: unless-stopped
+    networks:
+      - aibox-net
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Rust API Gateway
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  rust-api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.rust-api
+    ports:
+      - "6500:6500"
+    environment:
+      - PORT=6500
+      - ARANGODB_URL=http://arangodb:8529
+      - ARANGODB_DATABASE=abc_desktop
+      - ARANGODB_USERNAME=root
+      - ARANGODB_PASSWORD=abc_desktop_2026
+      - UNIFIED_AGENTS_URL=http://unified_agents:8011
+      - AITASK_URL=http://aitask:8001
+      - MCP_TOOLS_URL=http://mcp_tools:8004
+      - JWT_SECRET=abc-desktop-jwt-secret-2026
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - QDRANT_URL=http://qdrant:6333
+    volumes:
+      - ../dist:/app/dist
+    depends_on:
+      arangodb:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - aibox-net
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Python AI Services
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  aitask:
+    <<: *python-defaults
+    command: uvicorn aitask.main:app --host 0.0.0.0 --port 8001
+    ports:
+      - "8001:8001"
+    environment:
+      <<: *python-env
+
+  skills_rag:
+    <<: *python-defaults
+    command: uvicorn skills_rag.main:app --host 0.0.0.0 --port 8012
+    ports:
+      - "8012:8012"
+    environment:
+      <<: *python-env
+
+  mcp_tools:
+    <<: *python-defaults
+    command: uvicorn mcp_tools.main:app --host 0.0.0.0 --port 8004
+    ports:
+      - "8004:8004"
+    environment:
+      <<: *python-env
+
+  aiq_agent:
+    <<: *python-defaults
+    command: uvicorn aiq_agent.main:app --host 0.0.0.0 --port 8009
+    ports:
+      - "8009:8009"
+    environment:
+      <<: *python-env
+
+  unified_agents:
+    <<: *python-defaults
+    command: uvicorn unified_agents.main:app --host 0.0.0.0 --port 8011
+    ports:
+      - "8011:8011"
+    environment:
+      <<: *python-env
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Celery Async Worker
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  celery-worker:
+    <<: *python-defaults
+    command: celery -A celery_app.app worker --loglevel=info
+    environment:
+      <<: *python-env
+    depends_on:
+      - redis
+      - arangodb
