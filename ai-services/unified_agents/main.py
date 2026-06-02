@@ -13,7 +13,7 @@ setup_logging("unified_agents", os.getenv("LOG_LEVEL", "INFO"))
 STARTED_AT = datetime.now(timezone.utc).isoformat()
 
 app = FastAPI(
-    title="AIBox Unified Agents",
+    title="TWHC Unified Agents",
     description="Unified entry point for all AI agents: data_agent, knowledge_agent, memory_agent, backup_agent, mcp_tools",
     version="1.0.0",
 )

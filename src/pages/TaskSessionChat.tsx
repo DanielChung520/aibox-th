@@ -9,7 +9,7 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent } from 'react';
 import { Input, Dropdown, Tag, message, Typography } from 'antd';
 import type { MenuProps } from 'antd';
-import { PlusOutlined, PaperClipOutlined, SmileOutlined, AudioOutlined, SendOutlined, StopOutlined, RobotOutlined, EditOutlined, DeleteOutlined, VerticalAlignBottomOutlined, ArrowLeftOutlined, MinusOutlined } from '@ant-design/icons';
+import { PlusOutlined, PaperClipOutlined, SmileOutlined, AudioOutlined, SendOutlined, StopOutlined, RobotOutlined, EditOutlined, DeleteOutlined, VerticalAlignBottomOutlined, ArrowLeftOutlined } from '@ant-design/icons';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useContentTokens } from '../contexts/AppThemeProvider';
 import { chatStore } from '../stores/chatStore';

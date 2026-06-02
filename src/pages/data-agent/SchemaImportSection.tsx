@@ -15,13 +15,12 @@ import SchemaIntentModal from './SchemaIntentModal';
 
 const { Text } = Typography;
 
-const DEFAULT_ACCOUNT = 'dawnlink';
-
 interface SchemaImportSectionProps {
+  account: string;
   onImportSuccess: () => void;
 }
 
-export default function SchemaImportSection({ onImportSuccess }: SchemaImportSectionProps) {
+export default function SchemaImportSection({ account, onImportSuccess }: SchemaImportSectionProps) {
   const { message } = App.useApp();
   const [importConfirmVisible, setImportConfirmVisible] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -47,7 +46,7 @@ export default function SchemaImportSection({ onImportSuccess }: SchemaImportSec
     try {
       const content = await file.text();
       const res = await dataAgentApi.importRagicMd({
-        account: DEFAULT_ACCOUNT,
+        account,
         content
       });
 
@@ -125,7 +124,7 @@ export default function SchemaImportSection({ onImportSuccess }: SchemaImportSec
         </div>
       </Modal>
 
-      <SchemaGraphModal open={graphOpen} onClose={() => setGraphOpen(false)} account={DEFAULT_ACCOUNT} />
+      <SchemaGraphModal open={graphOpen} onClose={() => setGraphOpen(false)} account={account} />
       <SchemaIntentModal open={intentOpen} onClose={() => setIntentOpen(false)} />
     </>
   );

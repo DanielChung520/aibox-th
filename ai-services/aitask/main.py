@@ -52,7 +52,7 @@ async def lifespan(app_instance: FastAPI) -> AsyncGenerator[None, None]:
 
 
 app = FastAPI(
-    title="AIBox AITask Service",
+    title="TWHC AITask Service",
     description="AI Chat service with multi-provider streaming support.",
     version="1.3.0",
     lifespan=lifespan,

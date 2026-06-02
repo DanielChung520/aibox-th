@@ -20,7 +20,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 app = FastAPI(
-    title="AIBox BPA Service",
+    title="TWHC BPA Service",
     description="Business process automation service.",
     version="1.0.0",
 )

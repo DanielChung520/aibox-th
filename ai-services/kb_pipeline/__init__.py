@@ -1,5 +1,5 @@
 """
-AIBox Knowledge Base Pipeline — Reusable library for vectorization and graph extraction.
+TWHC Knowledge Base Pipeline — Reusable library for vectorization and graph extraction.
 """
 
 from kb_pipeline.chunker import chunk_text

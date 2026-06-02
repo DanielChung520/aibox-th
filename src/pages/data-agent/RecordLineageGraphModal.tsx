@@ -6,15 +6,15 @@
  * @author      Daniel Chung
  * @version     2.0.0
  */
-import { useRef, useState, useCallback, useEffect } from 'react';
+import { useRef, useState, useCallback } from 'react';
 import { Modal, Spin, Empty, Typography, Segmented, Button, Space, App, Input, AutoComplete, Tooltip } from 'antd';
 import { ZoomInOutlined, ZoomOutOutlined, ReloadOutlined, SearchOutlined, CloseCircleOutlined, ApartmentOutlined } from '@ant-design/icons';
 import { Graph } from '@antv/g6';
 import { dataAgentApi } from '../../services/dataAgentApi';
 import SchemaGraph3D, { type SchemaGraph3DHandle } from './SchemaGraph3D';
 import {
-  getLayout, getHighlightSet, buildG6NodeConfig, buildG6EdgeConfig,
-  buildGhostNodeConfig, buildGhostEdgeConfig, isGhostNode,
+  getLayout, buildG6NodeConfig, buildG6EdgeConfig,
+  isGhostNode,
   hashColor, NODE_COLORS, ROOT_NODE_COLOR, GHOST_NODE_COLOR,
   convertRecordTraceToGraph,
   type LayoutMode, type ViewMode, type ParsedGraph, type HighlightSet, type HighlightMode,
@@ -64,7 +64,7 @@ export default function RecordLineageGraphModal({
   const [highlightSet, setHighlightSet] = useState<HighlightSet | null>(null);
 
   // Progressive state
-  const [loadedNodes, setLoadedNodes] = useState<Map<string, Record<string, unknown>>>(new Map());
+  const [_loadedNodes, setLoadedNodes] = useState<Map<string, Record<string, unknown>>>(new Map());
   const [loadedEdges, setLoadedEdges] = useState<Array<Record<string, unknown>>>([]);
   const [ghostEdges, setGhostEdges] = useState<GhostEdge[]>([]);
   const [expandingEdges, setExpandingEdges] = useState<Set<string>>(new Set());
@@ -103,8 +103,7 @@ export default function RecordLineageGraphModal({
     const g6Edges: Array<{ id: string; source: string; target: string; data: Record<string, unknown> }> = [];
     const fgLinks: Array<{ id: string; source: string; target: string; label: string; color?: string }> = [];
 
-    const nodeData = (id: string) => nodes.get(id);
-    const getLabel = (nd: Record<string, unknown> | undefined) => {
+    const getLabel = (id: string, nd: Record<string, unknown> | undefined) => {
       if (!nd) return '';
       const tbl = String(nd.table_name || '');
       const flds = nd.fields as Record<string, unknown> | undefined;
@@ -124,7 +123,7 @@ export default function RecordLineageGraphModal({
 
     // Real nodes
     for (const [id, nd] of nodes) {
-      const label = getLabel(nd);
+      const label = getLabel(id, nd);
       const isRoot = nd.isRoot === true;
       g6Nodes.push({ id, data: { label, isRoot, table_name: nd.table_name } });
       fgNodes.push({ id, label, module: String(nd.table_name || ''), color: isRoot ? ROOT_NODE_COLOR : undefined });
@@ -253,7 +252,7 @@ export default function RecordLineageGraphModal({
         // Add new ghost edges from FK previews
         if (result.fk_previews) {
           for (const [rid, previews] of Object.entries(result.fk_previews)) {
-            for (const p of (previews as Array<Record<string, unknown>>)) {
+            for (const p of (previews as unknown as Array<Record<string, unknown>>)) {
               const pval = String(p.from_field_value || '');
               if (!pval) continue;
               newGhosts.push({
@@ -313,7 +312,7 @@ export default function RecordLineageGraphModal({
           isRoot: true,
         });
 
-        const initGhosts: GhostEdge[] = (data.fk_edges || []).map((e: Record<string, unknown>) => ({
+        const initGhosts: GhostEdge[] = (data.fk_edges || []).map((e: any) => ({
           id: `${recordId}_${e.from_field_id}`,
           from_record_id: recordId,
           from_table_key: tableKey,

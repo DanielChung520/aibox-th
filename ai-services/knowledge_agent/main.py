@@ -11,7 +11,7 @@ from shared.logging import LoggingMiddleware, setup_logging
 setup_logging("knowledge_agent", os.getenv("LOG_LEVEL", "INFO"))
 
 app = FastAPI(
-    title="AIBox Knowledge Agent Service",
+    title="TWHC Knowledge Agent Service",
     description="RAG-based knowledge retrieval service.",
     version="2.1.0",
 )

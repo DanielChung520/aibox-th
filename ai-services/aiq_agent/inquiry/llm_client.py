@@ -158,7 +158,7 @@ class InquiryLLMClient:
     def _build_system_prompt(self) -> str:
         """Build the system prompt for strict inquiry analysis."""
         return (
-            "你是 AIBox 艾企助手的意圖分析引擎。\n"
+            "你是 AIBox-TH 艾企助手的意圖分析引擎。\n"
             "請根據 working context、query 與 candidate seeds，推理最可能的使用者意圖。\n"
             "可用 ExecutionPath 選項如下：\n"
             "- knowledge_search: 需要知識庫或文件檢索\n"

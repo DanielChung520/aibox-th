@@ -103,6 +103,15 @@ class ArangoOps:
 
                     doc = docx.Document(io.BytesIO(content))
                     parts = [p.text.strip() for p in doc.paragraphs if p.text.strip()]
+                    for table in doc.tables[:50]:
+                        rows = []
+                        for row in table.rows:
+                            cells = [cell.text.strip() for cell in row.cells]
+                            line = " | ".join(cells).strip()
+                            if line:
+                                rows.append(line)
+                        if rows:
+                            parts.append("\n".join(rows))
                     return "\n".join(parts) if parts else ""
                 except Exception:
                     logger.exception("Failed to parse DOCX: %s", file_id)

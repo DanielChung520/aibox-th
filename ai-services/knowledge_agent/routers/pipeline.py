@@ -508,8 +508,6 @@ async def get_preview(
         ".csv": "table",
         ".xlsx": "table",
         ".xls": "table",
-        ".docx": "text",
-        ".doc": "text",
     }
     preview_type = content_type_map.get(ext, "binary")
 
@@ -575,11 +573,20 @@ async def get_preview(
         from docx import Document
 
         doc = Document(local_path)
-        paragraphs = [p.text.strip() for p in doc.paragraphs if p.text.strip()]
+        parts = [p.text.strip() for p in doc.paragraphs if p.text.strip()]
+        for table in doc.tables[:50]:
+            rows = []
+            for row in table.rows:
+                cells = [cell.text.strip() for cell in row.cells]
+                line = " | ".join(cells).strip()
+                if line:
+                    rows.append(line)
+            if rows:
+                parts.append("\n".join(rows))
         return {
             "file_id": file_id,
             "type": "text",
-            "content": "\n".join(paragraphs[:200]),
+            "content": "\n".join(parts[:200]),
         }
 
     return {"file_id": file_id, "type": "binary", "message": "不支援的檔案格式"}

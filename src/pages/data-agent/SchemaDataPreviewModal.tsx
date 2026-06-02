@@ -60,7 +60,7 @@ export default function SchemaDataPreviewModal({
   previewMode: externalMode,
   onPreviewModeChange,
   onCancel,
-  account = 'dawnlink',
+  account = '',
 }: SchemaDataPreviewModalProps) {
   const { message } = App.useApp();
   const effectiveTheme = useEffectiveTheme();

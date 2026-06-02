@@ -60,6 +60,19 @@ version: 2.0.0
 
 所有系統參數存放於 `system_params` 集合，嚴禁 hardcode。
 
+### 1.5 請求轉發架構（憲法級規範）
+
+所有前端請求必須經過 **Rust API Gateway**（port 6500），禁止前端直接呼叫 Python 服務。
+
+```
+前端 (Vite proxy:1420) → Rust API Gateway (6500) → Python 後端服務
+```
+
+- 前端程式碼一律使用相對路徑（如 `/order-secretary/preorders`），禁止 hardcode 任何 Python 服務的 IP/Port
+- Vite proxy 僅轉發到 `http://localhost:6500`，不直接 proxy 到 Python 服務
+- 新增後端路由時，必須在 `api/src/api/` 新增 proxy handler，並在 `api/src/api/mod.rs` 註冊
+- 違反此原則的 PR 不予合併（參見 `vite.config.ts` 與 `api/src/api/order_secretary.rs` 範例）
+
 ### 1.7 LLM Provider 解析標準
 
 所有 LLM 呼叫統一透過 `shared/llm_resolver.py` 解析，嚴禁各服務自行實作。
@@ -99,7 +112,7 @@ version: 2.0.0
 
 所有臨時檔案統一放置於 `.tmp/` 目錄，禁止散落在專案根目錄。
 
-### 1.5 Safe Operation Rules
+### 1.8 Safe Operation Rules
 
 > ⚠️ **基礎設施操作一律須經確認**：Cloudflare、DNS、資料庫、sudo、生產服務等操作，AI 僅能輸出指令，由使用者手動執行。
 
@@ -156,6 +169,7 @@ uvicorn aitask.main:app --port 8001 --reload
 
 | 日期 | 版本 | 更新者 | 變更內容 |
 |------|------|--------|----------|
+| 2026-05-21 | 2.1.0 | Daniel Chung | 新增 1.5 請求轉發架構原則（憲法級） |
 | 2026-05-09 | 2.0.0 | Daniel Chung | 重構為框架性文件，拆出編碼規範/架構/Agent 指南為獨立文件 |
 | 2026-04-30 | 1.13.0 | Daniel Chung | 新增 functionsIndex.md 複用函式索引 |
 | 2026-04-21 | 1.11.0 | Daniel Chung | 新增 Agent 建立指南 |

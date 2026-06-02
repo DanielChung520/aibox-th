@@ -25,7 +25,7 @@ from shared.logging import LoggingMiddleware, setup_logging
 setup_logging("data_agent", os.getenv("LOG_LEVEL", "INFO"))
 
 app = FastAPI(
-    title="AIBox Data Agent Service",
+    title="TWHC Data Agent Service",
     description="Unified data query and intent management service.",
     version="2.1.0",
 )

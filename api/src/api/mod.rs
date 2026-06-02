@@ -238,6 +238,8 @@ pub fn create_router() -> Router {
         .merge(mcp::create_mcp_router())
         .merge(order_secretary::create_order_secretary_router())
         .route("/api/v1/events", post(post_events))
+        .nest_service("/assets", ServeDir::new("../dist/assets"))
+        .nest_service("/manifest.webmanifest", ServeDir::new("../dist/manifest.webmanifest"))
         .nest_service("/channel",
             ServeDir::new("../dist")
                 .fallback(any(serve_channel_spa))
@@ -2772,7 +2774,7 @@ async fn analyze_agent_requirement(
         .unwrap_or_default();
 
     let prompt = format!(
-        r#"你是 AIBox / ABC Desktop 系統的資深開發架構師。請根據以下需求與系統規格，產生一份開發建議規格書（JSON 格式）。
+        r#"你是 AIBox-TH / TWHC Desktop 系統的資深開發架構師。請根據以下需求與系統規格，產生一份開發建議規格書（JSON 格式）。
 
 ## 系統規格索引（請根據需求主題，參考對應文件的設計模式與慣例）
 
@@ -3047,7 +3049,7 @@ async fn get_agent_requirement_spec_md(
 
     let mut md = String::new();
     md.push_str(&format!("# 開發規格書：{agent_name}\n\n"));
-    md.push_str("> 本規格書由 AIBox 系統開發區自動生成，可供 AI 開發工具參照。\n\n");
+    md.push_str("> 本規格書由 AIBox-TH 系統開發區自動生成，可供 AI 開發工具參照。\n\n");
     md.push_str("## 需求概要\n\n");
     md.push_str(&format!("- **目標**：{goal}\n"));
     md.push_str(&format!("- **預期效果**：{expected}\n"));
@@ -3107,7 +3109,7 @@ async fn get_agent_requirement_spec_md(
         }
     }
 
-    md.push_str("---\n*本規格書由 AIBox 系統自動生成。*\n");
+    md.push_str("---\n*本規格書由 AIBox-TH 系統自動生成。*\n");
 
     Ok(axum::response::Response::builder()
         .header("content-type", "text/markdown; charset=utf-8")

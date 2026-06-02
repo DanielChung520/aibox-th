@@ -12,7 +12,7 @@ from fastapi import FastAPI
 
 from bpa.esg_helper.router import router
 
-app = FastAPI(title="ESG Helper", description="AIBox ESG 小幫手 — ESG 領域 AI 助理", version="1.0.0")
+app = FastAPI(title="ESG Helper", description="TWHC ESG 小幫手 — ESG 領域 AI 助理", version="1.0.0")
 app.include_router(router, prefix="/esg-helper", tags=["ESG Helper"])
 
 

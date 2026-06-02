@@ -1,11 +1,45 @@
+# ============================================================================
+# @file        docker-compose.infra.yml
+# @description ABC Desktop — Infrastructure stack (shared across projects)
+# @lastUpdate  2026-05-23
+# @author      Daniel Chung
+# @version     2.0.0
+# ============================================================================
+#
+# 基礎設施層 — 資料庫、佇列、向量、檔案儲存
+# Ollama 使用 DGX 本機 host 服務（非 container）
+# 跨專案共享，可獨立部署。
+#
+# Usage:
+#   docker compose -f docker-compose.infra.yml up -d
+#   docker compose -f docker-compose.infra.yml down
+# ============================================================================
+
+networks:
+  aibox-net:
+    name: aibox-net
+    driver: bridge
+
+volumes:
+  arango-data:
+  qdrant-data:
+  redis-data:
+  seaweed-aibox-master-data:
+  seaweed-aibox-volume-data:
+  seaweed-aibox-filer-data:
+
 services:
-  arango:
+  # ═══════════════════════════════════════════════════════════════════════════
+  # ArangoDB — 主資料庫
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  arangodb:
     image: arangodb:3.12
     container_name: arangodb
     ports:
       - "8529:8529"
     environment:
-      ARANGO_ROOT_PASSWORD: abc_desktop_2026
+      ARANGO_ROOT_PASSWORD: ${ARANGODB_PASSWORD:-abc_desktop_2026}
       ARANGO_NO_AUTH: "1"
     volumes:
       - arango-data:/var/lib/arangodb3
@@ -16,6 +50,12 @@ services:
       retries: 10
       start_period: 30s
     restart: unless-stopped
+    networks:
+      - aibox-net
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Qdrant — 向量資料庫
+  # ═══════════════════════════════════════════════════════════════════════════
 
   qdrant:
     image: qdrant/qdrant:v1.16.3
@@ -26,6 +66,12 @@ services:
     volumes:
       - qdrant-data:/qdrant/storage
     restart: unless-stopped
+    networks:
+      - aibox-net
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Redis — 佇列 / Cache
+  # ═══════════════════════════════════════════════════════════════════════════
 
   redis:
     image: redis:7-alpine
@@ -40,10 +86,16 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
+    networks:
+      - aibox-net
 
-  seaweedfs-ai-box-master:
+  # ═══════════════════════════════════════════════════════════════════════════
+  # SeaweedFS — 分散式檔案儲存
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  seaweedfs-master:
     image: chrislusf/seaweedfs:latest
-    container_name: seaweedfs-ai-box-master
+    container_name: seaweedfs-master
     ports:
       - "9333:9333"
       - "9334:9334"
@@ -52,36 +104,46 @@ services:
     volumes:
       - seaweed-aibox-master-data:/data
     restart: unless-stopped
+    networks:
+      - aibox-net
 
-  seaweedfs-ai-box-volume:
+  seaweedfs-volume:
     image: chrislusf/seaweedfs:latest
-    container_name: seaweedfs-ai-box-volume
+    container_name: seaweedfs-volume
     ports:
       - "8080:8080"
-    command: volume -dir=/data -max=5 -mserver=seaweedfs-ai-box-master:9333 -port=8080
+    command: volume -dir=/data -max=5 -mserver=seaweedfs-master:9333 -port=8080
     volumes:
       - seaweed-aibox-volume-data:/data
     depends_on:
-      - seaweedfs-ai-box-master
+      - seaweedfs-master
     restart: unless-stopped
+    networks:
+      - aibox-net
 
-  seaweedfs-ai-box-filer:
+  seaweedfs-filer:
     image: chrislusf/seaweedfs:latest
-    container_name: seaweedfs-ai-box-filer
+    container_name: seaweedfs-filer
     ports:
       - "8333:8333"
       - "8888:8888"
-    command: filer -port=8888 -s3 -s3.port=8333 -master=seaweedfs-ai-box-master:9333
+    command: filer -port=8888 -s3 -s3.port=8333 -master=seaweedfs-master:9333
     volumes:
       - seaweed-aibox-filer-data:/data
     depends_on:
-      - seaweedfs-ai-box-master
+      - seaweedfs-master
     restart: unless-stopped
+    networks:
+      - aibox-net
 
-volumes:
-  arango-data:
-  qdrant-data:
-  redis-data:
-  seaweed-aibox-master-data:
-  seaweed-aibox-volume-data:
-  seaweed-aibox-filer-data:
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Ollama — 使用 DGX 本機 host 服務（port 11434）
+  #
+  # DGX Spark 上 Ollama 已安裝為 host 服務（非 container），
+  # 專案 container 透過 host.docker.internal:11434 連線。
+  # 需在專案 docker-compose.yml 中設定：
+  #   extra_hosts:
+  #     - "host.docker.internal:host-gateway"
+  #   environment:
+  #     OLLAMA_BASE_URL: http://host.docker.internal:11434
+  # ═══════════════════════════════════════════════════════════════════════════

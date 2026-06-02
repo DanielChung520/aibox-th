@@ -9,7 +9,7 @@ from typing import Optional
 from memory_agent.core.models import SessionMemory
 
 
-SESSION_MEMORY_DIR = os.getenv("AIBOX_SESSION_MEMORY_DIR", "~/.aibox/sessions")
+SESSION_MEMORY_DIR = os.getenv("AIBOX_TH_SESSION_MEMORY_DIR", "~/.aibox-th/sessions")
 SESSION_MEMORY_TEMPLATE = """# Session Memory
 
 ## Session Title

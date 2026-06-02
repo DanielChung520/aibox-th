@@ -6,7 +6,7 @@
  * @version     1.2.0
  */
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Button, Avatar, Dropdown, Modal, Form, Input, Descriptions, App } from 'antd';
 import type { MenuProps } from 'antd';
 import {
@@ -16,21 +16,8 @@ import {
 import ServiceStatusBar from './ServiceStatusBar';
 import JobMonitor from './JobMonitor';
 import type { LoginResponse } from '../services/api';
-import { paramsApi, userApi } from '../services/api';
-
-const avatarModules = import.meta.glob<{ default: string }>(
-  '../assets/avatar/*.png',
-  { eager: true }
-);
-
-function resolveAvatarSrc(name: string): string | undefined {
-  if (!name) return undefined;
-  const entry = Object.entries(avatarModules).find(([path]) => {
-    const filename = path.split('/').pop() || '';
-    return filename.replace(/\.png$/i, '') === name;
-  });
-  return entry ? entry[1].default : undefined;
-}
+import { userApi } from '../services/api';
+import { useAvatar } from '../services/avatarCache';
 
 interface HeaderControlsProps {
   user: LoginResponse['user'] | null;
@@ -49,28 +36,12 @@ export default function HeaderControls({
   onLogout,
   onToggleTheme,
 }: HeaderControlsProps) {
-  const [avatarSrc, setAvatarSrc] = useState<string | undefined>(undefined);
+  const avatarSrc = useAvatar();
   const [accountModalOpen, setAccountModalOpen] = useState(false);
   const [passwordModalOpen, setPasswordModalOpen] = useState(false);
   const [passwordLoading, setPasswordLoading] = useState(false);
   const [passwordForm] = Form.useForm();
   const { message } = App.useApp();
-
-  useEffect(() => {
-    paramsApi.get('basic.avatar')
-      .then(res => {
-        const name = res.data?.data?.param_value;
-        if (name) setAvatarSrc(resolveAvatarSrc(name));
-      })
-      .catch(() => {});
-
-    const handleAvatarChanged = (e: Event) => {
-      const name = (e as CustomEvent).detail?.name;
-      if (name) setAvatarSrc(resolveAvatarSrc(name));
-    };
-    window.addEventListener('avatar-changed', handleAvatarChanged);
-    return () => window.removeEventListener('avatar-changed', handleAvatarChanged);
-  }, []);
 
   const menuItems: MenuProps['items'] = [
     { key: 'account', icon: <InfoCircleOutlined />, label: '我的帳戶信息', onClick: () => setAccountModalOpen(true) },

@@ -13,7 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from backup_agent.routers.backup import router as backup_router
 
 app = FastAPI(
-    title="AIBox Backup Agent",
+    title="TWHC Backup Agent",
     description="ArangoDB & Qdrant backup and restore service",
     version="1.0.0",
 )

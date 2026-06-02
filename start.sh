@@ -23,11 +23,11 @@ API_PORT="${PORT:-6500}"
 # ─── Python AI Services 定義 ────────────────────────────────────────────────
 # 格式: "名稱:端口:模組路徑"
 # 注意：已整合到 unified_agents 的服務（da/ka/memory/backup/mcp）不再單獨啟動
+# bpa_mm_agent (8005) 為歷史遺留（legacy），已停用，不再啟動
 AI_SERVICES=(
   "aitask:8001:aitask.main:app"
   "skills_rag:8012:skills_rag.main:app"
   "mcp_tools:8004:mcp_tools.main:app"
-  "bpa_mm_agent:8005:bpa.mm_agent.main:app"
   "aiq_agent:8009:aiq_agent.main:app"
   "unified_agents:8011:unified_agents.main:app"
 )
@@ -87,7 +87,9 @@ start_api() {
   set +a
 
   cd "$API_DIR"
+  set -m
   cargo watch -x 'run --release' > /tmp/abc-api.log 2>&1 &
+  set +m
   echo $! > "$PID_DIR/api.pid"
 
   echo "  -> Waiting for API Server (compiling + starting, max 120s)..."
@@ -143,7 +145,9 @@ start_web() {
   fi
 
   cd "$web_dir"
+  set -m
   python3 -m http.server 3505 --bind 0.0.0.0 > /tmp/abc-web.log 2>&1 &
+  set +m
   echo $! > "$PID_DIR/web.pid"
 
   sleep 2
@@ -167,6 +171,58 @@ stop_web() {
   kill_port 3505
 }
 
+# ─── Frontend Dev Server (port 1420) ────────────────────────────────────────
+
+start_frontend() {
+  echo "═══════════════════════════════════════"
+  echo " Frontend Dev Server (port 1420)"
+  echo "═══════════════════════════════════════"
+
+  kill_port 1420
+
+  cd "$SCRIPT_DIR"
+  set -m
+  npm run dev < /dev/null > /tmp/abc-frontend.log 2>&1 &
+  set +m
+  echo $! > "$PID_DIR/frontend.pid"
+
+  echo "  -> Waiting for Frontend Dev Server (max 60s)..."
+  local elapsed=0
+  local max_wait=60
+  while [ $elapsed -lt $max_wait ]; do
+    if curl -sf "http://localhost:1420/" > /dev/null 2>&1; then
+      echo "  ✅ Frontend Dev Server started on http://localhost:1420 (${elapsed}s)"
+      return 0
+    fi
+    # Check if npm process is still alive
+    local pid
+    pid=$(cat "$PID_DIR/frontend.pid" 2>/dev/null)
+    if [ -n "$pid" ] && ! kill -0 "$pid" 2>/dev/null; then
+      echo "  ❌ Frontend Dev Server process exited unexpectedly"
+      tail -10 /tmp/abc-frontend.log
+      return 1
+    fi
+    sleep 2
+    elapsed=$((elapsed + 2))
+  done
+  echo "  ❌ Frontend Dev Server failed to start within ${max_wait}s"
+  tail -10 /tmp/abc-frontend.log
+  return 1
+}
+
+stop_frontend() {
+  if [ -f "$PID_DIR/frontend.pid" ]; then
+    local pid
+    pid=$(cat "$PID_DIR/frontend.pid")
+    if kill -0 "$pid" 2>/dev/null; then
+      echo "  -> Stopping Frontend Dev Server (PID: $pid)"
+      kill "$pid" 2>/dev/null || true
+    fi
+    rm -f "$PID_DIR/frontend.pid"
+  fi
+  kill_port 1420
+}
+
 # ─── Static File Server (port 6000) ─────────────────────────────────────────
 
 start_static() {
@@ -182,7 +238,9 @@ start_static() {
   fi
 
   cd "$SERVER_DIR"
+  set -m
   python3 -m http.server 6000 > /tmp/abc-static.log 2>&1 &
+  set +m
   echo $! > "$PID_DIR/static.pid"
 
   sleep 2
@@ -230,11 +288,15 @@ start_celery() {
   fi
 
   cd "$AI_DIR"
+  # set -m: 啟用 job control，讓 & 背景 process 獲得獨立 process group
+  # 避免 macOS 在父 shell 結束時對整個 process group 發 SIGTERM
+  set -m
   PYTHONPATH="$AI_DIR" "$AI_DIR/.venv/bin/watchfiles" \
     --filter python \
     "$AI_DIR/.venv/bin/celery -A celery_app.app worker --loglevel=info --concurrency=2" \
     "$AI_DIR" \
     > /tmp/abc-celery.log 2>&1 &
+  set +m
   echo $! > "$PID_DIR/celery.pid"
 
   sleep 2
@@ -299,9 +361,11 @@ start_celery_beat() {
   fi
 
   cd "$AI_DIR"
+  set -m
   PYTHONPATH="$AI_DIR" "$AI_DIR/.venv/bin/celery" \
     -A celery_app.app beat --loglevel=info \
     > /tmp/abc-celery-beat.log 2>&1 &
+  set +m
   echo $! > "$PID_DIR/celery-beat.pid"
 
   sleep 2
@@ -344,8 +408,10 @@ start_ai_service() {
     return 1
   fi
 
+  set -m
   "$VENV_PYTHON" -m uvicorn "$module" --host 127.0.0.1 --port "$port" --reload \
     > "/tmp/abc-${name}.log" 2>&1 &
+  set +m
   echo $! > "$PID_DIR/${name}.pid"
 
   wait_for_port "$port" "$name" 30
@@ -416,6 +482,10 @@ do_single() {
     web)
       [ "$action" = "stop" ] || [ "$action" = "restart" ] && stop_web
       [ "$action" = "start" ] || [ "$action" = "restart" ] && start_web
+      ;;
+    eea|frontend)
+      [ "$action" = "stop" ] || [ "$action" = "restart" ] && stop_frontend
+      [ "$action" = "start" ] || [ "$action" = "restart" ] && start_frontend
       ;;
     *)
       local entry
@@ -488,6 +558,18 @@ status() {
     static_pid=$(lsof -ti :6000 2>/dev/null | head -1)
     echo "✅ Healthy (PID: $static_pid)"
   elif lsof -ti :6000 > /dev/null 2>&1; then
+    echo "⚠️  Port open but not responding"
+  else
+    echo "❌ Not running"
+  fi
+
+  # --- EEA Frontend (port 1420) ---
+  printf "  %-22s (port %s): " "EEA Frontend" "1420"
+  if health_check "http://localhost:1420/" 2; then
+    local fe_pid
+    fe_pid=$(lsof -ti :1420 2>/dev/null | head -1)
+    echo "✅ Healthy (PID: $fe_pid)"
+  elif lsof -ti :1420 > /dev/null 2>&1; then
     echo "⚠️  Port open but not responding"
   else
     echo "❌ Not running"
@@ -632,6 +714,7 @@ case "${1:-status}" in
       do_single start "$2"
     else
       start_api
+      start_frontend
       start_static
       start_web
       start_all_ai
@@ -648,6 +731,7 @@ case "${1:-status}" in
       do_single stop "$2"
     else
       stop_api
+      stop_frontend
       stop_static
       stop_web
       stop_all_ai
@@ -660,12 +744,14 @@ case "${1:-status}" in
       do_single restart "$2"
     else
       stop_api
+      stop_frontend
       stop_static
       stop_web
       stop_all_ai
       stop_celery
       sleep 2
       start_api
+      start_frontend
       start_static
       start_web
       start_all_ai
@@ -699,7 +785,7 @@ case "${1:-status}" in
     echo "Usage: $0 <command> [service]"
     echo ""
     echo "Batch Commands:"
-    echo "  start           Start all services (API + Static + AI)"
+    echo "  start           Start all services (API + Frontend + Static + AI)"
     echo "  stop            Stop all services"
     echo "  restart         Restart all services"
     echo "  start-ai        Start all Python AI services"
@@ -715,6 +801,8 @@ case "${1:-status}" in
     echo "  api               Rust API Gateway (port $API_PORT)"
     echo "  static            Static File Server (port 6000)"
     echo "  web               Web Static Site (port 3505)"
+    echo "  eea               Frontend Dev Server / React SPA (port 1420)"
+    echo "  frontend          Alias for 'eea'"
     echo "  celery            Celery Worker (async task queue)"
     for entry in "${AI_SERVICES[@]}"; do
       IFS=':' read -r name port module <<< "$entry"
@@ -735,6 +823,7 @@ case "${1:-status}" in
     echo ""
     echo "Examples:"
     echo "  $0 restart api          Restart only Rust API"
+    echo "  $0 restart frontend     Restart only Frontend Dev Server"
     echo "  $0 start aitask         Start only aitask service"
     echo "  $0 stop data_agent      Stop only data_agent"
     echo "  $0 logs aitask          Show aitask logs"

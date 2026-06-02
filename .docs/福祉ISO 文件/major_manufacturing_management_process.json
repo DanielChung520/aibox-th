@@ -1,0 +1,613 @@
+{
+  "_key": "major_manufacturing_mgmt_process",
+  "type": "major",
+  "name": "Manufacturing_Management_Process",
+  "version": "1.0",
+  "default_version": true,
+  "ontology_name": "Manufacturing_Management_Process_Major_Ontology",
+  "description": "製造管理流程專業本體論，涵蓋福祉車輛改裝製造業的營運作業全流程。包含：客訂單處理與標案、產品開發與設計變更、採購與供應商管理、庫存與物料管控、製程管制與檢驗、儀器校驗與設備保養、車輛法規符合性檢驗、出貨與售後服務。所有實體與關係皆對應實際的 ISO 文件四階層體系。",
+  "author": "Daniel Chung",
+  "last_modified": "2026-05-30",
+  "inherits_from": [
+    "5W1H_Base_Ontology_OWL",
+    "ISO_Quality_Management_Domain_Ontology"
+  ],
+  "compatible_domains": null,
+  "tags": [
+    "Manufacturing",
+    "ProcessControl",
+    "VehicleModification",
+    "WheelchairVehicle",
+    "ProductionManagement",
+    "QualityInspection",
+    "InstrumentCalibration",
+    "EquipmentMaintenance",
+    "InventoryControl",
+    "SupplyChain"
+  ],
+  "use_cases": [
+    "製造流程 SOP 查詢與導航",
+    "儀器校驗狀態與履歷追蹤",
+    "設備點檢與保養排程管理",
+    "產品檢驗紀錄追溯",
+    "車輛法規符合性查核",
+    "新產品開發流程管控",
+    "工時工段分析與排程",
+    "供應商與採購管理",
+    "RAG 輔助製造現場決策",
+    "AI 推斷異常原因與改善對策"
+  ],
+  "entity_classes": [
+    {
+      "name": "Customer_Order",
+      "base_class": "Document",
+      "description": "客戶訂單。記錄客戶需求、產品規格、數量與交期。由 QP-P01 訂單處理管理辦法規範。"
+    },
+    {
+      "name": "Sales_Project",
+      "base_class": "Project",
+      "description": "標案/銷售專案。管理標案資訊、客戶需求與報價，由 QP-P02 標案處理管理辦法規範。"
+    },
+    {
+      "name": "Customer",
+      "base_class": "Agent",
+      "description": "客戶/顧客實體，包含一般客戶、捐贈客戶與經銷商。滿意度管理由 QP-P03 規範。"
+    },
+    {
+      "name": "Customer_Complaint",
+      "base_class": "Event",
+      "description": "顧客抱怨事件。記錄抱怨內容、處理過程與結案狀態，由 QP-P04 顧客抱怨處理辦法規範。"
+    },
+    {
+      "name": "After_Sales_Service",
+      "base_class": "Process",
+      "description": "售後服務，包含產品維修保養與技術支援。由 QP-P05 售後服務管理辦法規範。相關表單：TB-P05 維修保養滿意度調查表。"
+    },
+    {
+      "name": "Product",
+      "base_class": "Concept",
+      "description": "產品。本系統主要產品為載運輪椅車輛（WAV）、到宅沐浴車、小型廂式醫療車、小型廂式露營車等特種車輛。"
+    },
+    {
+      "name": "Vehicle_Platform",
+      "base_class": "Product",
+      "description": "車輛平台/底盤車。改裝所依據的原始車款，如：福特旅行家、福斯 Transporter/Caddy、現代 STARIA/STAREX、中華 Veryca/Delica/J-SPACE、Toyota Sienta 等。"
+    },
+    {
+      "name": "Vehicle_Modification_Type",
+      "base_class": "Concept",
+      "description": "車輛改裝類型。包含：輪椅升降台（Wheelchair Lift）、活動式坡道（Ramp）、沐浴車（Bath Car）、醫療車（Medical Vehicle）、露營車（Camping Vehicle）。"
+    },
+    {
+      "name": "Key_Component",
+      "base_class": "Product",
+      "description": "關鍵組件/套件。對產品安全與功能有重大影響的零組件，如：升降機、活動式坡道、輪椅束縛系統、掀頂裝置、浴槽等。由 TB-T20 關鍵組件檢查表管控。"
+    },
+    {
+      "name": "Production_Process",
+      "base_class": "Process",
+      "description": "生產製程/流程。針對特定車款與改裝類型的完整製程作業規範，由 WP 系列三階文件定義。如 WP-T01 載運輪椅車輛製程作業規範。"
+    },
+    {
+      "name": "Work_Station_Operation",
+      "base_class": "Process",
+      "description": "工站作業。製程中各個工站（工段）的具體作業內容，定義於 WP 文件中的 SOP 圖示與操作步驟。"
+    },
+    {
+      "name": "Labor_Hour_Segment",
+      "base_class": "Concept",
+      "description": "工時工段（序）表。記錄各工段的標準作業時間、作業順序與對應人力。表單代碼：TB-T58。用於產能規劃與效率分析。"
+    },
+    {
+      "name": "Risk_Assessment",
+      "base_class": "Document",
+      "description": "風險管理表。針對特定產品或製程的風險識別與評估，由 WO-Sxx 系列文件規範。包含作業風險、產品風險與法規風險。"
+    },
+    {
+      "name": "Welding_Specification",
+      "base_class": "Document",
+      "description": "銲接規範。定義銲接作業的技術標準、檢驗方法與人員資格要求。文件代碼：WO-T01 載運輪椅使用者車輛銲接規範。"
+    },
+    {
+      "name": "Material",
+      "base_class": "Concept",
+      "description": "物料。包含原料、零組件、半成品、成品與耗材。由 QP-S04 產品及物料防護管理辦法、QP-S08 產品識別及追溯管理辦法規範。"
+    },
+    {
+      "name": "Incoming_Material",
+      "base_class": "Material",
+      "description": "進料/採購入庫物料。需要進行進料檢驗（IQC）方可入庫，由 TB-T10 要驗物料一覽表、TB-T31 進料檢查表管控。"
+    },
+    {
+      "name": "Supplier",
+      "base_class": "Agent",
+      "description": "供應商/協力廠商。提供物料或委外加工服務的合作夥伴。由 QP-S06 供應商管理辦法、QP-S09 委外加工作業管理辦法規範。相關表單：TB-S09、TB-S10。"
+    },
+    {
+      "name": "Purchase_Order",
+      "base_class": "Document",
+      "description": "採購訂單。向供應商採購物料或服務的正式訂單，由 QP-S05 採購作業管理辦法規範。"
+    },
+    {
+      "name": "Outsourcing_Process",
+      "base_class": "Process",
+      "description": "委外加工/外包作業。將部分製程委由外部供應商執行的管理流程，由 QP-S09 委外加工作業管理辦法規範。相關表單：TB-S26 委外自主檢查表。"
+    },
+    {
+      "name": "Inventory_Record",
+      "base_class": "Concept",
+      "description": "庫存紀錄。記錄物料在特定時間與地點的數量、狀態與儲位。對應 ERP 庫存管理模組。"
+    },
+    {
+      "name": "Warehouse_Location",
+      "base_class": "Location",
+      "description": "倉庫/儲位。物料存放的實體位置，用於庫存管理與盤點作業。"
+    },
+    {
+      "name": "Product_Traceability",
+      "base_class": "Concept",
+      "description": "產品識別與追溯。透過料號、批號、序號等方式追蹤產品從進料到出貨的全程流向。由 QP-S08 規範。"
+    },
+    {
+      "name": "Quality_Inspection",
+      "base_class": "Event",
+      "description": "品質檢驗作業。對產品、半成品或進料的品質特性進行檢查與量測的活動。由 QP-T05 檢驗與測試管理辦法規範。"
+    },
+    {
+      "name": "Inspection_Type",
+      "base_class": "Concept",
+      "description": "檢驗類型分類。包含：進料檢驗（IQC）、製程檢驗（IPQC）、最終檢驗（FQC）、出貨檢驗（OQC）。各類型有對應的表單與檢驗標準。"
+    },
+    {
+      "name": "Self_Inspection",
+      "base_class": "Quality_Inspection",
+      "description": "自主檢查。由作業人員在製程中自行進行的檢查活動，以確保作業符合規範。表單：TB-T05 自主檢查表。"
+    },
+    {
+      "name": "Quality_Check_Record",
+      "base_class": "Document",
+      "description": "品質檢驗紀錄表。記錄檢驗項目、規格、量測數據與判定結果。表單代碼：TB-T04。依不同車款與改裝類型有對應的版本（如 TB-T04 (01)~(18)）。"
+    },
+    {
+      "name": "Key_Component_Check_Record",
+      "base_class": "Document",
+      "description": "關鍵組件檢查記錄。針對安全相關關鍵組件的檢驗結果。表單代碼：TB-T20。依組件類型有專用版本。"
+    },
+    {
+      "name": "Special_Acceptance",
+      "base_class": "Process",
+      "description": "特採（特別採用）。當不合格品或不符合標準的物料/產品在特定條件下被允許使用或出貨的流程。由 QP-S15 特採管理辦法規範。表單：TB-S27 特採申請單。"
+    },
+    {
+      "name": "Nonconformity_Handling_Record",
+      "base_class": "Document",
+      "description": "不合格品管理與矯正紀錄。由 QP-T04 不合格品管理辦法與 QP-T02 矯正及預防措施管理辦法規範。表單：TB-T02、TB-T08。"
+    },
+    {
+      "name": "Instrument",
+      "base_class": "Asset",
+      "description": "量測儀器/檢驗設備。用於產品檢驗與製程監控的量測設備，需要定期校驗以確保量測精度。代碼：SM（樹八廠）、TM（土城廠）。由 QP-T07 儀器管理辦法規範。"
+    },
+    {
+      "name": "Instrument_Type",
+      "base_class": "Classification",
+      "description": "儀器類別。包含：游標卡尺、角尺、捲尺、角度規、數位水平尺、塊規、角度塊規、精密R規、棘輪扭力扳手、扭力扳手、標準型雙向扭力扳手、指針盤式扭力扳手、附錶扭力扳手、數位式游標卡尺、電子吊秤、電子台秤、三用電錶、數位電錶、微電流交直流鉤錶、數位交流鉤錶。"
+    },
+    {
+      "name": "Calibration_Record",
+      "base_class": "Document",
+      "description": "儀器校正履歷。記錄每件儀器的校正日期、校正結果、校正人員與下次校正日期。表單：TB-T17 儀器履歷表。每件儀器有獨立的履歷表。"
+    },
+    {
+      "name": "Calibration_Status",
+      "base_class": "Status",
+      "description": "儀器校正狀態。包含：正常（合格）、待校驗、逾期、免校驗、停用、報廢。記錄於 TB-T18 校正合格標籤與 TB-T19 免校驗標籤。"
+    },
+    {
+      "name": "Calibration_Plan",
+      "base_class": "Planning",
+      "description": "儀器校驗計劃。針對特定精密儀器（如扭力扳手）制訂的校驗執行計劃與方法。如：樹八 SM08 扭力扳手校驗計劃。"
+    },
+    {
+      "name": "Internal_Calibration",
+      "base_class": "Process",
+      "description": "內部校正作業。由廠內自行執行的儀器校正，依據內校作業標準進行。相關表單：儀器內校紀錄表（含捲尺、數位水平尺、游標卡尺等專用表單）。"
+    },
+    {
+      "name": "External_Calibration",
+      "base_class": "Process",
+      "description": "外部校正作業。委託外部認證實驗室進行的儀器校正，校正結果具追溯性。"
+    },
+    {
+      "name": "Instrument_Master_List",
+      "base_class": "Document",
+      "description": "儀器一覽表/總表。廠區所有儀器的清冊總表，記錄儀器編號、名稱、規格、校正週期與狀態。表單代碼：TB-T16。包含樹八廠與土城廠的獨立版本。"
+    },
+    {
+      "name": "Equipment",
+      "base_class": "Asset",
+      "description": "生產設備。製造過程中使用的機械設備與設施。代碼：E001~E029。由 QP-T06 設備管理辦法規範。設備類型包含：空壓機、氬焊機、布輪機、砂輪切割機、鑽孔機、車輛頂高機、天車、貨梯、中央空調、拖板車、離子切割機、CO2焊接機、點焊機、集塵器。"
+    },
+    {
+      "name": "Equipment_Master_List",
+      "base_class": "Document",
+      "description": "設備總覽表。廠區所有生產設備的清冊總表。表單代碼：TB-T12。"
+    },
+    {
+      "name": "Equipment_Log",
+      "base_class": "Document",
+      "description": "設備履歷表。記錄每台設備的規格、購入日期、保養歷程與異動記錄。表單代碼：TB-T13。"
+    },
+    {
+      "name": "Maintenance_Record",
+      "base_class": "Document",
+      "description": "設備保養/點檢紀錄。定期對生產設備進行的檢查、保養與維修記錄。包含：每月定期檢查表、每季定期檢查表、每年定期檢查表。"
+    },
+    {
+      "name": "Maintenance_Type",
+      "base_class": "Classification",
+      "description": "保養類型。包含：每月定期點檢、每三月定期檢查、每年定期檢查。依設備類型與重要性有不同的檢查頻率。"
+    },
+    {
+      "name": "Equipment_Status",
+      "base_class": "Status",
+      "description": "設備狀態。包含：使用中（active）、停用（decommissioned）、待修（under_repair）、報廢（scrapped）。"
+    },
+    {
+      "name": "Tool",
+      "base_class": "Asset",
+      "description": "工具。生產作業中使用的各類手工具、氣動工具、電動工具等。表單：TB-T14 工具一覽表。"
+    },
+    {
+      "name": "Jig_Fixture",
+      "base_class": "Asset",
+      "description": "治具/模治具。用於定位、夾持或輔助生產的專用裝置。由 TB-T15 治具一覽表管理。新產品開發時需製作對應的治具（TB-T55 模治具開發計畫表）。"
+    },
+    {
+      "name": "New_Product_Development",
+      "base_class": "Project",
+      "description": "新產品開發專案。從產品概念到量產移行的完整開發流程。由 QP-T08 新產品開發管理辦法規範。涵蓋 19 份表單（TB-T50~TB-T67）。"
+    },
+    {
+      "name": "NPD_Phase",
+      "base_class": "Concept",
+      "description": "新產品開發階段。包含：① 產品範圍判定（TB-T50）→ ② 技術可行性分析（TB-T51）→ ③ 工程規格制定（TB-T52）→ ④ 大日程計畫（TB-T53）→ ⑤ 新材料開發（TB-T54）→ ⑥ 模治具開發（TB-T55）→ ⑦ 設計驗證（TB-T56）→ ⑧ 樣車製作（TB-T57）→ ⑨ 工時工段制定（TB-T58）→ ⑩ 問題點集約（TB-T59）→ ⑪ 操作說明書（TB-T60）→ ⑫ 量產移行（TB-T61）→ ⑬ FMEA（TB-T62）→ ⑭ 產能規劃（TB-T63）→ ⑮ 檢測測試（TB-T64）→ ⑯ 工程變更（TB-T65~T67）。"
+    },
+    {
+      "name": "Engineering_Change",
+      "base_class": "Process",
+      "description": "設計變更/工程變更。產品或製程設計的變更管理流程，由 QP-T09 設計變更管理辦法規範。表單：TB-T65 工程變更申請單（ECR）、TB-T66 工程變更通知單（ECN）、TB-T67 設計變更總覽表。"
+    },
+    {
+      "name": "FMEA",
+      "base_class": "Document",
+      "description": "失效模式與效應分析。系統性分析產品或製程潛在失效模式及其影響的風險評估工具。表單代碼：TB-T62。"
+    },
+    {
+      "name": "Vehicle_Safety_Regulation",
+      "base_class": "Regulation",
+      "description": "車輛安全法規。改裝車輛需符合的法規標準，包含：內裝材料難燃性、載運輪椅車輛規定項目、車輛規格、靜態煞車、安全帶固定裝置、座椅強度、頭枕等。檢驗表單：TB-T21~T25、TB-T30、TB-T32~T34。"
+    },
+    {
+      "name": "Compliance_Inspection_Record",
+      "base_class": "Document",
+      "description": "法規符合性檢驗紀錄。車輛法規檢驗項目的實際檢測結果記錄，包含 TB-T21 難燃性能、TB-T22 輪椅車輛規定、TB-T23 車輛規格、TB-T24 靜態煞車、TB-T25 法規品質管制、TB-T30 突出限制、TB-T32 安全帶固定裝置、TB-T33 座椅強度、TB-T34 頭枕檢驗。"
+    },
+    {
+      "name": "Vehicle_Delivery",
+      "base_class": "Event",
+      "description": "車輛驗收與交付。改裝完成車輛的驗收檢查與客戶交付程序。表單：TB-T09 車輛驗收單。"
+    },
+    {
+      "name": "Employee",
+      "base_class": "Agent",
+      "description": "員工/人員。組織成員，依職能與角色參與各項作業流程。教育訓練由 QP-S03 規範。"
+    },
+    {
+      "name": "Training_Record",
+      "base_class": "Document",
+      "description": "教育訓練紀錄。員工的訓練計劃、參訓記錄與技能鑑定資料。相關表單：TB-S05~S08。"
+    },
+    {
+      "name": "Skill_Certification",
+      "base_class": "Concept",
+      "description": "技能鑑定。針對特定專業作業（如銲接、檢驗）的人員資格認證。表單：TB-S29 專案專業人員技能鑑定表。"
+    },
+    {
+      "name": "Customer_Property",
+      "base_class": "Asset",
+      "description": "顧客財產。由客戶提供的車輛、零件或技術資料，需妥善管理與保護。由 QP-S07 顧客財產管理辦法規範。表單：TB-S30 顧客財產一覽表。"
+    },
+    {
+      "name": "Drawing",
+      "base_class": "Document",
+      "description": "工程圖面。產品設計圖、零件圖、裝配圖等技術圖面。由 QP-T01 圖面管理辦法規範。表單：TB-T01 圖面管理總表。"
+    },
+    {
+      "name": "Document_Overall_List",
+      "base_class": "Document",
+      "description": "文件總覽表。各層級文件的清單總表，用於文件管理與查詢。包含：TB-S01 品質文件總覽表（二階/三階）、TB-S04 紀錄總覽表（四階）。"
+    }
+  ],
+  "object_properties": [
+    {
+      "name": "produces",
+      "description": "生產流程產出特定產品/車輛。",
+      "domain": ["Production_Process"],
+      "range": ["Product", "Vehicle_Platform"]
+    },
+    {
+      "name": "based_on_platform",
+      "description": "改裝產品所基於的原始車輛平台。",
+      "domain": ["Product"],
+      "range": ["Vehicle_Platform"]
+    },
+    {
+      "name": "has_modification_type",
+      "description": "產品所採用的改裝類型。",
+      "domain": ["Product", "Production_Process"],
+      "range": ["Vehicle_Modification_Type"]
+    },
+    {
+      "name": "has_work_instruction",
+      "description": "製程或作業項目對應的三階作業規範文件。",
+      "domain": ["Production_Process", "Work_Station_Operation"],
+      "range": ["Level3_WorkInstruction"]
+    },
+    {
+      "name": "has_labor_hour_segment",
+      "description": "產品或製程訂有標準工時工段表。",
+      "domain": ["Product", "Production_Process"],
+      "range": ["Labor_Hour_Segment"]
+    },
+    {
+      "name": "references_drawing",
+      "description": "文件或作業所參照的工程圖面。",
+      "domain": ["Level3_WorkInstruction", "New_Product_Development", "Engineering_Change"],
+      "range": ["Drawing"]
+    },
+    {
+      "name": "uses_component",
+      "description": "產品使用某項關鍵組件。",
+      "domain": ["Product"],
+      "range": ["Key_Component"]
+    },
+    {
+      "name": "has_key_component_check",
+      "description": "關鍵組件有對應的檢查紀錄。",
+      "domain": ["Key_Component"],
+      "range": ["Key_Component_Check_Record"]
+    },
+    {
+      "name": "supplies_material",
+      "description": "供應商提供特定物料。",
+      "domain": ["Supplier"],
+      "range": ["Material"]
+    },
+    {
+      "name": "purchased_through",
+      "description": "物料採購透過採購訂單執行。",
+      "domain": ["Material"],
+      "range": ["Purchase_Order"]
+    },
+    {
+      "name": "inspected_as",
+      "description": "物料以特定檢驗類型進行檢驗。",
+      "domain": ["Material", "Product"],
+      "range": ["Inspection_Type"]
+    },
+    {
+      "name": "has_quality_check_record",
+      "description": "產品或物料有對應的品質檢驗紀錄。",
+      "domain": ["Product", "Material", "Vehicle_Platform"],
+      "range": ["Quality_Check_Record", "Self_Inspection"]
+    },
+    {
+      "name": "classified_as_instrument_type",
+      "description": "量測儀器所屬的儀器類別。",
+      "domain": ["Instrument"],
+      "range": ["Instrument_Type"]
+    },
+    {
+      "name": "has_calibration_record",
+      "description": "量測儀器擁有校正履歷記錄。",
+      "domain": ["Instrument"],
+      "range": ["Calibration_Record"]
+    },
+    {
+      "name": "has_calibration_status",
+      "description": "儀器目前的校正狀態。",
+      "domain": ["Instrument"],
+      "range": ["Calibration_Status"]
+    },
+    {
+      "name": "has_calibration_plan",
+      "description": "儀器具備專屬的校驗計劃。",
+      "domain": ["Instrument"],
+      "range": ["Calibration_Plan"]
+    },
+    {
+      "name": "calibrated_by_method",
+      "description": "儀器校正採用的方式（內部或外部）。",
+      "domain": ["Calibration_Record"],
+      "range": ["Internal_Calibration", "External_Calibration"]
+    },
+    {
+      "name": "listed_in_instrument_master",
+      "description": "儀器登錄於儀器一覽總表中。",
+      "domain": ["Instrument"],
+      "range": ["Instrument_Master_List"]
+    },
+    {
+      "name": "has_maintenance_record",
+      "description": "生產設備擁有保養/點檢記錄。",
+      "domain": ["Equipment"],
+      "range": ["Maintenance_Record"]
+    },
+    {
+      "name": "has_maintenance_type",
+      "description": "設備保養所屬的保養類型與頻率。",
+      "domain": ["Maintenance_Record"],
+      "range": ["Maintenance_Type"]
+    },
+    {
+      "name": "has_equipment_status",
+      "description": "生產設備目前的運轉狀態。",
+      "domain": ["Equipment"],
+      "range": ["Equipment_Status"]
+    },
+    {
+      "name": "listed_in_equipment_master",
+      "description": "設備登錄於設備總覽表中。",
+      "domain": ["Equipment"],
+      "range": ["Equipment_Master_List"]
+    },
+    {
+      "name": "has_equipment_log",
+      "description": "設備擁有完整的履歷記錄。",
+      "domain": ["Equipment"],
+      "range": ["Equipment_Log"]
+    },
+    {
+      "name": "has_tool_list",
+      "description": "設備或製程有對應的工具清單。",
+      "domain": ["Equipment", "Production_Process"],
+      "range": ["Tool"]
+    },
+    {
+      "name": "has_jig_fixture",
+      "description": "產品或製程使用特定的治具。",
+      "domain": ["Product", "Production_Process"],
+      "range": ["Jig_Fixture"]
+    },
+    {
+      "name": "develops_new_product",
+      "description": "新產品開發專案涵蓋的產品。",
+      "domain": ["New_Product_Development"],
+      "range": ["Product"]
+    },
+    {
+      "name": "has_npd_phase",
+      "description": "新產品開發專案經歷的開發階段。",
+      "domain": ["New_Product_Development"],
+      "range": ["NPD_Phase"]
+    },
+    {
+      "name": "triggers_engineering_change",
+      "description": "設計變更需求觸發工程變更流程。",
+      "domain": ["New_Product_Development"],
+      "range": ["Engineering_Change"]
+    },
+    {
+      "name": "has_fmea",
+      "description": "產品或製程執行了失效模式分析。",
+      "domain": ["Product", "Production_Process"],
+      "range": ["FMEA"]
+    },
+    {
+      "name": "regulated_by",
+      "description": "產品需符合特定車輛安全法規。",
+      "domain": ["Product"],
+      "range": ["Vehicle_Safety_Regulation"]
+    },
+    {
+      "name": "has_compliance_record",
+      "description": "法規檢驗項目有對應的符合性紀錄。",
+      "domain": ["Vehicle_Safety_Regulation"],
+      "range": ["Compliance_Inspection_Record"]
+    },
+    {
+      "name": "has_risk_assessment",
+      "description": "產品或製程有對應的風險管理評估。",
+      "domain": ["Product", "Production_Process"],
+      "range": ["Risk_Assessment"]
+    },
+    {
+      "name": "has_welding_spec",
+      "description": "產品涉及銲接作業時有對應的銲接規範。",
+      "domain": ["Product", "Production_Process"],
+      "range": ["Welding_Specification"]
+    },
+    {
+      "name": "has_employee_training",
+      "description": "員工接受的教育訓練記錄。",
+      "domain": ["Employee"],
+      "range": ["Training_Record"]
+    },
+    {
+      "name": "has_skill_certification",
+      "description": "員工擁有的專業技能鑑定資格。",
+      "domain": ["Employee"],
+      "range": ["Skill_Certification"]
+    },
+    {
+      "name": "manages_customer_property",
+      "description": "員工擁有的專業技能鑑定資格。",
+      "domain": ["Process", "Factory_Unit"],
+      "range": ["Customer_Property"]
+    },
+    {
+      "name": "outsourced_to",
+      "description": "委外加工的執行供應商。",
+      "domain": ["Outsourcing_Process"],
+      "range": ["Supplier"]
+    },
+    {
+      "name": "has_customer_complaint",
+      "description": "顧客提出的抱怨事件。",
+      "domain": ["Customer", "Product"],
+      "range": ["Customer_Complaint"]
+    },
+    {
+      "name": "handles_special_acceptance",
+      "description": "不合格品或偏差通過特採程序處理。",
+      "domain": ["Nonconformity"],
+      "range": ["Special_Acceptance"]
+    },
+    {
+      "name": "stored_in",
+      "description": "物料存放的倉庫儲位位置。",
+      "domain": ["Material", "Inventory_Record"],
+      "range": ["Warehouse_Location"]
+    },
+    {
+      "name": "traceable_by",
+      "description": "產品或物料透過特定方式進行追溯。",
+      "domain": ["Product", "Material"],
+      "range": ["Product_Traceability"]
+    },
+    {
+      "name": "has_delivery_record",
+      "description": "產品出貨交付的驗收記錄。",
+      "domain": ["Product"],
+      "range": ["Vehicle_Delivery"]
+    },
+    {
+      "name": "listed_in_document_overview",
+      "description": "文件登錄於所屬層級的總覽表中。",
+      "domain": ["QMS_Document"],
+      "range": ["Document_Overall_List"]
+    },
+    {
+      "name": "has_after_sales_service",
+      "description": "產品交付後的售後服務與維修記錄。",
+      "domain": ["Product", "Customer"],
+      "range": ["After_Sales_Service"]
+    }
+  ],
+  "metadata": {
+    "domain_owner": null,
+    "domain": "ISO_Quality_Management",
+    "major_owner": "Manufacturing_Team",
+    "data_classification": "INTERNAL",
+    "intended_usage": [
+      "RAG 檢索重排序與精準過濾",
+      "製造流程知識圖譜三元組抽取",
+      "儀器設備管理 AI 推斷",
+      "產品檢驗與法規符合性分析",
+      "新產品開發流程自動化導航",
+      "製造現場問題診斷與改善建議"
+    ]
+  },
+  "status": "enabled"
+}

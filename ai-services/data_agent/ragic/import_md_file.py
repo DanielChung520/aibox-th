@@ -30,7 +30,8 @@ ARANGO_PASSWORD = os.getenv("ARANGO_PASSWORD", "")
 
 def _default_md_path() -> Path:
     repo_root = Path(__file__).resolve().parents[3]
-    return repo_root / ".docs" / "Ragic" / "dawnlink" / "dawnlink202604.md"
+    account = os.getenv("RAGIC_DEFAULT_ACCOUNT", "dawnlink")
+    return repo_root / ".docs" / "Ragic" / account / f"{account}202604.md"
 
 
 def _build_parser() -> argparse.ArgumentParser:

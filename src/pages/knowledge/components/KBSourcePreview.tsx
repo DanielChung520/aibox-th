@@ -268,6 +268,38 @@ export default function KBSourcePreview({ fileId, fileName, fileType }: KBSource
     </div>
   );
 
+  // DOCX/Word 優先於 text preview（要用 mammoth 做完整 HTML 渲染）
+  const isExcel = /xlsx|xls|spreadsheet/i.test(fileType);
+  const isDocx = /docx|doc|word/i.test(fileType);
+
+  if (isDocx) {
+    return (
+      <div style={containerStyle}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, padding: token.paddingLG, gap: token.marginSM }}>
+          <div>{headerEl}</div>
+          <div style={{ flex: 1, minHeight: 0 }}>
+            <DOCXViewer fileId={fileId} fileName={fileName} fileType={fileType} />
+          </div>
+        </div>
+        {rightPanel}
+      </div>
+    );
+  }
+
+  if (isExcel) {
+    return (
+      <div style={containerStyle}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, padding: token.paddingLG, gap: token.marginSM }}>
+          <div>{headerEl}</div>
+          <div style={{ flex: 1, minHeight: 0 }}>
+            <ExcelViewer fileId={fileId} fileName={fileName} fileType={fileType} />
+          </div>
+        </div>
+        {rightPanel}
+      </div>
+    );
+  }
+
   if (preview.type === 'markdown' || preview.type === 'text') {
     return (
       <div style={containerStyle}>
@@ -328,37 +360,6 @@ export default function KBSourcePreview({ fileId, fileName, fileType }: KBSource
                 <Page pageNumber={pdfPage} scale={pdfScale} renderTextLayer renderAnnotationLayer />
               </Document>
             )}
-          </div>
-        </div>
-        {rightPanel}
-      </div>
-    );
-  }
-
-  const isExcel = /xlsx|xls|spreadsheet/i.test(fileType);
-  const isDocx = /docx|doc|word/i.test(fileType);
-
-  if (isExcel) {
-    return (
-      <div style={containerStyle}>
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, padding: token.paddingLG, gap: token.marginSM }}>
-          <div>{headerEl}</div>
-          <div style={{ flex: 1, minHeight: 0 }}>
-            <ExcelViewer fileId={fileId} fileName={fileName} fileType={fileType} />
-          </div>
-        </div>
-        {rightPanel}
-      </div>
-    );
-  }
-
-  if (isDocx) {
-    return (
-      <div style={containerStyle}>
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, padding: token.paddingLG, gap: token.marginSM }}>
-          <div>{headerEl}</div>
-          <div style={{ flex: 1, minHeight: 0 }}>
-            <DOCXViewer fileId={fileId} fileName={fileName} fileType={fileType} />
           </div>
         </div>
         {rightPanel}

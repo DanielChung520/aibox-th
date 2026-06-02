@@ -6,16 +6,15 @@ version: 2.1.0
 
 # AI Services
 
-AIBox Python FastAPI 微服務集群，提供 AI Agent 系統的後端能力。
+TWHC Python FastAPI 微服務集群，提供 AI Agent 系統的後端能力。
 
 ## 服務架構
 
 | 服務 | 端口 | 模組路徑 | 說明 |
 |------|------|----------|------|
 | AITask | 8001 | `aitask/` | AI 任務調度服務 |
-| unified_agents | 8011 | `unified_agents/` | 統一入口，承載 Data Agent `/da/*`、Knowledge `/ka/*` 等路由 |
+| unified_agents | 8011 | `unified_agents/` | 統一入口，承載 Data Agent `/da/*`、Knowledge `/ka/*`、BPA 等路由 |
 | MCP Tools | 8004 | `mcp_tools/` | MCP 工具集成服務 |
-| BPA MM Agent | 8005 | `bpa/mm_agent/` | 物料管理業務流程自動化 |
 | Knowledge Agent | 8007 | `knowledge_agent/` | 知識庫 RAG 管理服務 |
 | Memory Agent | 8008 | `memory_agent/` | AI 增強記憶系統 |
 

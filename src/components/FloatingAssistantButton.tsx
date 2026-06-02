@@ -11,12 +11,11 @@ import { RobotOutlined } from '@ant-design/icons';
 import { invoke } from '@tauri-apps/api/core';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { authStore } from '../stores/auth';
-import { paramsApi } from '../services/api';
-import { resolveAvatarSrc } from '../utils/avatarUtils';
+import { useAvatar } from '../services/avatarCache';
 
 export default function FloatingAssistantButton() {
   const [visible, setVisible] = useState(false);
-  const [avatarSrc, setAvatarSrc] = useState<string | undefined>(undefined);
+  const avatarSrc = useAvatar();
   const BUTTON_SIZE = 56;
   const EDGE_OFFSET = 24;
   const [position, setPosition] = useState(() => ({
@@ -38,22 +37,8 @@ export default function FloatingAssistantButton() {
     });
     setVisible(authStore.getState().isAuthenticated);
 
-    paramsApi.get('basic.avatar')
-      .then((res) => {
-        const name = res.data?.data?.param_value as string | undefined;
-        setAvatarSrc(resolveAvatarSrc(name));
-      })
-      .catch(() => {});
-
-    const handleAvatarChanged = (event: Event) => {
-      const name = (event as CustomEvent<{ name?: string }>).detail?.name;
-      setAvatarSrc(resolveAvatarSrc(name));
-    };
-    window.addEventListener('avatar-changed', handleAvatarChanged);
-
     return () => {
       unsubscribe();
-      window.removeEventListener('avatar-changed', handleAvatarChanged);
     };
   }, []);
 

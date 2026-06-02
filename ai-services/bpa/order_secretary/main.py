@@ -12,7 +12,7 @@ from fastapi import FastAPI
 
 from bpa.order_secretary.router import router
 
-app = FastAPI(title="Order Secretary", description="AIBox 訂單小秘 — 訂單解析與管理助手", version="1.0.0")
+app = FastAPI(title="Order Secretary", description="TWHC 訂單小秘 — 訂單解析與管理助手", version="1.0.0")
 app.include_router(router, prefix="/order-secretary", tags=["Order Secretary"])
 
 

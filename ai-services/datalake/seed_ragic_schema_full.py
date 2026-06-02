@@ -20,7 +20,8 @@ _user = os.environ.get("ARANGODB_USERNAME", "root")
 _pass = os.environ.get("ARANGODB_PASSWORD", "")
 AUTH = f"{_user}:{_pass}"
 TS = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
-SCHEMA_FILE = Path(__file__).parent.parent.parent / ".docs/Ragic/dawnlink/dawnlink202604.md"
+_RAGIC_ACCOUNT = os.environ.get("RAGIC_DEFAULT_ACCOUNT", "dawnlink")
+SCHEMA_FILE = Path(__file__).parent.parent.parent / ".docs/Ragic" / _RAGIC_ACCOUNT / f"{_RAGIC_ACCOUNT}202604.md"
 
 TYPE_MAP = {
     "文字": "VARCHAR", "數字": "DECIMAL", "日期": "DATE",

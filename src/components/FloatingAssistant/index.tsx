@@ -15,6 +15,7 @@ import FloatingButton from './FloatingButton';
 import ChatModal from './ChatModal';
 import DebugPanel from './DebugPanel';
 import { paramsApi, SystemParam } from '../../services/api';
+import { useAvatar } from '../../services/avatarCache';
 import { FloatingAssistantConfig, defaultConfig, resolvePageContext, IntentGuess } from './types';
 import { actionTrail } from '../../services/actionTrail';
 import { authStore } from '../../stores/auth';
@@ -44,20 +45,6 @@ function extractPageDomContext(): Record<string, unknown> {
   return ctx;
 }
 
-const avatarModules = import.meta.glob<{ default: string }>(
-  '../../assets/avatar/*.png',
-  { eager: true }
-);
-
-function resolveAvatarSrc(name: string): string | undefined {
-  if (!name) return undefined;
-  const entry = Object.entries(avatarModules).find(([path]) => {
-    const filename = path.split('/').pop() || '';
-    return filename.replace(/\.png$/i, '') === name;
-  });
-  return entry ? entry[1].default : undefined;
-}
-
 const NUMBER_FIELDS: Array<keyof FloatingAssistantConfig> = [
   'modalWidth',
   'modalHeight',
@@ -70,7 +57,7 @@ const NUMBER_FIELDS: Array<keyof FloatingAssistantConfig> = [
 export default function FloatingAssistant() {
   const [isOpen, setIsOpen] = useState(false);
   const [config, setConfig] = useState<FloatingAssistantConfig>(defaultConfig);
-  const [avatarSrc, setAvatarSrc] = useState<string | undefined>(undefined);
+  const avatarSrc = useAvatar();
   const location = useLocation();
   const pageContext = useMemo(() => resolvePageContext(location.pathname), [location.pathname]);
 
@@ -243,22 +230,10 @@ const handleEntityInteract = (e: Event) => {
   useEffect(() => {
     fetchConfig();
 
-    paramsApi.get('basic.avatar')
-      .then(res => {
-        const name = res.data?.data?.param_value;
-        if (name) setAvatarSrc(resolveAvatarSrc(name));
-      })
-      .catch(() => {});
-
     const handleConfigUpdate = (e: Event) => {
       const customEvent = e as CustomEvent<FloatingAssistantConfig>;
       setConfig(customEvent.detail);
       applyStylesToCss(customEvent.detail);
-    };
-
-    const handleAvatarChanged = (e: Event) => {
-      const name = (e as CustomEvent).detail?.name;
-      if (name) setAvatarSrc(resolveAvatarSrc(name));
     };
 
     const handleModalContextChange = (e: Event) => {
@@ -271,11 +246,9 @@ const handleEntityInteract = (e: Event) => {
     };
 
     window.addEventListener('floating-assistant-config-update', handleConfigUpdate);
-    window.addEventListener('avatar-changed', handleAvatarChanged);
     window.addEventListener('modal-context-change', handleModalContextChange);
     return () => {
       window.removeEventListener('floating-assistant-config-update', handleConfigUpdate);
-      window.removeEventListener('avatar-changed', handleAvatarChanged);
       window.removeEventListener('modal-context-change', handleModalContextChange);
     };
   }, []);

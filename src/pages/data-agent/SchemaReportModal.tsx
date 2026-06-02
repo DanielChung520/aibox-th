@@ -213,7 +213,7 @@ export default function SchemaReportModal({ open, tableInfo, onClose }: SchemaRe
         const reportName = values.goal.slice(0, 20);
         setReports(prev => [
           {
-            report_id: resp.data.report_key,
+            report_id: (resp.data as any).report_key,
             report_name: reportName,
             created_at: new Date().toLocaleString('zh-TW'),
             report_link: '',
@@ -301,7 +301,7 @@ export default function SchemaReportModal({ open, tableInfo, onClose }: SchemaRe
       });
       if (resp.data.success) {
         setReports(prev => [{
-          report_id: resp.data.report_key,
+          report_id: (resp.data as any).report_key,
           report_name: goal.slice(0, 20),
           created_at: new Date().toLocaleString('zh-TW'),
           report_link: '',

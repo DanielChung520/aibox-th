@@ -1,5 +1,5 @@
 """
-Celery application for AIBox async file processing pipeline.
+Celery application for TWHC async file processing pipeline.
 
 # Last Update: 2026-03-26 20:30:00
 # Author: Daniel Chung

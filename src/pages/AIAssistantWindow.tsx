@@ -19,7 +19,7 @@ import { pageContextManager } from '../services/PageContextManager';
 import { actionTrail, type ActionEvent } from '../services/actionTrail';
 import { fetchActionHistory } from '../services/actionTrailApi';
 import { intentEngine } from '../services/intentEngine';
-import { paramsApi } from '../services/api';
+import { getAvatarName } from '../services/avatarCache';
 import { AdminDropdown } from '../components/FloatingAssistant/AdminDropdown';
 import { ChatHistoryPanel } from '../components/FloatingAssistant/ChatHistoryPanel';
 import { MarkdownContent } from '../components/FloatingAssistant/ChatMarkdown';
@@ -104,12 +104,11 @@ function AIAssistantWindow() {
   }, []);
 
   useEffect(() => {
-    paramsApi.get('basic.avatar').then(res => {
-      const name = res.data?.data?.param_value;
+    getAvatarName().then(name => {
       if (name) {
         setAvatarSrc(`/avatars/${name}.png`);
       }
-    }).catch(() => {});
+    });
   }, []);
 
   useEffect(() => {

@@ -149,15 +149,15 @@ export default function ESGDashboard() {
   }, [records, dateRange]);
 
   const trendData = useMemo(() => {
-    const map = new Map<string, Record<string, number>>();
+    const map = new Map<string, Record<string, any>>();
     for (const r of filtered) {
       const month = r.submitted_at?.slice(0, 7) || 'unknown';
-      if (!map.has(month)) map.set(month, { month });
+      if (!map.has(month)) map.set(month, { month: month });
       const entry = map.get(month)!;
       const key = r.source_type || 'other';
       entry[key] = (entry[key] || 0) + r.total_co2e_kg;
     }
-    return Array.from(map.values()).sort((a, b) => a.month.localeCompare(b.month));
+    return Array.from(map.values()).sort((a, b) => String(a.month).localeCompare(String(b.month)));
   }, [filtered]);
 
   const sourceTypes = useMemo(() => {

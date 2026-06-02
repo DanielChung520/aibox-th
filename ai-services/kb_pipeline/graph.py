@@ -20,9 +20,9 @@ import httpx
 logger = logging.getLogger(__name__)
 
 # Chunk size for graph extraction (per LLM call)
-_CHUNK_SIZE = 3000
+_CHUNK_SIZE = 2000
 # Maximum chunks to process in parallel (avoid overwhelming LLM)
-_MAX_PARALLEL_CHUNKS = 5
+_MAX_PARALLEL_CHUNKS = 3
 
 
 def _sanitize_llm_json(raw: str) -> str:
@@ -112,7 +112,19 @@ class GraphExtractor:
                 return int(val)
             except ValueError:
                 pass
-        return 8192
+        return 12000
+
+    def _get_ollama_timeout(self) -> float:
+        from kb_pipeline.arango_ops import ArangoOps
+
+        arango = ArangoOps()
+        val = arango.get_system_param("knowledge.graph_timeout")
+        if val:
+            try:
+                return float(val)
+            except ValueError:
+                pass
+        return 300.0
 
     BASE_PROMPT = """你是一個知識圖譜提取專家。請從以下文本中提取實體和關係。
 
@@ -214,6 +226,7 @@ class GraphExtractor:
                     "model": self.model,
                     "prompt": prompt,
                     "stream": False,
+                    "keep_alive": -1,
                     "options": {"temperature": 0.1, "num_predict": num_predict},
                 },
             )
@@ -258,7 +271,7 @@ class GraphExtractor:
         text: str,
         ontology: dict[str, object] | None = None,
         max_parallel: int = _MAX_PARALLEL_CHUNKS,
-        max_chunks: int = 50,
+        max_chunks: int = 15,
     ) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
         """Extract entities and relations from text by processing chunks in parallel.
 
@@ -391,12 +404,12 @@ class GraphExtractor:
         self,
         ollama_url: str | None = None,
         model: str | None = None,
-        timeout: float = 120.0,
+        timeout: float | None = None,
     ) -> None:
         self.ollama_url = ollama_url or os.getenv(
             "OLLAMA_BASE_URL", "http://localhost:11434"
         )
-        self.timeout = timeout
+        self.timeout = timeout if timeout is not None else self._get_ollama_timeout()
         self._model = model or self._get_model()
 
     @property
@@ -431,6 +444,7 @@ class GraphExtractor:
                     "model": self.model,
                     "prompt": prompt,
                     "stream": False,
+                    "keep_alive": -1,
                     "options": {"temperature": 0.1, "num_predict": num_predict},
                 },
             )
@@ -468,6 +482,7 @@ class GraphExtractor:
                     "model": self.model,
                     "prompt": prompt,
                     "stream": False,
+                    "keep_alive": -1,
                     "options": {"temperature": 0.2, "num_predict": 1024},
                 },
             )

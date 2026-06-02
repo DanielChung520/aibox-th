@@ -17,7 +17,7 @@ from ragic_helper.router import router as ragic_router
 STARTED_AT = datetime.now(timezone.utc).isoformat()
 
 app = FastAPI(
-    title="AIBox Ragic Helper Agent",
+    title="TWHC Ragic Helper Agent",
     description="LINE Bot Agent with Intent Detection, Hybrid RAG, and Multi-turn Dialogue",
     version="1.0.0",
 )

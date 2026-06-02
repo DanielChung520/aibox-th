@@ -11,6 +11,10 @@ version: 1.5.0
 **AI Agent 系统扩展**: 支持 AI 聊天、数据查询、知识库管理、MCP 工具和 BPA 流程自动化。
 
 > AI Agent 開發規範請參照 [AGENTS.md](./AGENTS.md)。
+>
+> 🏠 **Taiwan Homecare (TWHC) Edition**: 此為 **AIBox-TH**，基於 ABC Desktop / AIBox 專案分支，為台灣福祉（Taiwan Homecare）客製化的居家照護管理系統。程式碼倉庫：`github.com/DanielChung520/aibox-th`。
+>
+> > `.docs/` 目錄下的歷史規格文件保留原始內容不變，僅供參考。
 
 ## 功能特点
 
@@ -41,7 +45,7 @@ version: 1.5.0
 ## 项目结构
 
 ```
-aibox/
+aibox-th/
 ├── api/                        # Rust Axum API Gateway
 │   ├── src/
 │   │   ├── main.rs            # 入口
@@ -70,7 +74,7 @@ aibox/
 │   ├── aitask/               # AI Task 服務 (port 8001)
 │   ├── data_agent/           # Data Agent 實作模組（整合入口由 unified_agents:8011 /da/* 提供）
 │   ├── mcp_tools/            # MCP Tools 服務 (port 8004)
-│   ├── bpa/mm_agent/         # BPA 物料管理 Agent (port 8005)
+│   ├── bpa/                   # BPA 業務流程 Agent 家族 (由 unified_agents 掛載)
 │   ├── knowledge_agent/      # Knowledge Agent 服務 (port 8007)
 │   ├── datalake/             # 資料湖種子資料與 Schema 工具
 │   └── requirements.txt
@@ -132,8 +136,6 @@ cd ai-services && source .venv/bin/activate
 uvicorn aitask.main:app --port 8001 --reload
 uvicorn unified_agents.main:app --port 8011 --reload
 uvicorn mcp_tools.main:app --port 8004 --reload
-uvicorn bpa.mm_agent.main:app --port 8005 --reload
-uvicorn knowledge_agent.main:app --port 8007 --reload
 ```
 
 ```bash
@@ -162,7 +164,7 @@ npm run tauri build
 ### 一键安装 (macOS)
 
 ```bash
-curl -sL https://raw.githubusercontent.com/your-repo/main/install.sh | bash
+curl -sL https://raw.githubusercontent.com/DanielChung520/aibox-th/main/install.sh | bash
 ```
 
 ## 服务管理
@@ -243,13 +245,12 @@ curl -sL https://raw.githubusercontent.com/your-repo/main/install.sh | bash
 
 | 服务 | 端口 | Dashboard | 说明 |
 |------|------|-----------|------|
-| API Gateway | 6500 | — | Rust Axum |
+| Frontend (dev) | 1420 | — | Vite dev server + proxy |
+| API Gateway | 6500 | — | Rust Axum（所有 API 統一入口） |
 | AITask | 8001 | — | Python FastAPI |
-| unified_agents | 8011 | — | Python FastAPI 統一入口（含 Data Agent `/da/*`） |
+| unified_agents | 8011 | — | Python FastAPI 統一入口（含 Data Agent `/da/*`、Knowledge `/ka/*`、BPA `/order-secretary`、MCP） |
 | MCP Tools | 8004 | — | Python FastAPI |
-| BPA MM Agent | 8005 | — | Python FastAPI (物料管理) |
 | Knowledge Agent | 8007 | — | Python FastAPI (知識庫 RAG) |
-| Frontend (dev) | 1420 | — | Vite dev server |
 | Frontend (preview) | 6000 | — | Vite preview |
 | ArangoDB | 8529 | :8529 | 資料庫 |
 | Qdrant | 6333 | :6333/dashboard | 向量檢索 |
@@ -257,6 +258,29 @@ curl -sL https://raw.githubusercontent.com/your-repo/main/install.sh | bash
 | SeaweedFS Master | 9333 | :9333 | SeaweedFS 叢集協調 |
 | Ollama | 11434 | — | LLM |
 | LM Studio | 1234 | — | LLM |
+
+### 請求轉發架構（Request Flow）
+
+所有請求統一經過 **Rust API Gateway**（port 6500），前端不直接與 Python 服務通訊：
+
+```
+瀏覽器 / Tauri
+     │
+     ▼
+Vite Dev Server (1420)  ─── proxy ──→  Rust API Gateway (6500)
+     │                                         │
+     │ 靜態資源                                  │ 路由轉發
+     │                                         ├─→ /api/v1/*        → 本機處理（DB、Auth…）
+     │                                         ├─→ /api/v1/da/ragic → Python data_agent (8003)
+     │                                         ├─→ /order-secretary → Python unified_agents (8011)
+     │                                         └─→ 其他 /api/*      → 本機處理
+```
+
+**規則**：
+- 前端程式碼**禁止 hardcode** Python 服務的 IP/Port（如 `localhost:8011`），必須使用相對路徑經由 Vite proxy → Rust Gateway
+- Vite proxy (`vite.config.ts`) 僅負責將路徑轉發到 Rust Gateway，不做業務邏輯
+- Rust Gateway (`api/src/api/mod.rs`) 負責認證、授權、路由分發到後端 Python 服務
+- 新增後端服務時，必須在 **Rust Gateway 註冊 proxy 路由**，不得繞過
 
 ### 生产环境
 
@@ -273,7 +297,7 @@ curl -sL https://raw.githubusercontent.com/your-repo/main/install.sh | bash
 # Database
 # ===================
 DATABASE_URL=http://localhost:8529
-DATABASE_NAME=aibox
+DATABASE_NAME=aibox_th
 DATABASE_USER=root
 DATABASE_PASSWORD=abc_desktop_2026
 
@@ -289,7 +313,6 @@ JWT_EXPIRATION_HOURS=24
 AITASK_URL=http://localhost:8001
 UNIFIED_AGENTS_URL=http://localhost:8011
 MCP_TOOLS_URL=http://localhost:8004
-BPA_MM_AGENT_URL=http://localhost:8005
 KNOWLEDGE_AGENT_URL=http://localhost:8007
 
 # ===================
@@ -398,7 +421,6 @@ cd ai-services && source .venv/bin/activate
 uvicorn aitask.main:app --port 8001
 uvicorn unified_agents.main:app --port 8011
 uvicorn mcp_tools.main:app --port 8004
-uvicorn bpa.mm_agent.main:app --port 8005
 uvicorn knowledge_agent.main:app --port 8007
 ```
 

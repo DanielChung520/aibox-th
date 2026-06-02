@@ -6,7 +6,7 @@ router = APIRouter(prefix="/memory", tags=["Memory Index"])
 from memory_agent.core import read_index, generate_system_prompt
 from memory_agent.core.storage import ensure_memory_dir
 
-MEMORY_DIR = " ~/.aibox/memory"
+MEMORY_DIR = "~/.aibox-th/memory"
 
 
 @router.get("/index")

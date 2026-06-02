@@ -166,7 +166,7 @@ async fn list_tables(
     let db = get_db();
     let data_source = params.get("data_source").cloned();
 
-    let tables: Vec<Value> = match data_source.as_deref() {
+    let mut tables: Vec<Value> = match data_source.as_deref() {
         Some("sap") => db
             .aql_str(
                 r#"FOR d IN da_table_info RETURN MERGE(d, {data_source: "sap"})"#,
@@ -190,6 +190,44 @@ async fn list_tables(
             .await
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
     };
+
+    // Dynamically rebuild sheet_url from system_param so it always reflects
+    // the current ragic.database setting, regardless of stored data.
+    let ragic_params: Vec<Value> = db
+        .aql_str(
+            "FOR d IN system_params FILTER d.category == 'ragic' RETURN { key: d.param_key, value: d.param_value }",
+        )
+        .await
+        .unwrap_or_default();
+    let mut server_prefix = String::new();
+    let mut ragic_database = String::new();
+    for p in &ragic_params {
+        if let (Some(key), Some(val)) = (
+            p.get("key").and_then(|v| v.as_str()),
+            p.get("value").and_then(|v| v.as_str()),
+        ) {
+            match key {
+                "ragic.server_prefix" => server_prefix = val.to_string(),
+                "ragic.database" => ragic_database = val.to_string(),
+                _ => {}
+            }
+        }
+    }
+    if !server_prefix.is_empty() && !ragic_database.is_empty() {
+        for t in &mut tables {
+            if let Some(obj) = t.as_object_mut() {
+                let tab = obj.get("tab").and_then(|v| v.as_str()).unwrap_or("");
+                let sheet_key = obj.get("sheet_key").and_then(|v| v.as_str()).unwrap_or("");
+                if !tab.is_empty() && !sheet_key.is_empty() {
+                    let url = format!(
+                        "https://{}.ragic.com/{}/{}/{}",
+                        server_prefix, ragic_database, tab, sheet_key
+                    );
+                    obj.insert("sheet_url".to_string(), Value::String(url));
+                }
+            }
+        }
+    }
 
     Ok(Json(ApiResponse::success(tables)))
 }

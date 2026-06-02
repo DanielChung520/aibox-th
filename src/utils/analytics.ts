@@ -63,7 +63,7 @@ export interface QueuedEvent {
 const EVENT_QUEUE: QueuedEvent[] = [];
 const FLUSH_INTERVAL = 3000; // 3 seconds
 const MAX_QUEUE_SIZE = 50;
-const LOCAL_STORAGE_KEY = 'aibox_analytics_events';
+const LOCAL_STORAGE_KEY = 'aibox_th_analytics_events';
 const MAX_LOCAL_EVENTS = 200;
 
 let sessionId: string | null = null;

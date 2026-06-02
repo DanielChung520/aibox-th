@@ -1,12 +1,17 @@
 """
 BPA MM Agent - Material Management Business Process Automation
 
-Provides workflow automation and orchestration for SAP MM module.
-Migrated from bpa/ root to bpa/mm_agent/ with port 8005.
+⚠️  歷史遺留 (Legacy / Deprecated)
+此服務為早期 BPA 流程原型，所有 workflow steps 皆為 mock 實作。
+目前已不再維護，預計未來退出。
 
-# Last Update: 2026-03-23 18:40:25
+現行的流程編排已由以下系統取代：
+- todos → 任務/流程追蹤
+- PDCA  → 計畫-執行-檢查-行動循環
+
+# Last Update: 2026-05-17
 # Author: Daniel Chung
-# Version: 2.0.0
+# Version: 2.0.0 (legacy, to be deprecated)
 """
 
 import asyncio
@@ -24,7 +29,7 @@ from pydantic import BaseModel, Field
 STARTED_AT = datetime.now(timezone.utc).isoformat()
 
 app = FastAPI(
-    title="AIBox BPA MM Agent",
+    title="TWHC BPA MM Agent",
     description="Material Management business process automation.",
     version="2.0.0",
 )

@@ -10,6 +10,7 @@ import { useState, useEffect } from 'react';
 import { Card, Table, Form, Tabs, App, Typography, Input, Button, Space, theme } from 'antd';
 import { DatabaseOutlined, SettingOutlined } from '@ant-design/icons';
 import { dataAgentApi, TableInfo, FieldInfo } from '../../services/dataAgentApi';
+import { paramsApi } from '../../services/api';
 
 import { TAB_LABELS, TAB_CATEGORIES } from './schemaConstants';
 import { getSchemaTableColumns } from './schemaTableColumns';
@@ -51,6 +52,7 @@ export default function SchemaPage() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [reportTableInfo, setReportTableInfo] = useState<TableInfo | null>(null);
+  const [ragicAccount, setRagicAccount] = useState<string>('');
   const { dispatchEntity } = useEntityPerception({ defaultEntityType: 'table', defaultAction: 'list' });
 
   const loadTables = async () => {
@@ -68,6 +70,13 @@ export default function SchemaPage() {
   useEffect(() => {
     loadTables();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    paramsApi.get('ragic.database').then(res => {
+      const val = res.data.data?.param_value;
+      if (val) setRagicAccount(val);
+    }).catch(() => {});
   }, []);
 
   const handleDeleteTable = async (tableId: string) => {
@@ -209,7 +218,7 @@ export default function SchemaPage() {
         </Title>
         <Space>
           <Button type="text" icon={<SettingOutlined />} onClick={() => setSettingsOpen(true)} title="模型設置" />
-          <SchemaImportSection onImportSuccess={loadTables} />
+          <SchemaImportSection account={ragicAccount} onImportSuccess={loadTables} />
         </Space>
       </div>
 
@@ -305,7 +314,7 @@ export default function SchemaPage() {
         previewMode={dataPreviewMode}
         onPreviewModeChange={handlePreviewModeChange}
         onCancel={() => setDataModalVisible(false)}
-        account="dawnlink"
+        account={ragicAccount}
       />
 
       <SchemaSettingsDrawer open={settingsOpen} onClose={() => setSettingsOpen(false)} />

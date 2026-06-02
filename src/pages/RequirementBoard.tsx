@@ -8,7 +8,7 @@
 
 import { useState, useEffect } from 'react';
 import { Table, Button, Tag, Space, App, Modal, Descriptions, Spin, Typography, Divider, Input } from 'antd';
-import { EyeOutlined, PlayCircleOutlined, CheckCircleOutlined, FileTextOutlined, HistoryOutlined, CodeOutlined } from '@ant-design/icons';
+import { EyeOutlined, PlayCircleOutlined, CheckCircleOutlined, FileTextOutlined, HistoryOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { agentApi } from '../services/api';
 import type { Demand } from '../services/api';
@@ -317,26 +317,6 @@ export default function RequirementBoard() {
     setSpecRecord(record);
     setSpecMd(buildMarkdownSpec(record));
     setSpecOpen(true);
-  };
-
-  const handleStartDev = async (record: RequirementRecord) => {
-    setAccepting(true);
-    try {
-      const res = await fetch(`/api/v1/agent-requirements/${record._key}/start-dev`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${authStore.getState().token}` },
-      });
-      if (res.ok) {
-        message.success('已建立開發工作區');
-        window.location.href = `/app/dev-workspace/${record._key}`;
-      } else {
-        message.error('建立工作區失敗');
-      }
-    } catch {
-      message.error('建立工作區失敗');
-    } finally {
-      setAccepting(false);
-    }
   };
 
   const handleRegenerate = async () => {

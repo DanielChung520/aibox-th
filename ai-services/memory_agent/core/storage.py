@@ -20,7 +20,7 @@ from memory_agent.core.models import (
 )
 
 
-MEMORY_DIR = os.getenv("AIBOX_MEMORY_DIR", "~/.aibox/memory")
+MEMORY_DIR = os.getenv("AIBOX_TH_MEMORY_DIR", "~/.aibox-th/memory")
 MAX_INDEX_LINES = 200
 MAX_LINE_CHARS = 150
 INDEX_FILENAME = "INDEX.md"

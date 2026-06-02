@@ -1,5 +1,5 @@
-const CACHE_KEY = 'aibox_theme_templates';
-const CACHE_TIMESTAMP_KEY = 'aibox_theme_templates_ts';
+const CACHE_KEY = 'aibox_th_theme_templates';
+const CACHE_TIMESTAMP_KEY = 'aibox_th_theme_templates_ts';
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 小時
 
 export function getCachedTemplates(): { templates: unknown[]; timestamp: number } | null {

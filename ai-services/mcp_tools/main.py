@@ -12,7 +12,7 @@ from shared.logging import LoggingMiddleware, setup_logging
 setup_logging("mcp_tools", os.getenv("LOG_LEVEL", "INFO"))
 
 app = FastAPI(
-    title="AIBox MCP Tools Service",
+    title="TWHC MCP Tools Service",
     description="MCP tool execution service.",
     version="2.0.0",
 )

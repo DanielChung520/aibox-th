@@ -4,7 +4,7 @@ import { ENTITY_INTERACT_EVENT } from '../hooks/useEntityPerception';
 import { intentEngine } from './intentEngine';
 import type { IntentGuess } from '../components/FloatingAssistant/types';
 
-export const ASSISTANT_CHANNEL_NAME = 'aibox-assistant-bridge';
+export const ASSISTANT_CHANNEL_NAME = 'aibox-th-assistant-bridge';
 
 export interface AssistantBridgeState {
   pathname: string;

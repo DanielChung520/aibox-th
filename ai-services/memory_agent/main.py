@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(
-    title="AIBox Memory Agent Service",
+    title="TWHC Memory Agent Service",
     description="AI-Augmented Memory System for persistent, long-term memory capabilities.",
     version="1.1.0",
 )

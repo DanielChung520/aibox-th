@@ -14,7 +14,7 @@ import { authStore } from '../stores/auth';
 import { useEntityPerception } from '../hooks/useEntityPerception';
 import { pageContextManager } from '../services/PageContextManager';
 
-const API_BASE = 'http://localhost:8011/order-secretary';
+const API_BASE = '/order-secretary';
 
 interface PreorderItem {
   _key?: string;
@@ -47,12 +47,12 @@ const statusColors: Record<string, string> = {
 
 const statusOptions = ['開立', '預購確認中', '已正式立單'];
 
-function ItemTable({ preorderId, masterKey }: { preorderId: string; masterKey: string }) {
+function ItemTable({ preorderId: _preorderId, masterKey }: { preorderId: string; masterKey: string }) {
   const [items, setItems] = useState<PreorderItem[]>([]);
   const [loading, setLoading] = useState(false);
   useEffect(() => {
     setLoading(true);
-    fetch(`http://localhost:8011/order-secretary/preorders/${masterKey}/items`, {
+    fetch(`/order-secretary/preorders/${masterKey}/items`, {
       headers: { Authorization: `Bearer ${authStore.getState().token}` },
     }).then(r => r.ok ? r.json() : []).then(setItems).catch(() => {}).finally(() => setLoading(false));
   }, [masterKey]);
@@ -257,16 +257,6 @@ export default function PreorderBoard() {
   };
 
   const sourceMap: Record<string, string> = { chat: '聊天', phone: '電話', website: '網站' };
-
-  const loadItems = async (preorderId: string, key: string): Promise<PreorderItem[]> => {
-    try {
-      const res = await fetch(`${API}/preorders/${key}/items`, {
-        headers: { Authorization: `Bearer ${authStore.getState().token}` },
-      });
-      if (res.ok) return await res.json();
-    } catch {}
-    return [];
-  };
 
   const columns: any[] = [
     {
