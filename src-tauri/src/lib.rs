@@ -15,16 +15,14 @@ use tauri::{
 };
 
 const AI_ASSISTANT_LABEL: &str = "ai-assistant";
-const AI_ASSISTANT_WIDTH: f64 = 840.0;
-const AI_ASSISTANT_HEIGHT: f64 = 884.0;
+const AI_ASSISTANT_WIDTH: f64 = 1008.0;
+const AI_ASSISTANT_HEIGHT: f64 = 1591.0;
 const AI_ASSISTANT_MIN_WIDTH: f64 = 720.0;
 const AI_ASSISTANT_MIN_HEIGHT: f64 = 400.0;
 const AI_ASSISTANT_MARGIN_X: i32 = 24;
 const AI_ASSISTANT_MARGIN_Y: i32 = 24;
 const AI_ASSISTANT_EXPANDED_WIDTH_RATIO: f64 = 0.92;
 const AI_ASSISTANT_EXPANDED_HEIGHT_RATIO: f64 = 0.80;
-const AI_ASSISTANT_PROD_URL: &str = "https://dy.ent4i.com/ai-assistant";
-
 #[derive(Clone, Copy)]
 struct WindowGeometry {
     x: i32,
@@ -44,11 +42,7 @@ fn assistant_window_url() -> WebviewUrl {
     if cfg!(debug_assertions) {
         WebviewUrl::App("http://localhost:1420/ai-assistant".into())
     } else {
-        WebviewUrl::External(
-            AI_ASSISTANT_PROD_URL
-                .parse()
-                .expect("valid assistant production URL"),
-        )
+        WebviewUrl::App("ai-assistant".into())
     }
 }
 

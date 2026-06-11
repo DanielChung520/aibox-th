@@ -58,6 +58,15 @@
   border-radius: 22px;
 }
 
+.ai-assistant-root:not(.has-intent-sidecar) .ai-window {
+  top: 18px;
+  right: 18px;
+  bottom: 18px;
+  left: 18px;
+  border-radius: 22px;
+  border: none;
+}
+
 .ai-assistant-root:not(.has-intent-sidecar) .ai-window.expanded {
   top: 18px;
   right: 18px;
