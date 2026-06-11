@@ -1,0 +1,338 @@
+/* ============================================
+   OrderStatus — preorder status and progress
+   BEM naming, mobile-first
+   ============================================ */
+
+/* ─── Design Tokens (scoped) ─────────────────────────────────────────────── */
+.order-status {
+  --os-text-primary: #111827;
+  --os-text-secondary: #6b7280;
+  --os-text-tertiary: #9ca3af;
+  --os-bg-card: #ffffff;
+  --os-bg-muted: #f9fafb;
+  --os-bg-hover: #f3f4f6;
+  --os-border: #e5e7eb;
+  --os-border-light: #f3f4f6;
+  --os-accent: #3b82f6;
+  --os-accent-light: #eff6ff;
+  --os-success: #059669;
+  --os-success-light: #d1fae5;
+  --os-warning: #d97706;
+  --os-warning-light: #fef3c7;
+  --os-error: #dc2626;
+  --os-error-light: #fef2f2;
+  --os-blue: #3b82f6;
+  --os-blue-light: #dbeafe;
+  --os-orange: #f59e0b;
+  --os-orange-light: #fef3c7;
+  --os-green: #10b981;
+  --os-green-light: #d1fae5;
+  --os-radius-sm: 6px;
+  --os-radius-md: 12px;
+  --os-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --os-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
+  --os-transition: 0.2s ease;
+  --os-font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    Helvetica, Arial, sans-serif;
+
+  font-family: var(--os-font);
+  color: var(--os-text-primary);
+}
+
+/* ─── Loading ────────────────────────────────────────────────────────────── */
+.order-status__loading {
+  text-align: center;
+  padding: 48px 16px;
+  font-size: 15px;
+  color: var(--os-text-secondary);
+}
+
+/* ─── Empty ──────────────────────────────────────────────────────────────── */
+.order-status__empty {
+  text-align: center;
+  padding: 48px 16px;
+  font-size: 15px;
+  color: var(--os-text-tertiary);
+  line-height: 1.6;
+}
+
+/* ─── Error ──────────────────────────────────────────────────────────────── */
+.order-status__error {
+  padding: 14px 16px;
+  background: var(--os-error-light);
+  border: 1px solid #fecaca;
+  border-radius: var(--os-radius-sm);
+  font-size: 14px;
+  color: var(--os-error);
+  line-height: 1.5;
+  margin-bottom: 16px;
+}
+
+/* ─── List ───────────────────────────────────────────────────────────────── */
+.order-status__list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* ─── Card ───────────────────────────────────────────────────────────────── */
+.order-status__card {
+  background: var(--os-bg-card);
+  border-radius: var(--os-radius-md);
+  padding: 16px;
+  box-shadow: var(--os-shadow-sm);
+  border: 1px solid var(--os-border-light);
+  cursor: pointer;
+  transition: box-shadow var(--os-transition), transform var(--os-transition),
+    border-color var(--os-transition);
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+.order-status__card:hover {
+  box-shadow: var(--os-shadow-md);
+  transform: translateY(-1px);
+  border-color: var(--os-border);
+}
+
+.order-status__card:active {
+  transform: translateY(0);
+  box-shadow: var(--os-shadow-sm);
+}
+
+/* ─── Card Header ────────────────────────────────────────────────────────── */
+.order-status__card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  gap: 12px;
+}
+
+/* ─── Preorder ID ────────────────────────────────────────────────────────── */
+.order-status__id {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--os-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ─── Status Badge ───────────────────────────────────────────────────────── */
+.order-status__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* Status dot via pseudo-element */
+.order-status__status::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* ─── Status Variants ────────────────────────────────────────────────────── */
+.order-status__status--blue {
+  color: var(--os-blue);
+  background: var(--os-blue-light);
+}
+.order-status__status--blue::before {
+  background: var(--os-blue);
+}
+
+.order-status__status--orange {
+  color: var(--os-warning);
+  background: var(--os-orange-light);
+}
+.order-status__status--orange::before {
+  background: var(--os-orange);
+}
+
+.order-status__status--green {
+  color: var(--os-success);
+  background: var(--os-green-light);
+}
+.order-status__status--green::before {
+  background: var(--os-green);
+}
+
+/* ─── Card Body ──────────────────────────────────────────────────────────── */
+.order-status__card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* ─── Date ───────────────────────────────────────────────────────────────── */
+.order-status__date {
+  font-size: 13px;
+  color: var(--os-text-secondary);
+}
+
+/* ─── Summary ────────────────────────────────────────────────────────────── */
+.order-status__summary {
+  font-size: 13px;
+  color: var(--os-text-secondary);
+}
+
+/* ─── Detail View ────────────────────────────────────────────────────────── */
+.order-status__detail {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* ─── Detail Header ──────────────────────────────────────────────────────── */
+.order-status__detail-header {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.order-status__detail-id {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--os-text-primary);
+  margin: 0;
+  line-height: 1.3;
+}
+
+/* ─── Detail Meta (definition list) ──────────────────────────────────────── */
+.order-status__detail-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 24px;
+  margin: 0;
+  padding: 12px 16px;
+  background: var(--os-bg-muted);
+  border-radius: var(--os-radius-md);
+  font-size: 13px;
+}
+
+.order-status__detail-meta dt {
+  font-weight: 600;
+  color: var(--os-text-primary);
+  margin: 0;
+  min-width: 64px;
+}
+
+.order-status__detail-meta dd {
+  margin: 0;
+  color: var(--os-text-secondary);
+}
+
+/* ─── Section ────────────────────────────────────────────────────────────── */
+.order-status__detail-section {
+  display: flex;
+  flex-direction: column;
+}
+
+.order-status__detail-section-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--os-text-primary);
+  margin: 0 0 10px 0;
+}
+
+/* ─── Items Table ────────────────────────────────────────────────────────── */
+.order-status__items-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  background: var(--os-bg-card);
+  border-radius: var(--os-radius-md);
+  overflow: hidden;
+  box-shadow: var(--os-shadow-sm);
+  border: 1px solid var(--os-border-light);
+}
+
+.order-status__items-table thead {
+  background: var(--os-bg-muted);
+}
+
+.order-status__items-table th {
+  text-align: left;
+  font-weight: 600;
+  color: var(--os-text-primary);
+  padding: 10px 12px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 2px solid var(--os-border);
+  white-space: nowrap;
+}
+
+.order-status__items-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--os-border-light);
+  color: var(--os-text-secondary);
+  vertical-align: top;
+  line-height: 1.4;
+}
+
+.order-status__items-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.order-status__items-table tbody tr:hover {
+  background: var(--os-bg-muted);
+}
+
+/* ─── Notes ──────────────────────────────────────────────────────────────── */
+.order-status__notes {
+  font-size: 13px;
+  color: var(--os-text-secondary);
+  background: var(--os-bg-muted);
+  border-radius: var(--os-radius-md);
+  padding: 12px 16px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  border: 1px solid var(--os-border-light);
+}
+
+/* ─── Dark Mode ──────────────────────────────────────────────────────────── */
+@media (prefers-color-scheme: dark) {
+  .order-status {
+    --os-text-primary: #f9fafb;
+    --os-text-secondary: #9ca3af;
+    --os-text-tertiary: #6b7280;
+    --os-bg-card: #1f2937;
+    --os-bg-muted: #374151;
+    --os-bg-hover: #4b5563;
+    --os-border: #4b5563;
+    --os-border-light: #374151;
+    --os-accent-light: #1e3a5f;
+    --os-success-light: #064e3b;
+    --os-warning-light: #78350f;
+    --os-error-light: #7f1d1d;
+    --os-blue-light: #1e3a5f;
+    --os-orange-light: #78350f;
+    --os-green-light: #064e3b;
+  }
+}
+
+/* ─── Tablet and up ──────────────────────────────────────────────────────── */
+@media (min-width: 768px) {
+  .order-status__card {
+    padding: 18px 20px;
+  }
+
+  .order-status__detail-id {
+    font-size: 20px;
+  }
+
+  .order-status__items-table th,
+  .order-status__items-table td {
+    padding: 12px 16px;
+  }
+}

@@ -1,0 +1,751 @@
+.floating-assistant-container {
+  position: fixed;
+  z-index: 99999;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+  overflow: visible;
+}
+
+.floating-button {
+  position: absolute;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  box-shadow: 0 4px 12px var(--fa-button-shadow-color, rgba(0, 0, 0, 0.15));
+  pointer-events: auto;
+  user-select: none;
+  transition: transform 0.2s, box-shadow 0.2s;
+  animation: floating-pulse 3s infinite;
+  background-color: var(--fa-button-bg, #3b82f6);
+  color: var(--fa-button-icon-color, #fff);
+}
+
+.floating-button:active {
+  cursor: grabbing;
+  transform: scale(0.95);
+  animation: none;
+}
+
+.floating-button:hover {
+  box-shadow: 0 6px 16px var(--fa-button-shadow-hover, rgba(0, 0, 0, 0.2));
+}
+
+@keyframes floating-pulse {
+  0% {
+    box-shadow: 0 0 0 0 var(--fa-button-pulse-color, rgba(59, 130, 246, 0.4));
+  }
+
+  70% {
+    box-shadow: 0 0 0 10px var(--fa-button-pulse-color, rgba(59, 130, 246, 0));
+  }
+
+  100% {
+    box-shadow: 0 0 0 0 var(--fa-button-pulse-color, rgba(59, 130, 246, 0));
+  }
+}
+
+.floating-modal {
+  position: absolute;
+  width: var(--fa-modal-width, 480px);
+  height: var(--fa-modal-height, 600px);
+  min-width: var(--fa-modal-min-width, 320px);
+  min-height: var(--fa-modal-min-height, 400px);
+  background: var(--fa-modal-bg, rgba(30, 41, 59, 0.85));
+  backdrop-filter: blur(var(--fa-blur-intensity, 20px)) saturate(var(--fa-saturation, 180%));
+  -webkit-backdrop-filter: blur(var(--fa-blur-intensity, 20px)) saturate(var(--fa-saturation, 180%));
+  border-radius: var(--fa-border-radius, 12px);
+  border: 1px solid var(--fa-modal-border-color, rgba(255, 255, 255, 0.1));
+  box-shadow:
+    0 8px 32px var(--fa-shadow-color, rgba(0, 0, 0, 0.12)),
+    0 0 0 1px var(--fa-shadow-inner-color, rgba(255, 255, 255, 0.05)),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  display: flex;
+  flex-direction: column;
+  pointer-events: none;
+  overflow: hidden;
+  transform-origin: bottom right;
+  opacity: 0;
+  transform: scale(0.9);
+  transition: opacity 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275),
+    transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.floating-modal.open {
+  opacity: 1;
+  transform: scale(1);
+  pointer-events: auto;
+}
+
+.floating-modal-header {
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: grab;
+  user-select: none;
+  background: var(--fa-header-bg, rgba(22, 27, 34, 0.75));
+  backdrop-filter: blur(var(--fa-blur-intensity, 20px)) saturate(var(--fa-saturation, 180%));
+  -webkit-backdrop-filter: blur(var(--fa-blur-intensity, 20px)) saturate(var(--fa-saturation, 180%));
+  border-bottom: var(--fa-header-border, 1px solid rgba(255, 255, 255, 0.1));
+}
+
+.floating-modal-header:active {
+  cursor: grabbing;
+}
+
+.floating-modal-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  color: var(--fa-title-color, #f1f5f9);
+}
+
+.floating-modal-title .ant-avatar {
+  background-color: var(--fa-avatar-bg, #3b82f6);
+  color: var(--fa-avatar-icon-color, #fff);
+}
+
+.floating-modal-header .ant-btn-text {
+  color: var(--fa-close-btn-color, #8892a0);
+}
+
+.floating-modal-header .ant-btn-text:hover {
+  color: var(--fa-close-btn-hover-color, #f1f5f9);
+  background: var(--fa-close-btn-hover-bg, rgba(255, 255, 255, 0.1));
+}
+
+.floating-modal-body {
+  flex: 1;
+  padding: 16px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: var(--fa-body-bg, rgba(30, 41, 59, 0.6));
+  backdrop-filter: blur(calc(var(--fa-blur-intensity, 20px) * 0.5));
+  -webkit-backdrop-filter: blur(calc(var(--fa-blur-intensity, 20px) * 0.5));
+  position: relative;
+}
+
+.floating-modal-body::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background:
+    linear-gradient(135deg,
+      var(--fa-gradient-start, rgba(99, 102, 241, 0.05)) 0%,
+      transparent 50%),
+    radial-gradient(ellipse at 20% 80%,
+      var(--fa-gradient-radial-1, rgba(99, 102, 241, 0.08)) 0%,
+      transparent 50%),
+    radial-gradient(ellipse at 80% 20%,
+      var(--fa-gradient-radial-2, rgba(14, 165, 233, 0.05)) 0%,
+      transparent 50%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.floating-modal-body>* {
+  position: relative;
+  z-index: 1;
+}
+
+.floating-modal-footer {
+  padding: 12px 16px;
+  border-top: var(--fa-footer-border, 1px solid rgba(255, 255, 255, 0.1));
+  background: var(--fa-footer-bg, rgba(22, 27, 34, 0.75));
+  backdrop-filter: blur(var(--fa-blur-intensity, 20px)) saturate(var(--fa-saturation, 180%));
+  -webkit-backdrop-filter: blur(var(--fa-blur-intensity, 20px)) saturate(var(--fa-saturation, 180%));
+  display: flex;
+  gap: 8px;
+}
+
+.floating-modal-footer .ant-input {
+  background: var(--fa-input-bg, rgba(255, 255, 255, 0.05));
+  color: var(--fa-input-text-color, #f1f5f9);
+  border-color: var(--fa-input-border-color, rgba(255, 255, 255, 0.1));
+}
+
+.floating-modal-footer .ant-input::placeholder {
+  color: var(--fa-input-placeholder-color, rgba(241, 245, 249, 0.45));
+}
+
+.floating-modal-footer .ant-input:hover,
+.floating-modal-footer .ant-input:focus {
+  border-color: var(--fa-input-focus-border-color, #3b82f6);
+}
+
+.floating-modal-footer .ant-btn-primary {
+  background: var(--fa-send-btn-bg, #3b82f6);
+  border-color: var(--fa-send-btn-border, #3b82f6);
+  color: var(--fa-send-btn-color, #fff);
+}
+
+.floating-modal-footer .ant-btn-primary:hover {
+  background: var(--fa-send-btn-hover-bg, #60a5fa);
+  border-color: var(--fa-send-btn-hover-border, #60a5fa);
+  color: var(--fa-send-btn-hover-color, #fff);
+}
+
+.floating-modal-resize {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 20px;
+  height: 20px;
+  cursor: se-resize;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.floating-modal:hover .floating-modal-resize {
+  opacity: 0.5;
+}
+
+.floating-modal-resize:hover {
+  opacity: 1 !important;
+}
+
+.floating-modal-resize::after {
+  content: '';
+  width: 10px;
+  height: 10px;
+  border-right: 2px solid var(--fa-resize-handle-color, #8892a0);
+  border-bottom: 2px solid var(--fa-resize-handle-color, #8892a0);
+}
+
+.message-placeholder {
+  align-self: flex-start;
+  background: var(--fa-message-bg, rgba(22, 27, 34, 0.8));
+  backdrop-filter: blur(calc(var(--fa-blur-intensity, 20px) * 0.6));
+  -webkit-backdrop-filter: blur(calc(var(--fa-blur-intensity, 20px) * 0.6));
+  color: var(--fa-message-text-color, #f1f5f9);
+  padding: 10px 14px;
+  border-radius: var(--fa-message-border-radius, 12px);
+  border-top-left-radius: 2px;
+  border: var(--fa-message-border, 1px solid rgba(255, 255, 255, 0.05));
+  max-width: 85%;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.message-placeholder.system {
+  align-self: center;
+  background: transparent;
+  backdrop-filter: none;
+  color: var(--fa-system-message-color, #8892a0);
+  font-size: 12px;
+  text-align: center;
+  padding: 4px;
+  border: none;
+}
+
+/* AI 氣泡基本樣式 */
+.floating-bubble-ai {
+  background: var(--fa-bubble-ai-bg, rgba(22, 27, 34, 0.8));
+  color: var(--fa-bubble-ai-text-color, #f1f5f9);
+  padding: 10px 14px;
+  border-radius: 12px;
+  border-top-left-radius: 2px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  max-width: 85%;
+  font-size: 14px;
+  line-height: 1.6;
+  word-break: break-word;
+}
+
+/* 用戶氣泡基本樣式 */
+.floating-bubble-user {
+  background: var(--fa-bubble-user-bg, #1e3a8a);
+  color: var(--fa-bubble-user-text-color, #fff);
+  padding: 10px 14px;
+  border-radius: 12px;
+  border-top-right-radius: 2px;
+  max-width: 85%;
+  font-size: 14px;
+  line-height: 1.6;
+  word-break: break-word;
+}
+
+/* 系統訊息（時間戳等） */
+.floating-bubble-system {
+  align-self: center;
+  color: var(--fa-bubble-time-color, rgba(241, 245, 249, 0.45));
+  font-size: 12px;
+  text-align: center;
+  padding: 4px 8px;
+}
+
+/* 氣泡時間戳 */
+.floating-bubble-time {
+  align-self: center;
+  color: var(--fa-bubble-time-color, rgba(241, 245, 249, 0.45));
+  font-size: 11px;
+  margin-top: 4px;
+  padding: 0 4px;
+}
+
+/* Mermaid 圖表容器 */
+.mermaid-container {
+  background: var(--fa-mermaid-bg, rgba(0, 0, 0, 0.3));
+  border-radius: 8px;
+  padding: 12px;
+  margin: 8px 0;
+  overflow-x: auto;
+}
+
+.mermaid-container pre.mermaid {
+  margin: 0;
+  background: transparent;
+  color: var(--fa-mermaid-text-color, #f1f5f9);
+}
+
+/* Markdown 樣式增強 */
+.floating-bubble-ai pre,
+.floating-bubble-user pre {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 8px;
+  padding: 12px;
+  margin: 8px 0;
+  overflow-x: auto;
+}
+
+.floating-bubble-ai code,
+.floating-bubble-user code {
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
+  font-size: 13px;
+}
+
+.floating-bubble-ai pre code,
+.floating-bubble-user pre code {
+  background: transparent;
+  padding: 0;
+}
+
+.floating-bubble-ai blockquote,
+.floating-bubble-user blockquote {
+  border-left: 3px solid var(--fa-quote-border-color, rgba(255, 255, 255, 0.2));
+  margin: 8px 0;
+  padding-left: 12px;
+  color: var(--fa-quote-text-color, #8892a0);
+}
+
+.floating-bubble-ai table,
+.floating-bubble-user table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 8px 0;
+}
+
+.floating-bubble-ai th,
+.floating-bubble-user th,
+.floating-bubble-ai td,
+.floating-bubble-user td {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 6px 10px;
+  text-align: left;
+}
+
+.floating-bubble-ai th,
+.floating-bubble-user th {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.floating-bubble-ai a,
+.floating-bubble-user a {
+  color: var(--fa-link-color, #3b82f6);
+}
+
+.floating-bubble-ai a:hover,
+.floating-bubble-user a:hover {
+  color: var(--fa-link-hover-color, #60a5fa);
+}
+
+.floating-bubble-ai ul,
+.floating-bubble-user ul,
+.floating-bubble-ai ol,
+.floating-bubble-user ol {
+  margin: 8px 0;
+  padding-left: 20px;
+}
+
+/* Markdown Heading 樣式 */
+.floating-bubble-ai h1,
+.floating-bubble-user h1 {
+  font-size: 1.4em;
+  font-weight: 700;
+  margin: 0.8em 0 0.4em;
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  color: inherit;
+}
+
+.floating-bubble-ai h2,
+.floating-bubble-user h2 {
+  font-size: 1.2em;
+  font-weight: 700;
+  margin: 0.6em 0 0.3em;
+  color: inherit;
+}
+
+.floating-bubble-ai h3,
+.floating-bubble-user h3 {
+  font-size: 1.05em;
+  font-weight: 700;
+  margin: 0.5em 0 0.2em;
+  color: inherit;
+}
+
+.floating-bubble-ai h4,
+.floating-bubble-user h4,
+.floating-bubble-ai h5,
+.floating-bubble-user h5,
+.floating-bubble-ai h6,
+.floating-bubble-user h6 {
+  font-size: 1em;
+  font-weight: 600;
+  margin: 0.4em 0 0.15em;
+  color: var(--fa-quote-text-color, #8892a0);
+}
+
+/* Markdown 文字強調 */
+.floating-bubble-ai strong,
+.floating-bubble-user strong,
+.floating-bubble-ai b,
+.floating-bubble-user b {
+  font-weight: 700;
+  color: inherit;
+}
+
+.floating-bubble-ai em,
+.floating-bubble-user em,
+.floating-bubble-ai i,
+.floating-bubble-user i {
+  font-style: italic;
+  color: var(--fa-quote-text-color, #8892a0);
+}
+
+/* Markdown 段落 */
+.floating-bubble-ai p,
+.floating-bubble-user p {
+  margin: 0 0 0.6em;
+  line-height: 1.7;
+}
+
+.floating-bubble-ai p:last-child,
+.floating-bubble-user p:last-child {
+  margin-bottom: 0;
+}
+
+/* Markdown 分隔線 */
+.floating-bubble-ai hr,
+.floating-bubble-user hr {
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  margin: 12px 0;
+}
+
+/* Markdown 圖片 */
+.floating-bubble-ai img,
+.floating-bubble-user img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+  margin: 8px 0;
+}
+
+/* 行內程式碼（非程式碼區塊內的） */
+.floating-bubble-ai code:not(pre code),
+.floating-bubble-user code:not(pre code) {
+  background: rgba(0, 0, 0, 0.2);
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+  font-size: 0.9em;
+}
+
+.floating-modal-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px 12px;
+  border-top: 1px solid var(--fa-footer-border-color, rgba(255, 255, 255, 0.1));
+  background: var(--fa-footer-bg, rgba(22, 27, 34, 0.75));
+  backdrop-filter: blur(var(--fa-blur-intensity, 20px));
+}
+
+.floating-suggestion-btn {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  font-size: 12px;
+  line-height: 1.4;
+  border: 1px solid var(--fa-input-border-color, rgba(255, 255, 255, 0.15));
+  border-radius: 12px;
+  background: var(--fa-input-bg, rgba(255, 255, 255, 0.05));
+  color: var(--fa-bubble-ai-text-color, #fff);
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
+  white-space: nowrap;
+}
+
+.floating-suggestion-btn:hover {
+  background: var(--fa-send-btn-bg, #1890ff);
+  border-color: var(--fa-send-btn-bg, #1890ff);
+  color: var(--fa-send-btn-color, #fff);
+}
+
+.intent-guess-btn {
+  width: 28px !important;
+  height: 28px !important;
+  border: none;
+  transition: all 0.3s;
+  padding: 0 !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.intent-guess-btn.active {
+  color: var(--fa-intent-active-color, #faad14);
+}
+
+.intent-guess-btn.disabled {
+  color: var(--fa-intent-disabled-color, rgba(255, 255, 255, 0.25));
+}
+
+.intent-guess-popover {
+  min-width: 280px;
+  max-width: 360px;
+  background: var(--fa-popover-bg, rgba(0, 10, 24, 0.8));
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 6px 34px rgba(100, 80, 220, 0.35);
+  overflow: hidden;
+}
+
+.intent-guess-header {
+  font-size: 13px;
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.85);
+  font-weight: 500;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.intent-guess-close {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.3);
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 4px;
+  transition: color 0.2s, background 0.2s;
+}
+
+.intent-guess-close:hover {
+  color: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.intent-guess-item {
+  padding: 8px 12px;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: background 0.2s;
+}
+
+.intent-guess-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.intent-guess-text {
+  flex: 1;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.9);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-right: 8px;
+}
+
+/* 意圖歷史面板 */
+.intent-history-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.intent-history-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--fa-title-color, #f1f5f9);
+}
+
+/* 強制覆蓋 Ant Design Button 在 FloatingAssistant 內的主題色 */
+.floating-modal .ant-btn-text.ant-btn-color-default {
+  color: #8892a0;
+}
+
+.floating-modal .ant-btn-text.ant-btn-color-default:hover {
+  color: #f1f5f9;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.intent-history-list {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 8px;
+}
+
+.intent-history-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 13px;
+  transition: background 0.2s;
+}
+
+.intent-history-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.intent-history-text {
+  flex: 1;
+  color: var(--fa-bubble-ai-text-color, #f1f5f9);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.intent-history-conf {
+  font-size: 11px;
+  color: var(--fa-bubble-time-color, rgba(241, 245, 249, 0.45));
+  min-width: 32px;
+  text-align: right;
+}
+
+.intent-history-time {
+  font-size: 11px;
+  color: var(--fa-bubble-time-color, rgba(241, 245, 249, 0.45));
+  white-space: nowrap;
+}
+
+.intent-history-empty {
+  text-align: center;
+  color: var(--fa-bubble-time-color, rgba(241, 245, 249, 0.45));
+  padding: 24px 0;
+  font-size: 13px;
+}
+
+/* 獨立意圖猜測面板 */
+.intent-panel-standalone {
+  pointer-events: auto;
+  transition: opacity 0.2s, transform 0.2s;
+  animation: intent-panel-fade-in 0.2s ease-out;
+}
+
+@keyframes intent-panel-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 浮動按鈕右鍵選單 */
+.floating-context-menu {
+  background: rgba(30, 41, 59, 0.92);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 6px 24px rgba(100, 80, 220, 0.35);
+  padding: 4px 0;
+  min-width: 160px;
+  animation: intent-panel-fade-in 0.15s ease-out;
+}
+
+.floating-context-menu-item {
+  padding: 8px 14px;
+  font-size: 13px;
+  color: rgba(200, 220, 248, 0.516);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.floating-context-menu-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.attachment-dropdown-menu {
+  background: rgba(30, 41, 59, 0.75) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  border-radius: 8px;
+  padding: 4px 0;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(12px);
+  min-width: calc(100% + 10px) !important;
+}
+
+.attachment-dropdown-menu .ant-dropdown-menu-item {
+  color: rgba(255, 255, 255, 0.85) !important;
+  font-size: 13px;
+  line-height: 1.6;
+  padding: 6px 16px;
+}
+
+.attachment-dropdown-menu .ant-dropdown-menu-item:hover {
+  background: rgba(99, 102, 241, 0.4) !important;
+  color: #ffffff !important;
+  border-radius: 4px;
+  margin: 0 6px;
+  width: calc(100% - 12px);
+}
+
+.floating-modal-footer .ant-dropdown-menu-item {
+  color: rgba(255, 255, 255, 0.599) !important;
+  font-size: 13px;
+  line-height: 1.6;
+  padding: 6px 16px;
+}
+
+.floating-modal-footer .ant-dropdown-menu-item:hover {
+  background: rgba(99, 102, 241, 0.35) !important;
+  color: #f1f5f9 !important;
+  border-radius: 4px;
+  margin: 0 6px;
+  width: calc(100% - 12px);
+}

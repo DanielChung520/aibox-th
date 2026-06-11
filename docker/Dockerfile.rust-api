@@ -1,0 +1,66 @@
+# =============================================================================
+# Dockerfile.rust-api — Multi-stage Docker build for Rust API Gateway
+# =============================================================================
+#
+# Usage:
+#   docker build -f docker/Dockerfile.rust-api -t abc-api .
+#
+# The frontend dist/ directory should be mounted as a volume at /app/dist,
+# or copied at build time for a self-contained image:
+#   COPY dist/ /app/dist/
+#
+# @file         Dockerfile.rust-api
+# @description  Multi-stage build: Rust compiler stage → slim runtime stage
+# @lastUpdate   2026-05-22
+# @author       ABC Team
+# @version      1.0.0
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# Stage 1: Builder — compile Rust binary
+# ---------------------------------------------------------------------------
+FROM rust:1.83-slim-bookworm AS builder
+
+WORKDIR /app
+
+# Install build dependencies (pkg-config, libssl for reqwest, musl-tools not
+# needed here since we use the default glibc target)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    pkg-config \
+    libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy manifests first for Docker layer caching (dependencies rebuild only
+# when Cargo.toml / Cargo.lock change)
+COPY api/Cargo.toml api/Cargo.lock ./api/
+
+# Copy source code
+COPY api/src/ ./api/src/
+
+# Build release binary
+WORKDIR /app/api
+RUN cargo build --release
+
+# ---------------------------------------------------------------------------
+# Stage 2: Runtime — slim Debian image with only runtime deps
+# ---------------------------------------------------------------------------
+FROM debian:bookworm-slim
+
+WORKDIR /app
+
+# Install runtime dependencies (ca-certificates for TLS, curl for healthcheck)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy the compiled binary from the builder stage
+COPY --from=builder /app/api/target/release/abc-api /app/abc-api
+
+# Copy entrypoint script
+COPY docker/docker-entrypoint.sh /app/docker-entrypoint.sh
+RUN chmod +x /app/docker-entrypoint.sh
+
+EXPOSE 6500
+
+ENTRYPOINT ["/app/docker-entrypoint.sh"]

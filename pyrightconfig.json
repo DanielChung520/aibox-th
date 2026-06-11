@@ -1,0 +1,12 @@
+{
+  "venvPath": "ai-services",
+  "venv": ".venv",
+  "executionEnvironments": [
+    {
+      "root": "ai-services",
+      "extraPaths": [
+        "ai-services"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,402 @@
+/**
+ * @file        數據湖表結構及數據檢視頁面
+ * @description 左側顯示所有資料表列表，點擊後右側顯示欄位結構與資料預覽（分頁模式）
+ * @lastUpdate  2026-04-02 19:30:00
+ * @author      Daniel Chung
+ * @version     1.3.0
+ */
+
+import { useState, useEffect, useMemo } from 'react';
+import { Table, Card, Typography, Tag, Space, Spin, Empty, Descriptions, Alert, Tabs, theme, Input, Switch } from 'antd';
+import { DatabaseOutlined, TableOutlined, InfoCircleOutlined } from '@ant-design/icons';
+import { dataAgentApi, TableInfo, FieldInfo } from '../../services/dataAgentApi';
+import { useEntityPerception } from '../../hooks/useEntityPerception';
+import { pageContextManager } from '../../services/PageContextManager';
+
+const { Text } = Typography;
+type DataSourceType = 'sap' | 'ragic' | 'ALL';
+
+const MODULE_COLORS: Record<string, string> = {
+  MM: 'blue',
+  SD: 'green',
+  FI: 'orange',
+  PP: 'purple',
+  QM: 'cyan',
+  OTHER: 'default',
+};
+
+export default function DataLakePage() {
+  const { token } = theme.useToken();
+  const { dispatchEntity } = useEntityPerception({ defaultEntityType: 'datalake', defaultAction: 'list' });
+  void dispatchEntity; // Reserved for future event handler use
+
+  useEffect(() => {
+    pageContextManager.report({ component: 'DataLakePage', entityType: 'datalake', action: 'list' });
+    return () => { pageContextManager.report({ component: undefined, entityType: undefined, action: undefined }); };
+  }, []);
+
+  const [tables, setTables] = useState<TableInfo[]>([]);
+  const [loadingTables, setLoadingTables] = useState(false);
+  const [searchText, setSearchText] = useState('');
+  const [showDisabled, setShowDisabled] = useState(false);
+  const [dataSourceFilter] = useState<DataSourceType>(
+    () => (localStorage.getItem('app.system_type') as DataSourceType) || 'ALL'
+  );
+  const [selectedTable, setSelectedTable] = useState<string | null>(null);
+  const [tableInfo, setTableInfo] = useState<TableInfo | null>(null);
+  const [fields, setFields] = useState<FieldInfo[]>([]);
+  const [rows, setRows] = useState<Record<string, unknown>[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loadingData, setLoadingData] = useState(false);
+  const [loadingRows, setLoadingRows] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [dataError, setDataError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState('schema');
+  const pageSize = 20;
+
+  const loadTables = async () => {
+    setLoadingTables(true);
+    try {
+      const res = await dataAgentApi.listTables();
+      setTables(res.data.data || []);
+    } catch {
+      setTables([]);
+    } finally {
+      setLoadingTables(false);
+    }
+  };
+
+  useEffect(() => {
+    loadTables();
+  }, []);
+
+  const filteredTables = useMemo(() => {
+    let result = tables;
+    if (dataSourceFilter !== 'ALL') {
+      result = result.filter(t => t.data_source === dataSourceFilter);
+    }
+    if (!showDisabled) {
+      result = result.filter(t => t.status === 'enabled');
+    }
+    return result;
+  }, [tables, dataSourceFilter, showDisabled]);
+
+  const loadTableData = async (tableName: string, page = 1, size = 20) => {
+    const isNewTable = tableName !== selectedTable;
+    if (isNewTable) {
+      setLoadingData(true);
+      setSelectedTable(tableName);
+    } else {
+      setLoadingRows(true);
+    }
+    setDataError(null);
+    try {
+      const offset = (page - 1) * size;
+      const res = await dataAgentApi.previewTable(tableName, offset, size);
+      const data = res.data;
+      if (isNewTable) {
+        setTableInfo(data.table_info || null);
+        setFields(data.fields || []);
+      }
+      setRows(data.rows || []);
+      setTotal(data.total || 0);
+      setCurrentPage(page);
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { detail?: string } }; message?: string };
+      const msg = e?.response?.data?.detail || e?.message || '載入失敗';
+      setDataError(
+        msg.includes('404') || msg.includes('Not Found')
+          ? '此資料表的實際資料集合尚未建立，請先執行資料湖資料填充腳本'
+          : msg,
+      );
+      if (isNewTable) {
+        setTableInfo(null);
+        setFields([]);
+      }
+      setRows([]);
+      setTotal(0);
+    } finally {
+      setLoadingData(false);
+      setLoadingRows(false);
+    }
+  };
+
+  const handlePageChange = (page: number) => {
+    if (selectedTable) loadTableData(selectedTable, page, pageSize);
+  };
+
+  const fieldColumns = [
+    {
+      title: '欄位名',
+      dataIndex: 'field_name',
+      key: 'field_name',
+      width: 200,
+      render: (name: string) => (
+        <Text code style={{ fontSize: 12 }}>{name}</Text>
+      ),
+    },
+    {
+      title: '類型',
+      dataIndex: 'field_type',
+      key: 'field_type',
+      width: 100,
+      render: (type: string) => <Tag>{type}</Tag>,
+    },
+    {
+      title: '可寫入',
+      dataIndex: 'writable',
+      key: 'writable',
+      width: 70,
+      align: 'center' as const,
+      render: (v: boolean) => (v ? 'Y' : 'N'),
+    },
+    {
+      title: '備註',
+      dataIndex: 'memo',
+      key: 'memo',
+      render: (memo: string) => (
+        <Text type="secondary" style={{ fontSize: 12 }}>{memo || '-'}</Text>
+      ),
+    },
+  ];
+
+  const rowColumns = fields.map(field => ({
+    title: field.field_name,
+    dataIndex: field.field_name,
+    key: field.field_name,
+    ellipsis: true,
+    width: 150,
+    render: (value: unknown) => {
+      if (value === null || value === undefined) return <Text type="secondary">NULL</Text>;
+      if (typeof value === 'object') return <Text type="secondary">{JSON.stringify(value)}</Text>;
+      return String(value);
+    },
+  }));
+
+  const tabItems = useMemo(() => [
+    {
+      key: 'schema',
+      label: (
+        <Space>
+          <TableOutlined />
+          <span>欄位結構</span>
+          <Tag>{fields.length}</Tag>
+        </Space>
+      ),
+      children: (
+        <div style={{ height: '100%', overflow: 'auto', padding: '8px 0' }}>
+          {fields.length > 0 ? (
+            <Table
+              columns={fieldColumns}
+              dataSource={fields}
+              rowKey="field_id"
+              size="small"
+              pagination={false}
+              scroll={{ x: 600 }}
+            />
+          ) : (
+            <Empty description="尚無欄位結構" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+          )}
+        </div>
+      ),
+    },
+    {
+      key: 'data',
+      label: (
+        <Space>
+          <DatabaseOutlined />
+          <span>資料預覽</span>
+          <Tag>{total > 0 ? total.toLocaleString() : '-'}</Tag>
+        </Space>
+      ),
+      children: (
+        <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+          {dataError ? (
+            <Alert
+              title="資料載入失敗"
+              description={dataError}
+              type="warning"
+              showIcon
+              action={
+                <Tag
+                  color="warning"
+                  style={{ cursor: 'pointer' }}
+                  onClick={() => selectedTable && loadTableData(selectedTable, 1, pageSize)}
+                >
+                  重試
+                </Tag>
+              }
+            />
+          ) : rows.length > 0 ? (
+            <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+              {total > pageSize && (
+                <Alert
+                  title={`顯示第 ${(currentPage - 1) * pageSize + 1}–${Math.min(currentPage * pageSize, total)} 筆記錄，共 ${total.toLocaleString()} 筆記錄`}
+                  type="info"
+                  showIcon
+                  style={{ marginBottom: 8 }}
+                />
+              )}
+              <Table
+                columns={rowColumns}
+                dataSource={rows.map((r, i) => ({ ...r, key: (r._key as string) || i }))}
+                rowKey="key"
+                size="small"
+                loading={loadingRows}
+                pagination={{
+                  current: currentPage,
+                  pageSize,
+                  total,
+                  showSizeChanger: false,
+                  onChange: handlePageChange,
+                  showTotal: t => `${t} 筆記錄`,
+                }}
+                scroll={{ x: Math.max(fields.length * 150, 600) }}
+              />
+            </div>
+          ) : (
+            <Empty description="此資料表尚無實際資料" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+          )}
+        </div>
+      ),
+    },
+  ], [fields, rows, total, currentPage, pageSize, dataError, selectedTable]);
+
+  return (
+    <div style={{ display: 'flex', height: '100%', gap: 16 }}>
+      <Card
+        title={
+          <Space>
+            <DatabaseOutlined />
+            <span>資料表列表</span>
+            <Tag>{filteredTables.length}</Tag>
+          </Space>
+        }
+        extra={
+          <Switch
+            checkedChildren="全部"
+            unCheckedChildren="已啟用"
+            checked={showDisabled}
+            onChange={setShowDisabled}
+            size="small"
+          />
+        }
+        style={{ width: 300, flexShrink: 0 }}
+        styles={{ body: { padding: 0 } }}
+      >
+        <div style={{ padding: '12px 12px 4px' }}>
+          <Input
+            placeholder="搜尋資料表..."
+            value={searchText}
+            onChange={e => setSearchText(e.target.value)}
+            allowClear
+          />
+        </div>
+        <div style={{ maxHeight: 'calc(100vh - 200px)', overflowY: 'auto' }}>
+          <Table
+            dataSource={filteredTables.filter(t =>
+              !searchText ||
+              t.table_name.toLowerCase().includes(searchText.toLowerCase()) ||
+              t.module.toLowerCase().includes(searchText.toLowerCase()) ||
+              t.table_id.toLowerCase().includes(searchText.toLowerCase())
+            )}
+            rowKey="table_id"
+            size="small"
+            pagination={false}
+            onRow={t => ({
+              onClick: () => loadTableData(t.table_id, 1, pageSize),
+              style: {
+                cursor: 'pointer',
+                opacity: t.status === 'disabled' ? 0.45 : 1,
+                background: selectedTable === t.table_id ? token.controlItemBgActive : 'transparent',
+              },
+            })}
+            columns={[
+              {
+                title: '資料表',
+                key: 'name',
+                render: (_: unknown, t: TableInfo) => (
+                  <Space orientation="vertical" size={2}>
+                    <Space>
+                      <Text strong style={{ fontSize: 13 }}>{t.table_name}</Text>
+                      <Tag color={MODULE_COLORS[t.module] || 'default'} style={{ fontSize: 10 }}>
+                        {t.module}
+                      </Tag>
+                       {t.data_source && (
+                         <Tag color="green" style={{ fontSize: 10 }}>
+                           {t.data_source.toUpperCase()}
+                         </Tag>
+                       )}
+                      {t.status === 'disabled' && (
+                        <Tag color="default" style={{ fontSize: 10 }}>停用</Tag>
+                      )}
+                    </Space>
+                    <Text type="secondary" style={{ fontSize: 10 }}>
+                      {t.table_id}
+                    </Text>
+                    </Space>
+                ),
+              },
+            ]}
+            loading={loadingTables}
+            locale={{ emptyText: <Empty description="暫無資料表" image={Empty.PRESENTED_IMAGE_SIMPLE} /> }}
+          />
+        </div>
+      </Card>
+
+      <Card style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+        {!selectedTable ? (
+          <Empty
+            description="點擊左側資料表以查看結構與資料"
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+          />
+        ) : loadingData ? (
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 300 }}>
+            <Spin size="large" description="載入資料中..." />
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 12, overflow: 'hidden' }}>
+            {tableInfo && (
+              <Card size="small" title={
+                <Space><InfoCircleOutlined /><span>資料表資訊</span></Space>
+              } styles={{ body: { flex: 'none' } }}>
+                <Descriptions size="small" column={5} bordered>
+                  <Descriptions.Item label="表名">
+                    <Text strong>{tableInfo.table_name}</Text>
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Table ID">
+                    <Text code>{tableInfo.table_id}</Text>
+                  </Descriptions.Item>
+                  <Descriptions.Item label="模組">
+                    <Tag color={MODULE_COLORS[tableInfo.module] || 'default'}>{tableInfo.module}</Tag>
+                  </Descriptions.Item>
+                  <Descriptions.Item label="來源">
+                    <Tag color="green">
+                      {tableInfo.data_source.toUpperCase()}
+                    </Tag>
+                  </Descriptions.Item>
+                  <Descriptions.Item label="狀態">
+                    <Tag color={tableInfo.status === 'enabled' ? 'green' : 'default'}>
+                      {tableInfo.status}
+                    </Tag>
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Sheet Key">
+                    {tableInfo.sheet_key || '-'}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="表單連結" span={2}>
+                    {tableInfo.sheet_url ? (
+                      <a href={tableInfo.sheet_url} target="_blank" rel="noopener noreferrer">開啟 Ragic</a>
+                    ) : '-'}
+                  </Descriptions.Item>
+                </Descriptions>
+              </Card>
+            )}
+        <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+              <Tabs activeKey={activeTab} onChange={setActiveTab} items={tabItems} className="datalake-tabs" />
+            </div>
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+}

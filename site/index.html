@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ABC Desktop — AI 驅動的桌面管理系統</title>
+<meta name="description" content="ABC Desktop 是基於 Tauri + React + Ant Design 建構的跨平台桌面管理應用，支援 AI 對話、資料查詢、知識庫管理等功能。">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0f172a;--surface:#1e293b;--border:#334155;--text:#e2e8f0;--muted:#94a3b8;--dim:#64748b;--primary:#3b82f6;--primary-hover:#2563eb;--white:#fff}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans TC",sans-serif;background:var(--bg);color:var(--text);min-height:100vh;line-height:1.6}
+a{color:var(--primary);text-decoration:none}
+a:hover{text-decoration:underline}
+
+/* Hero */
+.hero{text-align:center;padding:80px 20px 48px}
+.hero h1{font-size:2.5rem;color:var(--white);margin-bottom:12px}
+.hero h1 span{color:var(--primary)}
+.hero p{font-size:1.1rem;color:var(--muted);max-width:600px;margin:0 auto 32px}
+.hero-badges{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+.badge{display:inline-block;background:var(--surface);border:1px solid var(--border);padding:4px 14px;border-radius:20px;font-size:0.8rem;color:var(--muted)}
+
+/* Container */
+.container{max-width:800px;margin:0 auto;padding:0 20px}
+
+/* Features */
+.features{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin:0 auto 48px;max-width:800px;padding:0 20px}
+.feature{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:20px}
+.feature h3{font-size:0.95rem;color:var(--white);margin-bottom:6px}
+.feature p{font-size:0.85rem;color:var(--muted)}
+
+/* Section */
+.section-title{font-size:1.3rem;color:var(--white);margin:48px 0 20px;padding-bottom:10px;border-bottom:1px solid var(--border)}
+
+/* Download cards */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;margin-bottom:16px;transition:border-color .2s}
+.card:hover{border-color:var(--primary)}
+.card-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px}
+.card-title{font-size:1.05rem;font-weight:600;color:var(--white)}
+.card-meta{font-size:0.8rem;color:var(--dim)}
+.card-desc{color:var(--muted);font-size:0.88rem;margin-bottom:14px}
+.btn{display:inline-block;background:var(--primary);color:var(--white);padding:10px 24px;border-radius:8px;text-decoration:none;font-weight:500;font-size:0.9rem;transition:background .2s}
+.btn:hover{background:var(--primary-hover);text-decoration:none}
+.btn-disabled{background:#475569;cursor:not-allowed}
+.btn-disabled:hover{background:#475569}
+.btn-size{color:var(--dim);font-size:0.8rem;margin-left:12px}
+.file-info{margin-bottom:14px;padding:10px 14px;background:var(--bg);border:1px solid var(--border);border-radius:8px}
+.file-name{display:block;font-size:0.88rem;color:var(--white);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;margin-bottom:4px}
+.file-detail{font-size:0.8rem;color:var(--dim)}
+
+/* Install steps */
+.steps{color:var(--muted);font-size:0.9rem;line-height:2;padding-left:22px}
+.steps code{background:var(--surface);border:1px solid var(--border);padding:2px 7px;border-radius:4px;font-size:0.84rem;color:var(--text)}
+
+/* Version history */
+.version-tag{display:inline-block;background:var(--primary);color:var(--white);padding:2px 10px;border-radius:10px;font-size:0.82rem;font-weight:600;margin-right:8px}
+
+/* Footer */
+.footer{text-align:center;padding:48px 20px 32px;color:var(--dim);font-size:0.8rem}
+.footer a{color:var(--dim)}
+.footer a:hover{color:var(--muted)}
+
+/* Tech stack */
+.tech-list{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.tech-list span{background:var(--surface);border:1px solid var(--border);padding:4px 12px;border-radius:6px;font-size:0.82rem;color:var(--muted)}
+</style>
+</head>
+<body>
+
+<!-- Hero -->
+<section class="hero">
+  <h1>ABC <span>Desktop</span></h1>
+  <p>AI 驅動的跨平台桌面管理系統，整合對話式 AI、自然語言資料查詢、知識庫管理與流程自動化。</p>
+  <div class="hero-badges">
+    <span class="badge">Tauri 2.x</span>
+    <span class="badge">React 19</span>
+    <span class="badge">Ant Design 6</span>
+    <span class="badge">Rust Axum</span>
+    <span class="badge">FastAPI</span>
+  </div>
+</section>
+
+<!-- Features -->
+<section class="features">
+  <div class="feature">
+    <h3>🤖 AI 對話</h3>
+    <p>支援 SSE 流式回應與 WebSocket 即時對話，可整合 Ollama / LM Studio。</p>
+  </div>
+  <div class="feature">
+    <h3>📊 資料查詢</h3>
+    <p>自然語言轉 SQL，意圖辨識與 RAG 混合檢索，讓資料分析更直覺。</p>
+  </div>
+  <div class="feature">
+    <h3>📚 知識庫</h3>
+    <p>RAG 向量檢索，支援文件上傳、知識圖譜抽取與智慧問答。</p>
+  </div>
+  <div class="feature">
+    <h3>⚙️ 流程自動化</h3>
+    <p>BPA 業務流程 Agent，MCP 工具整合，實現端到端自動化。</p>
+  </div>
+  <div class="feature">
+    <h3>🔐 權限管理</h3>
+    <p>RBAC 角色權限、動態功能選單、JWT 認證，安全且靈活。</p>
+  </div>
+  <div class="feature">
+    <h3>🖥️ 跨平台</h3>
+    <p>支援 macOS (ARM / Intel) 及 Windows，一套程式碼多平台部署。</p>
+  </div>
+</section>
+
+<!-- Download -->
+<div class="container">
+  <h2 class="section-title" id="download">📦 下載安裝</h2>
+
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">macOS — Apple Silicon (M1 / M2 / M3 / M4)</span>
+      <span class="card-meta">2026-03-28</span>
+    </div>
+    <p class="card-desc">適用於 2020 年後的 Mac（M 系列晶片）</p>
+    <div class="file-info">
+      <span class="file-name">ABC管理系统_1.0.1_aarch64.dmg</span>
+      <span class="file-detail">v1.0.1 · 12 MB · 2026-03-28</span>
+    </div>
+    <a class="btn" href="/downloads/ABC管理系统_1.0.1_aarch64.dmg" download>下載 DMG</a>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">macOS — Intel</span>
+      <span class="card-meta">2026-03-28</span>
+    </div>
+    <p class="card-desc">適用於 2020 年前的 Mac（Intel 處理器）</p>
+    <div class="file-info">
+      <span class="file-name">ABC管理系统_1.0.1_x64.dmg</span>
+      <span class="file-detail">v1.0.1 · 12 MB · 2026-03-28</span>
+    </div>
+    <a class="btn" href="/downloads/ABC管理系统_1.0.1_x64.dmg" download>下載 DMG</a>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Windows x64</span>
+      <span class="card-meta">即將發佈</span>
+    </div>
+    <p class="card-desc">適用於 Windows 10 / 11 64 位元（NSIS 安裝程式）</p>
+    <span class="btn btn-disabled">尚未提供</span>
+  </div>
+
+  <!-- Install -->
+  <h2 class="section-title">🔧 安裝說明</h2>
+
+  <h3 style="color:var(--white);margin:16px 0 8px;font-size:0.95rem">macOS</h3>
+  <ol class="steps">
+    <li>下載對應架構的 <code>.dmg</code> 檔案</li>
+    <li>雙擊打開 DMG，將 <strong>ABC管理系统</strong> 拖到 <strong>Applications</strong> 資料夾</li>
+    <li>首次開啟會被 Gatekeeper 阻擋 → <strong>右鍵 → 打開 → 確認打開</strong></li>
+    <li>或在終端執行：<code>xattr -cr /Applications/ABC管理系统.app</code></li>
+    <li>應用程式會自動檢查更新</li>
+  </ol>
+
+  <h3 style="color:var(--white);margin:16px 0 8px;font-size:0.95rem">Windows</h3>
+  <ol class="steps">
+    <li>下載 <code>.exe</code> 安裝程式</li>
+    <li>執行安裝程式，依照指示完成安裝</li>
+    <li>從開始選單啟動 ABC管理系统</li>
+  </ol>
+
+  <!-- Version History -->
+  <h2 class="section-title" id="versions">📋 版本紀錄</h2>
+
+  <div class="card">
+    <div class="card-header">
+      <span><span class="version-tag">v1.0.1</span> 更新應用圖示（藍底水晶）</span>
+      <span class="card-meta">2026-03-28</span>
+    </div>
+    <p class="card-desc">
+      應用圖示更新為藍底水晶風格，其他功能與 v1.0.0 相同。
+    </p>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <span><span class="version-tag">v1.0.0</span> 首次正式發佈</span>
+      <span class="card-meta">2026-03-28</span>
+    </div>
+    <p class="card-desc">
+      完整 Tauri 桌面殼，內嵌前端打包，自動更新機制。<br>
+      功能：用戶管理、角色權限、系統設置、AI 對話、意圖決策管理、工具授權、服務狀態監控。
+    </p>
+  </div>
+
+  <!-- Tech -->
+  <h2 class="section-title">🛠️ 技術架構</h2>
+  <div class="tech-list" style="margin-bottom:24px">
+    <span>Tauri 2.x (Rust)</span>
+    <span>React 19</span>
+    <span>TypeScript</span>
+    <span>Vite 7</span>
+    <span>Ant Design 6</span>
+    <span>Rust Axum</span>
+    <span>Python FastAPI</span>
+    <span>ArangoDB</span>
+    <span>Qdrant</span>
+    <span>Ollama / LM Studio</span>
+  </div>
+</div>
+
+<!-- Footer -->
+<footer class="footer">
+  <p>© 2026 ABC Desktop. All rights reserved.</p>
+  <p style="margin-top:6px">
+    <a href="https://github.com/DanielChung520/aibox-th" target="_blank">GitHub</a>
+  </p>
+</footer>
+
+</body>
+</html>

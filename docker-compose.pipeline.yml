@@ -1,0 +1,30 @@
+services:
+  celery-worker:
+    image: python:3.11-slim
+    container_name: aibox-celery-worker
+    working_dir: /app
+    volumes:
+      - ../ai-services:/app
+      - ../api/data:/app/data
+    environment:
+      REDIS_URL: redis://host.docker.internal:6379/0
+      ARANGO_URL: http://host.docker.internal:8529
+      ARANGO_DATABASE: abc_desktop
+      ARANGO_USER: root
+      ARANGO_PASSWORD: abc_desktop_2026
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
+      EMBEDDING_MODEL: bge-m3:latest
+      QDRANT_URL: http://host.docker.internal:6333
+      API_ROOT: /app
+    command: >
+      sh -c "pip install -r requirements.txt --break-system-packages && celery -A celery_app.app worker --loglevel=info"
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    depends_on:
+      - redis
+    networks:
+      - aibox-pipeline
+
+networks:
+  aibox-pipeline:
+    external: true

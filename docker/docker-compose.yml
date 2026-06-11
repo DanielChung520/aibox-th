@@ -1,0 +1,138 @@
+# ============================================================================
+# @file        docker/docker-compose.yml
+# @description ABC Desktop — Application services (project-specific)
+# @lastUpdate  2026-05-23
+# @author      Daniel Chung
+# @version     2.0.0
+# ============================================================================
+#
+# Application layer — 僅含 ABC Desktop 專屬服務。
+# 依賴於 infrastructure stack（docker-compose.infra.yml）提供的：
+#   - ArangoDB (arangodb:8529)
+#   - Qdrant (qdrant:6333)
+#   - Redis (redis:6379)
+#   - SeaweedFS (seaweedfs-filer:8888)
+#   - Ollama (ollama:11434)
+#
+# 使用方式：
+#   1. 先啟動基礎設施：docker compose -f docker-compose.infra.yml up -d
+#   2. 再啟動應用服務：docker compose -f docker/docker-compose.yml up -d
+#   3. 全部關閉：順序相反
+# ============================================================================
+
+networks:
+  aibox-net:
+    external: true
+    name: aibox-net
+
+# ─── YAML Anchors (shared config) ──────────────────────────────────────────
+x-python-defaults: &python-defaults
+  build:
+    context: ..
+    dockerfile: docker/Dockerfile.python
+  depends_on:
+    redis:
+      condition: service_started
+  restart: unless-stopped
+  networks:
+    - aibox-net
+  # NOTE: Python source code is copied into the image at build time.
+  # For development with hot-reload, uncomment the following volume mount:
+  # volumes:
+  #   - ../ai-services:/app
+
+x-python-env: &python-env
+  ARANGO_URL: http://arangodb:8529
+  ARANGO_DATABASE: ${ARANGODB_DATABASE:-abc_desktop}
+  ARANGO_USER: root
+  ARANGO_PASSWORD: ${ARANGODB_PASSWORD:-abc_desktop_2026}
+  OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
+  QDRANT_URL: http://qdrant:6333
+  REDIS_URL: redis://redis:6379/0
+
+services:
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Rust API Gateway — 所有 API 統一入口 (port 6500)
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  rust-api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.rust-api
+    ports:
+      - "${API_PORT:-6500}:6500"
+    environment:
+      PORT: 6500
+      ARANGODB_URL: http://arangodb:8529
+      ARANGODB_DATABASE: ${ARANGODB_DATABASE:-abc_desktop}
+      ARANGODB_USERNAME: root
+      ARANGODB_PASSWORD: ${ARANGODB_PASSWORD:-abc_desktop_2026}
+      AITASK_URL: http://aitask:8001
+      UNIFIED_AGENTS_URL: http://unified_agents:8011
+      MCP_TOOLS_URL: http://mcp_tools:8004
+      AIQ_AGENT_URL: http://aiq_agent:8009
+      SKILLS_RAG_URL: http://skills_rag:8012
+      JWT_SECRET: ${JWT_SECRET:-abc-desktop-jwt-secret-2026}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
+      QDRANT_URL: http://qdrant:6333
+    volumes:
+      - ../dist:/app/dist
+    restart: unless-stopped
+    networks:
+      - aibox-net
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Python AI Services
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  aitask:
+    <<: *python-defaults
+    command: uvicorn aitask.main:app --host 0.0.0.0 --port 8001
+    ports:
+      - "8001:8001"
+    environment:
+      <<: *python-env
+
+  skills_rag:
+    <<: *python-defaults
+    command: uvicorn skills_rag.main:app --host 0.0.0.0 --port 8012
+    ports:
+      - "8012:8012"
+    environment:
+      <<: *python-env
+
+  mcp_tools:
+    <<: *python-defaults
+    command: uvicorn mcp_tools.main:app --host 0.0.0.0 --port 8004
+    ports:
+      - "8004:8004"
+    environment:
+      <<: *python-env
+
+  aiq_agent:
+    <<: *python-defaults
+    command: uvicorn aiq_agent.main:app --host 0.0.0.0 --port 8009
+    ports:
+      - "8009:8009"
+    environment:
+      <<: *python-env
+
+  unified_agents:
+    <<: *python-defaults
+    command: uvicorn unified_agents.main:app --host 0.0.0.0 --port 8011
+    ports:
+      - "8011:8011"
+    environment:
+      <<: *python-env
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Celery Async Worker
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  celery-worker:
+    <<: *python-defaults
+    command: celery -A celery_app.app worker --loglevel=info
+    environment:
+      <<: *python-env
+    depends_on:
+      - redis

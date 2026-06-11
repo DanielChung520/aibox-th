@@ -1,0 +1,227 @@
+[
+  {
+    "sid": "T15",
+    "query": "本月進貨單總金額",
+    "expected": "ERP_12_default",
+    "actual": "RAGICSALES_10_default",
+    "code": 0,
+    "status": "❌",
+    "passed": false
+  },
+  {
+    "sid": "P05",
+    "query": "本月採購金額統計",
+    "expected": "ERP_2_default",
+    "actual": "RAGICSALES_10_default",
+    "code": 6,
+    "status": "⚠️ CLARIFY",
+    "passed": false
+  },
+  {
+    "sid": "P06",
+    "query": "本月採購報價",
+    "expected": "RAGICPURCHASING_1_default",
+    "actual": "RAGICSALES_10_default",
+    "code": 0,
+    "status": "❌",
+    "passed": false
+  },
+  {
+    "sid": "F01",
+    "query": "本月各部門費用統計",
+    "expected": "RAGICFORMS_4_default",
+    "actual": "RAGICSALES_10_default",
+    "code": 0,
+    "status": "❌",
+    "passed": false
+  },
+  {
+    "sid": "F06",
+    "query": "本月請購單清單",
+    "expected": "RAGICPURCHASING_5_default",
+    "actual": "RAGICSALES_10_default",
+    "code": 0,
+    "status": "❌",
+    "passed": false
+  },
+  {
+    "sid": "S07",
+    "query": "今日出貨",
+    "expected": "RAGICSALES_9_default",
+    "actual": "FORM_5_default",
+    "code": 0,
+    "status": "❌",
+    "passed": false
+  },
+  {
+    "sid": "M03",
+    "query": "查詢 MES 表",
+    "expected": "MES_2_default",
+    "actual": "MES_18_default",
+    "code": 0,
+    "status": "❌",
+    "passed": false
+  },
+  {
+    "sid": "M08",
+    "query": "本月產出統計",
+    "expected": "MES_2_default",
+    "actual": "RAGICSALES_10_default",
+    "code": 0,
+    "status": "❌",
+    "passed": false
+  },
+  {
+    "sid": "M11",
+    "query": "不良原因分析",
+    "expected": "MES_14_default",
+    "actual": "ISO2_15_default",
+    "code": 0,
+    "status": "❌",
+    "passed": false
+  },
+  {
+    "sid": "M15",
+    "query": "生產效率報表",
+    "expected": "MES_2_default",
+    "actual": "RAGICSALES_1_default",
+    "code": 0,
+    "status": "❌",
+    "passed": false
+  },
+  {
+    "sid": "Q09",
+    "query": "清洗消毒紀錄表",
+    "expected": "G4102_1_default",
+    "actual": "G4102_3_default",
+    "code": 0,
+    "status": "❌",
+    "passed": false
+  },
+  {
+    "sid": "Q10",
+    "query": "衛生的巡查表",
+    "expected": "G4102_11_default",
+    "actual": "ISO2_5_default",
+    "code": 0,
+    "status": "❌",
+    "passed": false
+  },
+  {
+    "sid": "Q11",
+    "query": "巡查標準書",
+    "expected": "G4102_11_default",
+    "actual": "ISO2_5_default",
+    "code": 0,
+    "status": "❌",
+    "passed": false
+  },
+  {
+    "sid": "P07",
+    "query": "請採購單統計",
+    "expected": "RAGICPURCHASING_5_default",
+    "actual": "ERP_13_default",
+    "code": 0,
+    "status": "❌",
+    "passed": false
+  },
+  {
+    "sid": "P09",
+    "query": "採購合約列表",
+    "expected": "CONFIGURATIONFILE_13_default",
+    "actual": "ERP_13_default",
+    "code": 0,
+    "status": "❌",
+    "passed": false
+  },
+  {
+    "sid": "P10",
+    "query": "新增供應商",
+    "expected": "CONFIGURATIONFILE_13_create",
+    "actual": "CONFIGURATIONFILE_15_default",
+    "code": 0,
+    "status": "❌",
+    "passed": false
+  },
+  {
+    "sid": "B06",
+    "query": "組織架構圖",
+    "expected": "CONFIGFILEDETAILS_3_default",
+    "actual": "CONFIGURATIONFILE_2_default",
+    "code": 0,
+    "status": "❌",
+    "passed": false
+  },
+  {
+    "sid": "B07",
+    "query": "部門人數統計",
+    "expected": "CONFIGFILEDETAILS_3_default",
+    "actual": "CONFIGFILEDETAILS_3_default",
+    "code": 0,
+    "status": "✅",
+    "passed": true
+  },
+  {
+    "sid": "B08",
+    "query": "在職訓練記錄",
+    "expected": "CONFIGFILEDETAILS_3_default",
+    "actual": "ISO2_14_default",
+    "code": 0,
+    "status": "❌",
+    "passed": false
+  },
+  {
+    "sid": "B10",
+    "query": "人事異動記錄",
+    "expected": "CONFIGFILEDETAILS_3_default",
+    "actual": "CONFIGURATIONFILE_5_default",
+    "code": 0,
+    "status": "❌",
+    "passed": false
+  },
+  {
+    "sid": "F03",
+    "query": "本月費用報支明細",
+    "expected": "RAGICFORMS_4_default",
+    "actual": "FORM_12_default",
+    "code": 0,
+    "status": "❌",
+    "passed": false
+  },
+  {
+    "sid": "F05",
+    "query": "產品需求預測",
+    "expected": "RAGICFORMS6_3_default",
+    "actual": "FORMS4_12_default",
+    "code": 0,
+    "status": "❌",
+    "passed": false
+  },
+  {
+    "sid": "F08",
+    "query": "本月請假記錄",
+    "expected": "CONFIGFILEDETAILS_3_default",
+    "actual": "RAGICSALES_10_default",
+    "code": 0,
+    "status": "❌",
+    "passed": false
+  },
+  {
+    "sid": "F09",
+    "query": "會議室預約表",
+    "expected": "RAGICFORMS6_3_default",
+    "actual": "ISO2_12_default",
+    "code": 0,
+    "status": "❌",
+    "passed": false
+  },
+  {
+    "sid": "X04",
+    "query": "本月生產效率",
+    "expected": "MES_2_default",
+    "actual": "RAGICSALES_10_default",
+    "code": 6,
+    "status": "⚠️ CLARIFY",
+    "passed": false
+  }
+]

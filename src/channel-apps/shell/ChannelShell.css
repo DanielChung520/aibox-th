@@ -1,0 +1,98 @@
+/* ============================================
+   ChannelShell — channel app layout container
+   Mobile-first, pure CSS, BEM naming
+   ============================================ */
+
+/* ---- CSS Variables (theming) ---- */
+:root {
+  --shell-bg: transparent;
+  --shell-header-bg: #1a1a2e;
+  --shell-text-color: #ffffff;
+  --shell-accent: #3b82f6;
+}
+
+/* ---- Root ---- */
+.channel-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-width: 320px;
+  max-width: 100%;
+  background: var(--shell-bg);
+  color: var(--shell-text-color);
+}
+
+/* ---- Header ---- */
+.channel-shell__header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--shell-header-bg);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  min-height: 52px;
+}
+
+.channel-shell__header-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: inherit;
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---- Back Button ---- */
+.channel-shell__back-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--shell-text-color);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.2s, opacity 0.2s;
+  flex-shrink: 0;
+}
+
+.channel-shell__back-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.channel-shell__back-btn:active {
+  opacity: 0.7;
+}
+
+/* ---- Content ---- */
+.channel-shell__content {
+  flex: 1;
+  padding: 16px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ---- Tablet and up ---- */
+@media (min-width: 768px) {
+  .channel-shell {
+    max-width: 100%;
+  }
+
+  .channel-shell__header {
+    padding: 14px 24px;
+  }
+
+  .channel-shell__content {
+    padding: 24px;
+  }
+}

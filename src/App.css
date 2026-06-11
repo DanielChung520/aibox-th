@@ -1,0 +1,129 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+html.ai-assistant-window,
+html.ai-assistant-window body,
+html.ai-assistant-window #root {
+  background: transparent !important;
+}
+
+.ant-menu-dark .ant-menu-submenu-title:hover {
+  background: rgba(59, 130, 246, 0.3) !important;
+}
+
+.ant-menu-dark .ant-menu-item:hover {
+  background: rgba(255, 255, 255, 0.12) !important;
+}
+
+.ant-menu-dark .ant-menu-sub .ant-menu-item:hover {
+  background: rgba(59, 130, 246, 0.25) !important;
+}
+
+/* 表格陰影 — 透過 CSS 變數由 AppContent 注入 */
+.ant-table-wrapper {
+  box-shadow: var(--table-shadow, none);
+  border-radius: 8px;
+}
+
+.datalake-tabs {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+}
+
+.datalake-tabs > .ant-tabs-nav {
+  flex: none;
+}
+
+.datalake-tabs > .ant-tabs-content-holder {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.datalake-tabs > .ant-tabs-content-holder > .ant-tabs-content {
+  height: 100%;
+}
+
+.datalake-tabs > .ant-tabs-content-holder > .ant-tabs-content > .ant-tabs-tabpane {
+  height: 100%;
+  overflow: hidden;
+}
+
+.ant-tag {
+  background: transparent !important;
+  border-color: currentColor !important;
+}
+
+.ant-badge-status-text {
+  font-size: inherit;
+}
+
+.ant-table .ant-tag {
+  background: transparent !important;
+  border-color: currentColor !important;
+}
+
+.schema-table-fill {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.schema-table-fill .ant-spin,
+.schema-table-fill .ant-spin-container,
+.schema-table-fill .ant-table-wrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.schema-table-fill .ant-table-wrapper .ant-table {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.schema-table-fill .ant-table-wrapper .ant-table .ant-table-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.schema-table-fill .ant-table-wrapper .ant-table .ant-table-content {
+  flex: 1;
+  min-height: 0;
+  overflow: auto !important;
+}
+
+.schema-table-fill .ant-table-wrapper .ant-table .ant-table-content > table {
+  height: 100%;
+}
+
+.schema-table-fill .ant-pagination {
+  margin-bottom: 4px !important;
+}
+
+.ant-tooltip .ant-tooltip-inner {
+  background: var(--tooltip-bg);
+  color: var(--tooltip-text);
+}
+
+.ant-tooltip .ant-tooltip-arrow::before {
+  background: var(--tooltip-bg);
+}

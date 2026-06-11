@@ -1,0 +1,81 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Edge Enterprise AI",
+  "version": "1.0.10",
+  "identifier": "com.abc.desktop",
+  "build": {
+    "beforeDevCommand": "zsh -lc 'lsof -nP -iTCP:1420 -sTCP:LISTEN >/dev/null 2>&1 || npm run dev'",
+    "beforeBuildCommand": "npm run build",
+    "devUrl": "http://localhost:1420",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "macOSPrivateApi": true,
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "title": "Edge Enterprise AI",
+        "width": 1200,
+        "height": 800,
+        "minWidth": 800,
+        "minHeight": 600,
+        "center": true,
+        "resizable": true,
+        "fullscreen": false,
+        "decorations": true,
+        "maximized": true,
+        "label": "main"
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self' https://eeaapi.ent4i.com http://localhost:*; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://eeaapi.ent4i.com http://localhost:*; style-src 'self' 'unsafe-inline' https://unpkg.com http://localhost:*; img-src 'self' data: blob: https://eeaapi.ent4i.com; connect-src 'self' https://eeaapi.ent4i.com wss://eeaapi.ent4i.com ipc://localhost blob: https://unpkg.com http://localhost:*; font-src 'self' https://unpkg.com http://localhost:*; worker-src 'self' blob: http://localhost:*; frame-src http://localhost:*",
+      "assetProtocol": {
+        "enable": true,
+        "scope": [
+          "**/*"
+        ]
+      }
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": [
+      "app",
+      "dmg",
+      "nsis"
+    ],
+    "createUpdaterArtifacts": false,
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "macOS": {
+      "minimumSystemVersion": "10.13"
+    },
+    "windows": {
+      "certificateThumbprint": null,
+      "digestAlgorithm": "sha256",
+      "timestampUrl": "",
+      "nsis": {
+        "displayLanguageSelector": true,
+        "languages": [
+          "SimpChinese",
+          "English"
+        ],
+        "installMode": "both"
+      }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDI3QzRENDI5NUQ3QjMyNDgKUldSSU1udGRLZFRFSndIOXRURzJmNEpQMTU3WWNDUlgzdEE5dVA4b1dCT3Y3YTFjZy9sVkJybm8K",
+      "endpoints": [
+        "https://github.com/DanielChung520/aibox/releases/latest/download/latest.json"
+      ],
+      "dialog": true
+    }
+  }
+}

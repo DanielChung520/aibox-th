@@ -1,0 +1,46 @@
+# Dockerfile.python — Shared base for all Python AI services
+# Used by: aitask, skills_rag, mcp_tools, aiq_agent, unified_agents, celery-worker
+#
+# @file        docker/Dockerfile.python
+# @description Shared Docker image for all Python AI services — 5 FastAPI services + celery worker
+# @lastUpdate  2026-05-22 01:00:00
+# @author      Daniel Chung
+# @version     1.0.0
+
+FROM python:3.11-slim-bookworm
+
+LABEL maintainer="Daniel Chung"
+LABEL description="Shared Python base for ABC Desktop AI services"
+LABEL version="1.0.0"
+
+WORKDIR /app
+
+# Install system dependencies required by some Python packages
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies
+COPY ai-services/requirements.txt /app/requirements.txt
+RUN pip install --no-cache-dir -r /app/requirements.txt
+
+# ------------------------------------------------------------------
+# Dev / Demo mode: ai-services/ is mounted as a volume at runtime.
+#   docker-compose.yml volumes:
+#     - ./ai-services/:/app/
+#
+# The command is specified per service in docker-compose.yml:
+#   command: uvicorn aitask.main:app --host 0.0.0.0 --port 8001
+#   command: uvicorn unified_agents.main:app --host 0.0.0.0 --port 8011
+#   command: uvicorn mcp_tools.main:app --host 0.0.0.0 --port 8004
+#   command: uvicorn knowledge_agent.main:app --host 0.0.0.0 --port 8007
+#   command: uvicorn memory_agent.main:app --host 0.0.0.0 --port 8008
+#   command: celery -A celery_app.app worker --loglevel=info
+# ------------------------------------------------------------------
+
+# Production build: copy code into image (uncomment for self-contained image)
+# COPY ai-services/ /app/
+
+# Default command (overridden by docker-compose or CLI)
+CMD ["python", "--version"]
