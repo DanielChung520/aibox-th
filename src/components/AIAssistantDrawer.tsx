@@ -82,7 +82,7 @@ function hexAlpha(hex: string, alpha: number): string {
 
 export default function AIAssistantDrawer({ open, onClose }: AIAssistantDrawerProps) {
   const contentTokens = useContentTokens();
-  const { activeView, setActiveView } = useAIAssistantDrawer();
+  const { activeView, setActiveView, activeAgent, setActiveAgent } = useAIAssistantDrawer();
 
   // ── State ──
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -96,7 +96,6 @@ export default function AIAssistantDrawer({ open, onClose }: AIAssistantDrawerPr
   const [intentHistory, setIntentHistory] = useState<ActionEvent[]>([]);
   const [actionHistory, setActionHistory] = useState<ActionEvent[]>([]);
   const [storeState, setStoreState] = useState(aiqChatStore.getState());
-  const [activeAgent, setActiveAgent] = useState<Agent | null>(null);
   const [showSessionList, setShowSessionList] = useState(false);
 
   // ── Refs ──
@@ -426,7 +425,7 @@ export default function AIAssistantDrawer({ open, onClose }: AIAssistantDrawerPr
         } : undefined}
       />
       <span className="ai-drawer__header-text">
-        {activeAgent?.name || '艾企 AI 助手'}
+        {activeAgent ? activeAgent.name : '助手'}
       </span>
       {activeAgent && (
         <Tag color={activeAgent.visibility === 'private' ? 'default' : 'blue'} style={{ fontSize: 10 }}>
@@ -464,6 +463,7 @@ export default function AIAssistantDrawer({ open, onClose }: AIAssistantDrawerPr
       open={open}
       onClose={onClose}
       destroyOnClose={false}
+      mask={false}
       rootClassName="ai-drawer"
       style={drawerVars}
       styles={{

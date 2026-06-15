@@ -19,7 +19,7 @@ import AgentMenu from './AIAssistantDrawer/AgentMenu';
 export default function FloatingAssistantButton() {
   const [visible, setVisible] = useState(false);
   const avatarSrc = useAvatar();
-  const { isOpen, toggle } = useAIAssistantDrawer();
+  const { isOpen, toggle, activeAgent, setActiveAgent } = useAIAssistantDrawer();
   const BUTTON_SIZE = 56;
   const EDGE_OFFSET = 24;
   const [position, setPosition] = useState(() => ({
@@ -28,7 +28,6 @@ export default function FloatingAssistantButton() {
   }));
   const [isDragging, setIsDragging] = useState(false);
   const [agents, setAgents] = useState<Agent[]>([]);
-  const [activeAgent, setActiveAgent] = useState<Agent | null>(null);
   const [showAgentMenu, setShowAgentMenu] = useState(false);
   const dragRef = useRef({
     startX: 0,
