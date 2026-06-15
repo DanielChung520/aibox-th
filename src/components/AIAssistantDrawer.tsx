@@ -9,12 +9,13 @@
  */
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Drawer, Input, Button, Avatar, Spin, Tooltip } from 'antd';
+import { Drawer, Input, Button, Avatar, Spin, Tooltip, Tag } from 'antd';
 import {
   SendOutlined,
   PlusOutlined,
   RobotOutlined,
   PaperClipOutlined,
+  BulbOutlined,
 } from '@ant-design/icons';
 import type { InputRef, MenuProps } from 'antd';
 import { authStore } from '../stores/auth';
@@ -75,6 +76,7 @@ export default function AIAssistantDrawer({ open, onClose }: AIAssistantDrawerPr
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [intentGuesses, setIntentGuesses] = useState<IntentGuess[]>([]);
+  const [intentPanelOpen, setIntentPanelOpen] = useState(false);
   const [fullPageContext, setFullPageContext] = useState<PageContextState | null>(pageContextManager.getContext());
   const [entityContext, setEntityContext] = useState<Record<string, unknown> | null>(null);
   const [modalContext, setModalContext] = useState<Record<string, unknown> | null>(null);
@@ -136,10 +138,13 @@ export default function AIAssistantDrawer({ open, onClose }: AIAssistantDrawerPr
     return unsubscribe;
   }, []);
 
-  // ── Intent engine subscription ──
+  // ── Intent engine subscription — auto-open panel when guesses arrive ──
   useEffect(() => {
     const unsubscribe = intentEngine.subscribe((guesses) => {
       setIntentGuesses(guesses);
+      if (guesses.length > 0) {
+        setIntentPanelOpen(true);
+      }
     });
     intentEngine.startListening();
     return () => {
@@ -246,6 +251,15 @@ export default function AIAssistantDrawer({ open, onClose }: AIAssistantDrawerPr
 
   const handleStopStreaming = useCallback(() => {
     aiqChatStore.stopStreaming();
+  }, []);
+
+  const handleBulbToggle = useCallback(() => {
+    setIntentPanelOpen((prev) => !prev);
+  }, []);
+
+  const handleChipClick = useCallback((guess: IntentGuess) => {
+    setInputValue(guess.text);
+    requestAnimationFrame(() => inputRef.current?.focus());
   }, []);
 
   const handleNewChat = useCallback(() => {
@@ -453,10 +467,52 @@ export default function AIAssistantDrawer({ open, onClose }: AIAssistantDrawerPr
                 ))}
               </div>
             )}
+
+            {/* Intent guess panel — inline, collapsible chips above footer */}
+            <div
+              className={`ai-drawer__intent-panel ${intentPanelOpen && intentGuesses.length > 0 ? 'ai-drawer__intent-panel--open' : ''}`}
+            >
+              <div className="ai-drawer__intent-chips">
+                {intentGuesses.map((guess, i) => (
+                  <div
+                    key={i}
+                    className="ai-drawer__intent-chip"
+                    onClick={() => handleChipClick(guess)}
+                  >
+                    <span className="ai-drawer__intent-chip-text">{guess.text}</span>
+                    <Tag
+                      color={guess.confidence >= 0.8 ? 'green' : guess.confidence >= 0.5 ? 'orange' : 'default'}
+                      className="ai-drawer__intent-chip-tag"
+                    >
+                      {guess.source === 'template' ? '模板' : guess.source === 'rule' ? '規則' : 'AI'}
+                    </Tag>
+                  </div>
+                ))}
+              </div>
+            </div>
           </>
         )}
 
         <div className="ai-drawer__footer">
+          {intentGuesses.length > 0 ? (
+            <Tooltip title="顯示意圖預測">
+              <Button
+                type="text"
+                icon={<BulbOutlined />}
+                className={`ai-drawer__footer-btn ai-drawer__footer-bulb ${intentPanelOpen ? 'active' : ''}`}
+                onClick={handleBulbToggle}
+              />
+            </Tooltip>
+          ) : (
+            <Tooltip title="操作更多後可使用意圖猜測">
+              <Button
+                type="text"
+                icon={<BulbOutlined />}
+                className="ai-drawer__footer-btn ai-drawer__footer-bulb"
+                disabled
+              />
+            </Tooltip>
+          )}
           <Tooltip title="附加檔案">
             <Button
               type="text"
