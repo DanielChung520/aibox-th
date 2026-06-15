@@ -46,13 +46,22 @@ import TodoBoard from './pages/TodoBoard';
 import ESGStandards from './pages/esg/ESGStandards';
 import ESGRecords from './pages/esg/ESGRecords';
 import ESGDashboard from './pages/esg/ESGDashboard';
+import CrmDashboard from './pages/eea-crm/DashboardPage';
+import CrmCustomerMap from './pages/eea-crm/CustomerMapPage';
+import CrmSalesDashboard from './pages/eea-crm/SalesDashboardPage';
+import CrmCustomers from './pages/eea-crm/CustomerListPage';
+import CrmContacts from './pages/eea-crm/ContactListPage';
+import CrmTimeline from './pages/eea-crm/TimelinePage';
+import CrmTags from './pages/eea-crm/TagsPage';
+import CrmParams from './pages/eea-crm/ParamsPage';
+import EeaCrmLayout from './pages/eea-crm/EeaCrmLayout';
 
 import { authStore } from './stores/auth';
 import AppUpdater from './components/AppUpdater';
 import FloatingAssistantButton from './components/FloatingAssistantButton';
-import AIAssistantWindow from './pages/AIAssistantWindow';
 import ChannelAppRouter from './channel-apps/ChannelAppRouter';
-import { setupAssistantBridge } from './services/assistantBridge';
+import { AIAssistantDrawerProvider, useAIAssistantDrawer } from './contexts/AIAssistantDrawerContext';
+import AIAssistantDrawer from './components/AIAssistantDrawer';
 import { setupPageViewTracking, setupBeforeUnload } from './utils/analytics';
 import { actionTrail } from './services/actionTrail';
 import { startGlobalTracking, stopGlobalTracking } from './services/globalActionTracker';
@@ -88,13 +97,12 @@ function AppPerceptionBridge() {
 }
 
 function GlobalFloatingAssistantButton() {
-  const location = useLocation();
-
-  if (location.pathname === '/ai-assistant') {
-    return null;
-  }
-
   return <FloatingAssistantButton />;
+}
+
+function AIAssistantDrawerWithContext() {
+  const { isOpen, close } = useAIAssistantDrawer();
+  return <AIAssistantDrawer open={isOpen} onClose={close} />;
 }
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
@@ -117,15 +125,6 @@ function ProtectedRoute({ children }: { children: ReactNode }) {
 function AppContent() {
   const effectiveTheme = useEffectiveTheme();
   const contentTokens = useContentTokens();
-  const [isAuthenticated, setIsAuthenticated] = useState(authStore.getState().isAuthenticated);
-
-  useEffect(() => {
-    const unsubscribe = authStore.subscribe(() => {
-      setIsAuthenticated(authStore.getState().isAuthenticated);
-    });
-    return unsubscribe;
-  }, []);
-
   useEffect(() => {
     paramsApi.list().then((res: any) => {
       const params = res.data.data || [];
@@ -144,14 +143,6 @@ function AppContent() {
     setupBeforeUnload();
     return cleanup;
   }, []);
-
-  useEffect(() => {
-    if (!isAuthenticated) {
-      return undefined;
-    }
-
-    return setupAssistantBridge(() => window.location.pathname);
-  }, [isAuthenticated]);
 
   const algorithm = effectiveTheme === 'dark' ? theme.darkAlgorithm : theme.defaultAlgorithm;
 
@@ -213,13 +204,14 @@ function AppContent() {
     >
       <BrowserRouter>
         <AntApp>
-          <AppPerceptionBridge />
-          <AppUpdater />
-          <GlobalFloatingAssistantButton />
-          <Routes>
+          <AIAssistantDrawerProvider>
+            <AppPerceptionBridge />
+            <AppUpdater />
+            <GlobalFloatingAssistantButton />
+            <AIAssistantDrawerWithContext />
+            <Routes>
             <Route path="/" element={<Welcome />} />
             <Route path="/login" element={<Login />} />
-            <Route path="/ai-assistant" element={<AIAssistantWindow />} />
             <Route path="/channel/*" element={<ChannelAppRouter />} />
 
             <Route
@@ -264,8 +256,17 @@ function AppContent() {
               <Route path="esg/dashboard" element={<ESGDashboard />} />
               <Route path="esg/standards" element={<ESGStandards />} />
               <Route path="esg/records" element={<ESGRecords />} />
+              <Route path="eea-crm/dashboard" element={<EeaCrmLayout context="dashboard"><CrmDashboard /></EeaCrmLayout>} />
+              <Route path="eea-crm/customer-map" element={<EeaCrmLayout context="dashboard"><CrmCustomerMap /></EeaCrmLayout>} />
+              <Route path="eea-crm/sales-performance" element={<EeaCrmLayout context="dashboard"><CrmSalesDashboard /></EeaCrmLayout>} />
+              <Route path="eea-crm/customers" element={<EeaCrmLayout context="customers"><CrmCustomers /></EeaCrmLayout>} />
+              <Route path="eea-crm/contacts" element={<EeaCrmLayout context="contacts"><CrmContacts /></EeaCrmLayout>} />
+              <Route path="eea-crm/timeline" element={<EeaCrmLayout context="timeline"><CrmTimeline /></EeaCrmLayout>} />
+              <Route path="eea-crm/tags" element={<EeaCrmLayout context="tags"><CrmTags /></EeaCrmLayout>} />
+              <Route path="eea-crm/params" element={<EeaCrmLayout context="params"><CrmParams /></EeaCrmLayout>} />
             </Route>
-          </Routes>
+            </Routes>
+          </AIAssistantDrawerProvider>
         </AntApp>
       </BrowserRouter>
     </ConfigProvider>

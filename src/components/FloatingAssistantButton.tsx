@@ -12,10 +12,12 @@ import { invoke } from '@tauri-apps/api/core';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { authStore } from '../stores/auth';
 import { useAvatar } from '../services/avatarCache';
+import { useAIAssistantDrawer } from '../contexts/AIAssistantDrawerContext';
 
 export default function FloatingAssistantButton() {
   const [visible, setVisible] = useState(false);
   const avatarSrc = useAvatar();
+  const { toggle } = useAIAssistantDrawer();
   const BUTTON_SIZE = 56;
   const EDGE_OFFSET = 24;
   const [position, setPosition] = useState(() => ({
@@ -56,11 +58,17 @@ export default function FloatingAssistantButton() {
 
   const handleClick = useCallback(async () => {
     try {
-      await invoke('toggle_ai_assistant');
-    } catch (err) {
-      console.warn('[FloatingAssistantButton] Tauri toggle_ai_assistant not available:', err);
+      // Try Drawer toggle first (primary mode)
+      toggle();
+    } catch {
+      // Fallback to Tauri native window (safety period)
+      try {
+        await invoke('toggle_ai_assistant');
+      } catch (err) {
+        console.warn('[FloatingAssistantButton] Tauri toggle not available:', err);
+      }
     }
-  }, []);
+  }, [toggle]);
 
   const handlePointerStart = (clientX: number, clientY: number) => {
     setIsDragging(true);

@@ -19,7 +19,8 @@ import {
 import type { InputRef, MenuProps } from 'antd';
 import { authStore } from '../stores/auth';
 import { aiqChatStore } from '../stores/chatStore';
-import { pageContextManager } from '../services/PageContextManager';
+import { pageContextManager, type PageContextState } from '../services/PageContextManager';
+import { ENTITY_INTERACT_EVENT } from '../hooks/useEntityPerception';
 import { actionTrail, type ActionEvent } from '../services/actionTrail';
 import { fetchActionHistory } from '../services/actionTrailApi';
 import { intentEngine, type IntentGuess } from '../services/intentEngine';
@@ -74,6 +75,9 @@ export default function AIAssistantDrawer({ open, onClose }: AIAssistantDrawerPr
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [intentGuesses, setIntentGuesses] = useState<IntentGuess[]>([]);
+  const [fullPageContext, setFullPageContext] = useState<PageContextState | null>(pageContextManager.getContext());
+  const [entityContext, setEntityContext] = useState<Record<string, unknown> | null>(null);
+  const [modalContext, setModalContext] = useState<Record<string, unknown> | null>(null);
   const [avatarSrc, setAvatarSrc] = useState<string | undefined>(undefined);
   const [currentView, setCurrentView] = useState<HistoryView>('chat');
   const [intentHistory, setIntentHistory] = useState<ActionEvent[]>([]);
@@ -144,6 +148,40 @@ export default function AIAssistantDrawer({ open, onClose }: AIAssistantDrawerPr
     };
   }, []);
 
+  // ── Page context subscription ──
+  useEffect(() => {
+    const unsubscribe = pageContextManager.subscribe((ctx) => {
+      setFullPageContext(ctx);
+    });
+    return () => {
+      unsubscribe();
+    };
+  }, []);
+
+  // ── Entity interact event listener ──
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<Record<string, unknown>>).detail;
+      setEntityContext({
+        entity_id: detail.entity_id as string,
+        entity_type: detail.entity_type as string,
+        action: detail.action as string,
+      });
+    };
+    window.addEventListener(ENTITY_INTERACT_EVENT, handler);
+    return () => window.removeEventListener(ENTITY_INTERACT_EVENT, handler);
+  }, []);
+
+  // ── Modal context change event listener ──
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<Record<string, unknown>>).detail;
+      setModalContext(detail.action === 'open' ? detail : null);
+    };
+    window.addEventListener('modal-context-change', handler);
+    return () => window.removeEventListener('modal-context-change', handler);
+  }, []);
+
   // ── Load avatar ──
   useEffect(() => {
     getAvatarName().then((name) => {
@@ -185,14 +223,13 @@ export default function AIAssistantDrawer({ open, onClose }: AIAssistantDrawerPr
     setInputValue('');
 
     try {
-      const fullPageContext = pageContextManager.getContext();
       const pageCtx = resolvePageContext(window.location.pathname);
       await aiqChatStore.sendMessage(userMessage, buildAssistantContext({
         pathname: window.location.pathname,
         pageContext: pageCtx,
         fullPageContext,
-        modalContext: null,
-        entityContext: null,
+        modalContext,
+        entityContext,
         intentGuesses,
         recentActions: actionTrail.getTrail(8),
       }));
@@ -205,7 +242,7 @@ export default function AIAssistantDrawer({ open, onClose }: AIAssistantDrawerPr
       };
       setMessages((prev) => [...prev, errorMessage]);
     }
-  }, [inputValue, storeState.isStreaming, intentGuesses]);
+  }, [inputValue, storeState.isStreaming, intentGuesses, fullPageContext, modalContext, entityContext]);
 
   const handleStopStreaming = useCallback(() => {
     aiqChatStore.stopStreaming();
