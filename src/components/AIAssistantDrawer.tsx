@@ -11,21 +11,32 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Drawer, Input, Button, Avatar, Spin, Tooltip, Tag } from 'antd';
 import {
-  SendOutlined,
+  BarChartOutlined,
+  BulbOutlined,
+  CloudOutlined,
+  CodeOutlined,
+  DatabaseOutlined,
+  ExperimentOutlined,
+  HistoryOutlined,
+  PaperClipOutlined,
   PlusOutlined,
   RobotOutlined,
-  PaperClipOutlined,
-  BulbOutlined,
+  SafetyOutlined,
+  SendOutlined,
+  SettingOutlined,
+  ToolOutlined,
+  UserOutlined,
 } from '@ant-design/icons';
 import type { InputRef, MenuProps } from 'antd';
 import { authStore } from '../stores/auth';
 import { aiqChatStore } from '../stores/chatStore';
+import { agentApi, type Agent } from '../services/api';
+import { getAgentColor } from '../services/agentColor';
 import { pageContextManager, type PageContextState } from '../services/PageContextManager';
 import { ENTITY_INTERACT_EVENT } from '../hooks/useEntityPerception';
 import { actionTrail, type ActionEvent } from '../services/actionTrail';
 import { fetchActionHistory } from '../services/actionTrailApi';
 import { intentEngine, type IntentGuess } from '../services/intentEngine';
-import { getAvatarName } from '../services/avatarCache';
 import { AdminDropdown } from './FloatingAssistant/AdminDropdown';
 import { ChatHistoryPanel } from './FloatingAssistant/ChatHistoryPanel';
 import { MarkdownContent } from './FloatingAssistant/ChatMarkdown';
@@ -35,6 +46,7 @@ import { resolvePageContext } from './FloatingAssistant/types';
 import { buildAssistantContext } from '../services/assistantContext';
 import { useAIAssistantDrawer } from '../contexts/AIAssistantDrawerContext';
 import { useContentTokens } from '../contexts/AppThemeProvider';
+import SessionListPanel from './AIAssistantDrawer/SessionListPanel';
 import './AIAssistantDrawer.css';
 
 // ── Types ──
@@ -80,11 +92,12 @@ export default function AIAssistantDrawer({ open, onClose }: AIAssistantDrawerPr
   const [fullPageContext, setFullPageContext] = useState<PageContextState | null>(pageContextManager.getContext());
   const [entityContext, setEntityContext] = useState<Record<string, unknown> | null>(null);
   const [modalContext, setModalContext] = useState<Record<string, unknown> | null>(null);
-  const [avatarSrc, setAvatarSrc] = useState<string | undefined>(undefined);
   const [currentView, setCurrentView] = useState<HistoryView>('chat');
   const [intentHistory, setIntentHistory] = useState<ActionEvent[]>([]);
   const [actionHistory, setActionHistory] = useState<ActionEvent[]>([]);
   const [storeState, setStoreState] = useState(aiqChatStore.getState());
+  const [activeAgent, setActiveAgent] = useState<Agent | null>(null);
+  const [showSessionList, setShowSessionList] = useState(false);
 
   // ── Refs ──
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -103,6 +116,23 @@ export default function AIAssistantDrawer({ open, onClose }: AIAssistantDrawerPr
     void aiqChatStore.loadProviders();
     return unsubscribe;
   }, []);
+
+  // ── Load agents list & set default active agent ──
+  useEffect(() => {
+    agentApi.list().then(res => {
+      const list = res.data.data || [];
+      if (list.length > 0 && !activeAgent) {
+        setActiveAgent(list[0]);
+      }
+    }).catch(() => {});
+  }, []);
+
+  // ── Load sessions when drawer opens ──
+  useEffect(() => {
+    if (open) {
+      void aiqChatStore.loadSessions();
+    }
+  }, [open]);
 
   // ── Session resume / welcome message ──
   useEffect(() => {
@@ -187,15 +217,6 @@ export default function AIAssistantDrawer({ open, onClose }: AIAssistantDrawerPr
     return () => window.removeEventListener('modal-context-change', handler);
   }, []);
 
-  // ── Load avatar ──
-  useEffect(() => {
-    getAvatarName().then((name) => {
-      if (name) {
-        setAvatarSrc(`/avatars/${name}.png`);
-      }
-    });
-  }, []);
-
   // ── Push mode: shift page content when Drawer opens ──
   useEffect(() => {
     if (open) {
@@ -277,6 +298,39 @@ export default function AIAssistantDrawer({ open, onClose }: AIAssistantDrawerPr
     aiqChatStore.clearDataSources();
   }, [setActiveView]);
 
+  // ── Icon resolution helper ──
+  function resolveIcon(iconName?: string): React.ReactNode {
+    if (!iconName) return <RobotOutlined />;
+    const iconMap: Record<string, React.ReactNode> = {
+      'RobotOutlined': <RobotOutlined />,
+      'UserOutlined': <UserOutlined />,
+      'BarChartOutlined': <BarChartOutlined />,
+      'ToolOutlined': <ToolOutlined />,
+      'DatabaseOutlined': <DatabaseOutlined />,
+      'SettingOutlined': <SettingOutlined />,
+      'CodeOutlined': <CodeOutlined />,
+      'ExperimentOutlined': <ExperimentOutlined />,
+      'SafetyOutlined': <SafetyOutlined />,
+      'CloudOutlined': <CloudOutlined />,
+    };
+    return iconMap[iconName] || <RobotOutlined />;
+  }
+
+  // ── Session action handlers ──
+  const handleSessionSelect = useCallback(async (sessionKey: string) => {
+    await aiqChatStore.loadSessionMessages(sessionKey);
+    setShowSessionList(false);
+  }, []);
+
+  const handleNewSessionFromList = useCallback(async () => {
+    await aiqChatStore.createSession();
+    setShowSessionList(false);
+  }, []);
+
+  const handleDeleteSession = useCallback(async (sessionKey: string) => {
+    await aiqChatStore.deleteSession(sessionKey);
+  }, []);
+
   const adminMenuItems: MenuProps['items'] = [
     { key: 'actionTrail', label: '📋 顯示操作記錄' },
     { key: 'intentHistory', label: '🔍 顯示意圖記錄' },
@@ -329,9 +383,6 @@ export default function AIAssistantDrawer({ open, onClose }: AIAssistantDrawerPr
     }));
   }, [messages, storeState.messages]);
 
-  const effectivePageContext = useMemo(() => resolvePageContext(window.location.pathname), []);
-  const quickSuggestions = effectivePageContext.suggestions;
-
   // ── Theme-derived CSS variables ──
   const textBase = contentTokens.colorTextBase;
   const primary = contentTokens.colorPrimary;
@@ -362,20 +413,39 @@ export default function AIAssistantDrawer({ open, onClose }: AIAssistantDrawerPr
 
   // ── Render: Header ──
 
-  const headerTitle = (
+  const headerTitle = useMemo(() => (
     <div className="ai-drawer__header-title">
       <Avatar
         size={28}
-        src={avatarSrc}
-        icon={!avatarSrc ? <RobotOutlined /> : undefined}
-        className="ai-drawer__header-avatar"
+        src={undefined}
+        icon={activeAgent ? resolveIcon(activeAgent.icon) : <RobotOutlined />}
+        style={activeAgent ? {
+          border: `2px solid ${getAgentColor(activeAgent)}`,
+          color: getAgentColor(activeAgent),
+          backgroundColor: `${getAgentColor(activeAgent)}22`,
+        } : undefined}
       />
-      <span className="ai-drawer__header-text">艾企 AI 助手</span>
+      <span className="ai-drawer__header-text">
+        {activeAgent?.name || '艾企 AI 助手'}
+      </span>
+      {activeAgent && (
+        <Tag color={activeAgent.visibility === 'private' ? 'default' : 'blue'} style={{ fontSize: 10 }}>
+          {activeAgent.visibility === 'private' ? '私有' : '公用'}
+        </Tag>
+      )}
     </div>
-  );
+  ), [activeAgent]);
 
   const headerExtra = (
     <div className="ai-drawer__header-actions">
+      <Tooltip title="對話歷史">
+        <Button
+          type="text"
+          icon={<HistoryOutlined />}
+          className="ai-drawer__header-btn"
+          onClick={() => setShowSessionList(prev => !prev)}
+        />
+      </Tooltip>
       <Tooltip title="開始新對話">
         <Button
           type="text"
@@ -403,6 +473,20 @@ export default function AIAssistantDrawer({ open, onClose }: AIAssistantDrawerPr
       title={headerTitle}
       extra={headerExtra}
     >
+      {showSessionList && (
+        <SessionListPanel
+          sessions={storeState.sessions}
+          activeSessionKey={storeState.activeSessionKey}
+          agentColor={activeAgent ? getAgentColor(activeAgent) : undefined}
+          onSelect={handleSessionSelect}
+          onNewChat={handleNewSessionFromList}
+          onDelete={handleDeleteSession}
+          onRename={async (key, title) => {
+            await aiqChatStore.updateSessionTitle(key, title);
+          }}
+          onClose={() => setShowSessionList(false)}
+        />
+      )}
       <div className="ai-drawer__container">
         {currentView !== 'chat' ? (
           <div className="ai-drawer__history">
@@ -457,16 +541,6 @@ export default function AIAssistantDrawer({ open, onClose }: AIAssistantDrawerPr
 
               <div ref={messagesEndRef} />
             </div>
-
-            {quickSuggestions.length > 0 && !storeState.isStreaming && (
-              <div className="ai-drawer__quick-suggestions">
-                {quickSuggestions.map((text) => (
-                  <button key={text} className="intent-item quick-suggestion" onClick={() => setInputValue(text)}>
-                    <span className="intent-text">{text}</span>
-                  </button>
-                ))}
-              </div>
-            )}
 
             {/* Intent guess panel — inline, collapsible chips above footer */}
             <div

@@ -1,9 +1,9 @@
 /**
  * @file        FloatingAssistantButton.tsx
- * @description 艾企 AI 助手按鈕 - 點擊後在 Tauri 原生窗口打開助手
- * @lastUpdate  2026-04-23 10:00:14
+ * @description 艾企 AI 助手按鈕 — 左鍵拖曳/點擊切換 Drawer，右鍵顯示 Agent 切換選單
+ * @lastUpdate  2026-06-16 12:00:00
  * @author      Daniel Chung
- * @version     1.4.2
+ * @version     1.5.0
  */
 
 import { Tooltip, Avatar } from 'antd';
@@ -13,11 +13,13 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { authStore } from '../stores/auth';
 import { useAvatar } from '../services/avatarCache';
 import { useAIAssistantDrawer } from '../contexts/AIAssistantDrawerContext';
+import { agentApi, type Agent } from '../services/api';
+import AgentMenu from './AIAssistantDrawer/AgentMenu';
 
 export default function FloatingAssistantButton() {
   const [visible, setVisible] = useState(false);
   const avatarSrc = useAvatar();
-  const { toggle } = useAIAssistantDrawer();
+  const { isOpen, toggle } = useAIAssistantDrawer();
   const BUTTON_SIZE = 56;
   const EDGE_OFFSET = 24;
   const [position, setPosition] = useState(() => ({
@@ -25,6 +27,9 @@ export default function FloatingAssistantButton() {
     y: Math.max(EDGE_OFFSET, window.innerHeight - BUTTON_SIZE - EDGE_OFFSET),
   }));
   const [isDragging, setIsDragging] = useState(false);
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [activeAgent, setActiveAgent] = useState<Agent | null>(null);
+  const [showAgentMenu, setShowAgentMenu] = useState(false);
   const dragRef = useRef({
     startX: 0,
     startY: 0,
@@ -54,6 +59,12 @@ export default function FloatingAssistantButton() {
 
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  useEffect(() => {
+    agentApi.list().then(res => {
+      setAgents(res.data.data || []);
+    }).catch(() => {});
   }, []);
 
   const handleClick = useCallback(async () => {
@@ -93,6 +104,18 @@ export default function FloatingAssistantButton() {
     handlePointerStart(touch.clientX, touch.clientY);
     e.preventDefault();
   };
+
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setShowAgentMenu(true);
+  }, []);
+
+  const handleAgentSelect = useCallback((agent: Agent) => {
+    setActiveAgent(agent);
+    setShowAgentMenu(false);
+    if (!isOpen) toggle();
+  }, [isOpen, toggle]);
 
   useEffect(() => {
     if (!isDragging) return;
@@ -169,8 +192,9 @@ export default function FloatingAssistantButton() {
       }}
       onMouseDown={handleMouseDown}
       onTouchStart={handleTouchStart}
+      onContextMenu={handleContextMenu}
     >
-      <Tooltip title="打開艾企 AI 助手" placement="left">
+      <Tooltip title={activeAgent ? `${activeAgent.name} — 右鍵切換` : '打開艾企 AI 助手'} placement="left">
         <div
           style={{
             width: '100%',
@@ -189,6 +213,16 @@ export default function FloatingAssistantButton() {
           />
         </div>
       </Tooltip>
+
+      {showAgentMenu && (
+        <AgentMenu
+          agents={agents}
+          activeAgent={activeAgent}
+          position={position}
+          onSelect={handleAgentSelect}
+          onClose={() => setShowAgentMenu(false)}
+        />
+      )}
     </div>
   );
 }
