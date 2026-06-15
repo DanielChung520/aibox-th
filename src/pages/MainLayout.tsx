@@ -23,6 +23,7 @@ import AppLogo from '../components/AppLogo';
 import HeaderControls from '../components/HeaderControls';
 import { signalCollector } from '../services/signalCollector';
 import { userProfileStore } from '../stores/userProfileStore';
+import { useAIAssistantDrawer } from '../contexts/AIAssistantDrawerContext';
 
 const { Header, Sider, Content } = Layout;
 
@@ -30,6 +31,8 @@ export default function MainLayout() {
   const [collapsed, setCollapsed] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
+
+  const { isOpen: isDrawerOpen } = useAIAssistantDrawer();
 
   const [user, setUser] = useState(authStore.getState().user);
   const [functions, setFunctions] = useState<Function[]>([]);
@@ -53,9 +56,16 @@ export default function MainLayout() {
     : tooltipBgRaw;
 
   useEffect(() => {
-void signalCollector.start();
-return () => { signalCollector.stop(); };
+    void signalCollector.start();
+    return () => { signalCollector.stop(); };
   }, []);
+
+  // ── Auto-collapse sidebar when AI Assistant Drawer opens ──
+  useEffect(() => {
+    if (isDrawerOpen && !collapsed) {
+      setCollapsed(true);
+    }
+  }, [isDrawerOpen]);
 
   useEffect(() => {
     const unsubscribe = authStore.subscribe(() => {
@@ -166,7 +176,7 @@ return () => { signalCollector.stop(); };
           },
         }}
       >
-        <Sider trigger={null} collapsible collapsed={collapsed} width={200} style={{ background: siderBg }}>
+        <Sider trigger={null} collapsible collapsed={collapsed} collapsedWidth={64} width={200} style={{ background: siderBg }}>
           <div style={{
             height: 65,
             display: 'flex',
@@ -224,11 +234,10 @@ return () => { signalCollector.stop(); };
           </Header>
 
           <Content style={{
-            padding: '24px',
+            padding: 0,
             background: contentBg,
-            borderRadius: '10px',
-            height: 'calc(100vh - 96px)',
-            overflow: 'auto',
+            height: 'calc(100vh - 64px)',
+            overflow: 'hidden',
             display: 'flex',
             flexDirection: 'column',
           }}>
