@@ -101,13 +101,15 @@ async def health():
 
 
 @app.post("/refresh-celery")
-async def refresh_celery(keywords: list[str] | None = None) -> dict:
+async def refresh_celery(body: dict) -> dict:
     """透過 Celery 背景執行市場觀察任務"""
+    keywords = body.get("keywords")
+    user_key = body.get("user_key")
     import sys, os
     _dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     if _dir not in sys.path: sys.path.insert(0, _dir)
     from celery_app.tasks import market_intel_refresh
-    task = market_intel_refresh.delay(keywords=keywords)
+    task = market_intel_refresh.delay(keywords=keywords, user_key=user_key)
     return {"task_id": task.id, "status": "submitted"}
 
 
@@ -243,27 +245,53 @@ async def get_job_status(job_id: str) -> dict:
 
 
 @app.get("/report/{date_str}")
-async def get_report(date_str: str) -> DailyReport | dict:
-    """取得指定日期的快報"""
+async def get_report(date_str: str) -> dict:
+    """取得指定日期的快報（回傳該日期第一筆）"""
     try:
         rows = await _aql(
             "FOR r IN market_intel_reports FILTER r.date == @d LIMIT 1 RETURN r",
             {"d": date_str},
         )
         if rows:
-            return rows[0]
+            return {k: v for k, v in rows[0].items() if not k.startswith("_")}
     except Exception:
         pass
     return {"status": "not_found", "date": date_str}
 
 
-@app.get("/latest")
-async def get_latest() -> dict:
-    """取得最新的快報"""
+@app.get("/report-by-key/{key}")
+async def get_report_by_key(key: str) -> dict:
+    """取得指定 _key 的快報"""
     try:
         rows = await _aql(
-            "FOR r IN market_intel_reports SORT r.created_at DESC LIMIT 1 RETURN r",
+            "FOR r IN market_intel_reports FILTER r._key == @k LIMIT 1 RETURN r",
+            {"k": key},
         )
+        if rows:
+            return {k: v for k, v in rows[0].items() if not k.startswith("_")}
+    except Exception:
+        pass
+    return {"status": "not_found", "key": key}
+
+
+@app.get("/latest")
+async def get_latest(user_key: str | None = None, supervisor_key: str | None = None) -> dict:
+    """取得最新的快報。可指定 user_key 只取該使用者產生的，或 supervisor_key 取特定主管產生的。"""
+    try:
+        if user_key:
+            rows = await _aql(
+                "FOR r IN market_intel_reports FILTER r.created_by == @uk SORT r.created_at DESC LIMIT 1 RETURN r",
+                {"uk": user_key},
+            )
+        elif supervisor_key:
+            rows = await _aql(
+                "FOR r IN market_intel_reports FILTER r.created_by == @sk SORT r.created_at DESC LIMIT 1 RETURN r",
+                {"sk": supervisor_key},
+            )
+        else:
+            rows = await _aql(
+                "FOR r IN market_intel_reports SORT r.created_at DESC LIMIT 1 RETURN r",
+            )
         if rows:
             return {k: v for k, v in rows[0].items() if not k.startswith("_")}
     except Exception:
@@ -272,16 +300,85 @@ async def get_latest() -> dict:
 
 
 @app.get("/history")
-async def list_history(limit: int = 30) -> list[dict]:
-    """取得歷史快報列表（含 token 用量與任務 ID）"""
+async def list_history(limit: int = 30, user_key: str | None = None) -> list[dict]:
+    """取得歷史快報列表（含 token 用量與任務 ID）。可指定 user_key 只取該使用者的記錄。"""
     try:
-        rows = await _aql(
-            "FOR r IN market_intel_reports SORT r.created_at DESC LIMIT @n RETURN {date: r.date, daily_focus: r.daily_focus, items_count: LENGTH(r.items), token_usage: r.token_usage, task_id: r.task_id, created_at: r.created_at}",
-            {"n": limit},
-        )
+        if user_key:
+            rows = await _aql(
+                "FOR r IN market_intel_reports FILTER r.created_by == @uk SORT r.created_at DESC LIMIT @n RETURN {_key: r._key, date: r.date, daily_focus: r.daily_focus, items_count: LENGTH(r.items), token_usage: r.token_usage, task_id: r.task_id, created_at: r.created_at, created_by: r.created_by}",
+                {"uk": user_key, "n": limit},
+            )
+        else:
+            rows = await _aql(
+                "FOR r IN market_intel_reports SORT r.created_at DESC LIMIT @n RETURN {_key: r._key, date: r.date, daily_focus: r.daily_focus, items_count: LENGTH(r.items), token_usage: r.token_usage, task_id: r.task_id, created_at: r.created_at, created_by: r.created_by}",
+                {"n": limit},
+            )
         return rows
     except Exception:
         return []
+
+
+@app.post("/delete-reports")
+async def delete_reports(body: dict) -> dict:
+    """批次刪除指定的快報記錄"""
+    keys = body.get("keys", [])
+    if not keys or not isinstance(keys, list):
+        return {"status": "error", "message": "keys must be a non-empty list"}
+    try:
+        import httpx as _httpx, base64
+        auth = base64.b64encode(f"{ARANGO_USER}:{ARANGO_PASSWORD}".encode()).decode()
+        deleted = 0
+        async with _httpx.AsyncClient(timeout=30) as client:
+            for k in keys:
+                resp = await client.delete(
+                    f"{ARANGO_URL}/_db/{ARANGO_DB}/_api/document/market_intel_reports/{k}",
+                    headers={"Authorization": f"Basic {auth}"},
+                )
+                if resp.status_code in (200, 202):
+                    deleted += 1
+        return {"status": "ok", "deleted": deleted}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
+@app.post("/cleanup")
+async def cleanup_old_reports() -> dict:
+    """刪除超過保留天數的舊快報（預設 10 天）"""
+    try:
+        from datetime import datetime, timezone, timedelta
+        import httpx as _httpx, base64
+
+        # 讀取保留天數設定
+        try:
+            rows = await _aql(
+                "FOR p IN system_params FILTER p._key == @k LIMIT 1 RETURN p.param_value",
+                {"k": "market_intel.retention_days"},
+            )
+            days = int(rows[0]) if rows else 10
+        except:
+            days = 10
+
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+        keys_to_delete = await _aql(
+            "FOR r IN market_intel_reports FILTER r.created_at < @cutoff RETURN r._key",
+            {"cutoff": cutoff},
+        )
+        if not keys_to_delete:
+            return {"status": "ok", "deleted": 0, "message": "無需清理"}
+
+        auth = base64.b64encode(f"{ARANGO_USER}:{ARANGO_PASSWORD}".encode()).decode()
+        deleted = 0
+        async with _httpx.AsyncClient(timeout=60) as client:
+            for k in keys_to_delete:
+                resp = await client.delete(
+                    f"{ARANGO_URL}/_db/{ARANGO_DB}/_api/document/market_intel_reports/{k}",
+                    headers={"Authorization": f"Basic {auth}"},
+                )
+                if resp.status_code in (200, 202):
+                    deleted += 1
+        return {"status": "ok", "deleted": deleted}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
 
 
 @app.post("/push")

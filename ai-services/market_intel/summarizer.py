@@ -113,14 +113,13 @@ async def summarize_article(title: str, content: str) -> dict[str, Any]:
 }}"""
 
     try:
-        text = await _call_llm([{"role": "user", "content": prompt}], max_tokens=800)
-        text = text.strip()
-        if text.startswith("```"):
-            text = text.split("\n", 1)[-1].rsplit("\n", 1)[0]
-        return json.loads(text)
-    except Exception as e:
-        logger.warning("Summarize failed: %s", e)
-        return {"summary": content[:200] or title[:200], "relevance": "low", "relevance_reason": "AI 摘要失敗", "key_point": "", "action": None, "impact": "neutral"}
+        text = await _call_llm([{"role": "user", "content": prompt}], max_tokens=2000)
+        result = _try_parse_json(text)
+        if result:
+            return result
+    except Exception:
+        pass
+    return {"summary": content[:200] or title[:200], "relevance": "low", "relevance_reason": "AI 摘要失敗", "key_point": "", "action": None, "impact": "neutral"}
 
 
 async def generate_daily_report(articles: list[dict[str, Any]]) -> dict[str, Any]:
@@ -144,11 +143,34 @@ async def generate_daily_report(articles: list[dict[str, Any]]) -> dict[str, Any
 }}"""
 
     try:
-        text = await _call_llm([{"role": "user", "content": prompt}], max_tokens=1000)
-        text = text.strip()
-        if text.startswith("```"):
-            text = text.split("\n", 1)[-1].rsplit("\n", 1)[0]
+        text = await _call_llm([{"role": "user", "content": prompt}], max_tokens=2000)
+        result = _try_parse_json(text)
+        if result:
+            return result
+    except Exception:
+        pass
+    return {"daily_focus": "今日市場資訊整理完成", "key_trends": [], "attention_points": [], "opportunities": [], "overall_assessment": "AI 分析暫時無法使用。"}
+
+
+def _try_parse_json(text: str) -> dict | None:
+    """嘗試解析 JSON，支援從 markdown code block 或 reasoning 中提取"""
+    import re, json
+    text = text.strip()
+    # 移除 markdown code block
+    if text.startswith("```"):
+        text = text.split("\n", 1)[-1].rsplit("\n", 1)[0]
+    # 直接解析
+    try:
         return json.loads(text)
-    except Exception as e:
-        logger.warning("Daily report failed: %s", e)
-        return {"daily_focus": "今日市場資訊整理完成", "key_trends": [], "attention_points": [], "opportunities": [], "overall_assessment": "AI 分析暫時無法使用。"}
+    except json.JSONDecodeError:
+        pass
+    # 嘗試從文字中提取 {...} 區塊
+    m = re.search(r'\{[^{}]*\}', text, re.DOTALL)
+    if m:
+        candidate = m.group(0)
+        try:
+            return json.loads(candidate)
+        except json.JSONDecodeError:
+            pass
+    # 沒救
+    return None

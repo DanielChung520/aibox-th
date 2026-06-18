@@ -457,13 +457,14 @@ def check_scheduled_reports(self: Any) -> dict[str, Any]:
 
 
 @app.task(bind=True, max_retries=1, acks_late=True)
-def market_intel_refresh(self, keywords: list[str] | None = None) -> dict:
+def market_intel_refresh(self, keywords: list[str] | None = None, user_key: str | None = None) -> dict:
     """Celery 任務：市場觀察搜尋+摘要+儲存（背景執行，可監控狀態）"""
     import asyncio
     from market_intel.scraper import search, fetch_page_content
     from market_intel.summarizer import summarize_article, generate_daily_report, reset_token_usage, get_token_usage
     from datetime import datetime, timezone, date
     import httpx
+    import base64
 
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
@@ -504,10 +505,10 @@ def market_intel_refresh(self, keywords: list[str] | None = None) -> dict:
             "token_usage": get_token_usage(),
             "created_at": datetime.now(timezone.utc).isoformat(),
             "task_id": self.request.id,
+            "created_by": user_key or "",
         }
 
         # 寫入 ArangoDB（每次建立新記錄，保留歷史）
-        import base64
         auth_b64 = base64.b64encode(b"root:abc_desktop_2026").decode()
         headers = {"Authorization": f"Basic {auth_b64}", "Content-Type": "application/json"}
         with httpx.Client(timeout=20) as client:

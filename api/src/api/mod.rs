@@ -15,9 +15,11 @@ use crate::db::{
     get_db, CreateAgentRequest, CreateRoleRequest, CreateToolRequest, CreateUserRequest, Function, FunctionRoleAuth, Role, RoleFunction, SystemParam, UpdateParamRequest, UpdateRoleRequest, User, Agent, Tool, ModelProvider, LLMModel,
 };
 use crate::models::*;
+use crate::services::DemandEngine;
 use axum::{
+    body::Bytes,
     extract::{Path, Query},
-    http::{header::AUTHORIZATION, HeaderMap, Method, StatusCode},
+    http::{header::AUTHORIZATION, HeaderMap, Method, StatusCode, Uri},
     response::IntoResponse,
     routing::{any, get, post, put, patch, delete},
     Json, Router,
@@ -67,6 +69,8 @@ pub mod mcp;
 pub mod order_secretary;
 pub mod skills;
 pub mod todos;
+pub mod crm;
+pub mod channels;
 
 async fn sync_tool_intents(
     Path(key): Path<String>,
@@ -120,6 +124,35 @@ async fn serve_channel_spa() -> impl IntoResponse {
     }
 }
 
+/// Proxy: /api/v1/market-intel/* → unified_agents:8011/market-intel/*
+async fn market_intel_proxy(
+    method: Method,
+    Path(path): Path<String>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Result<impl IntoResponse, StatusCode> {
+    use axum::http::HeaderValue;
+    let backend_url = format!("http://localhost:8011/market-intel/{}", &path);
+
+    let client = reqwest::Client::new();
+    let reqwest_method = method.to_string().parse::<reqwest::Method>().unwrap_or(reqwest::Method::GET);
+    let mut req = client.request(reqwest_method, &backend_url);
+    if let Some(auth) = headers.get("Authorization") {
+        let val = auth.to_str().unwrap_or("").to_string();
+        req = req.header("Authorization", &val);
+    }
+    req = req.header("Content-Type", "application/json");
+    if !body.is_empty() {
+        req = req.body(body.to_vec());
+    }
+
+    let resp = req.send().await.map_err(|_| StatusCode::BAD_GATEWAY)?;
+    let status_code = StatusCode::from_u16(resp.status().as_u16()).unwrap_or(StatusCode::BAD_GATEWAY);
+    let resp_body = resp.bytes().await.map_err(|_| StatusCode::BAD_GATEWAY)?;
+
+    Ok((status_code, [("content-type", "application/json")], resp_body))
+}
+
 pub fn create_router() -> Router {
     let cors = CorsLayer::new()
         .allow_origin(Any)
@@ -152,6 +185,12 @@ pub fn create_router() -> Router {
         .route("/api/v1/agents/{key}/demands/{demand_key}/status", patch(update_demand_status))
         .route("/api/v1/demands/estimate-hours", post(estimate_demand_hours))
         .route("/api/v1/demands/review", post(review_demand))
+        .route("/api/v1/demands/{key}/submit", post(submit_demand))
+        .route("/api/v1/demands/{key}/qualify", post(qualify_demand))
+        .route("/api/v1/demands/{key}/withdraw", post(withdraw_demand))
+        .route("/api/v1/demands/{key}/change", post(change_demand))
+        .route("/api/v1/demands/{key}/reactivate", post(reactivate_demand))
+        .route("/api/v1/demands/{key}/history", get(get_demand_history))
         .route("/api/v1/agent-requirements", get(list_all_agent_requirements).post(create_agent_requirement))
         .route("/api/v1/agent-requirements/{req_key}", get(get_agent_requirement))
         .route("/api/v1/agent-requirements/{req_key}/accept", patch(accept_agent_requirement))
@@ -237,6 +276,9 @@ pub fn create_router() -> Router {
         .merge(ragic::create_ragic_router())
         .merge(mcp::create_mcp_router())
         .merge(order_secretary::create_order_secretary_router())
+        .merge(crm::create_crm_router().route_layer(middleware::from_fn(jwt_auth_middleware)))
+        .merge(channels::create_channel_router().route_layer(middleware::from_fn(jwt_auth_middleware)))
+        .route("/api/v1/market-intel/{*path}", any(market_intel_proxy))
         .route("/api/v1/events", post(post_events))
         .nest_service("/assets", ServeDir::new("../dist/assets"))
         .nest_service("/manifest.webmanifest", ServeDir::new("../dist/manifest.webmanifest"))
@@ -481,9 +523,15 @@ async fn get_auth_functions(headers: HeaderMap) -> Result<impl IntoResponse, Sta
         .aql_str(&query)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    // 去重：當使用者擁有多個角色（如 admin + 業務主管）
+    // 同一功能可能被多個角色綁定，導致重複
+    let mut seen = std::collections::HashSet::new();
     let functions: Vec<Function> = raw_functions
         .into_iter()
-        .filter_map(|v| serde_json::from_value(v).ok())
+        .filter_map(|v| {
+            let f: Function = serde_json::from_value(v).ok()?;
+            if seen.insert(f._key.clone()?) { Some(f) } else { None }
+        })
         .collect();
 
     Ok(Json(ApiResponse::success(functions)))
@@ -1840,6 +1888,105 @@ async fn update_demand_status(
 
     let demand = updated.into_iter().next().ok_or(StatusCode::NOT_FOUND)?;
     Ok(Json(ApiResponse::success(demand)))
+}
+
+// ─── DemandEngine Handlers ──────────────────────────────────────
+
+/// POST /api/v1/demands/{key}/submit
+/// draft → submitted
+async fn submit_demand(Path(key): Path<String>) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
+    DemandEngine::submit(&key, "system").await
+        .map_err(|e| (StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": e.message}))))?;
+    let db = get_db();
+    let docs: Vec<serde_json::Value> = db.aql_bind_vars(
+        "FOR d IN agent_demands FILTER d._key == @key LIMIT 1 RETURN d",
+        [("key", serde_json::json!(key))].into(),
+    ).await.map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error":"DB error"}))))?;
+    let demand = docs.into_iter().next().ok_or((StatusCode::NOT_FOUND, Json(serde_json::json!({"error":"Not found"}))))?;
+    Ok(Json(ApiResponse::success(demand)))
+}
+
+/// POST /api/v1/demands/{key}/qualify
+/// submitted → qualified，自動建立看板記錄
+async fn qualify_demand(
+    Path(key): Path<String>,
+    Json(payload): Json<serde_json::Value>,
+) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
+    let agent_key = payload.get("agent_key").and_then(|v| v.as_str()).unwrap_or("");
+    let actor = payload.get("actor").and_then(|v| v.as_str()).unwrap_or("system");
+    if agent_key.is_empty() {
+        return Err((StatusCode::BAD_REQUEST, Json(serde_json::json!({"error":"agent_key required"}))));
+    }
+    DemandEngine::qualify(&key, agent_key, actor).await
+        .map_err(|e| (StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": e.message}))))?;
+    let db = get_db();
+    let docs: Vec<serde_json::Value> = db.aql_bind_vars(
+        "FOR d IN agent_demands FILTER d._key == @key LIMIT 1 RETURN d",
+        [("key", serde_json::json!(key))].into(),
+    ).await.map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error":"DB error"}))))?;
+    let demand = docs.into_iter().next().ok_or((StatusCode::NOT_FOUND, Json(serde_json::json!({"error":"Not found"}))))?;
+    Ok(Json(ApiResponse::success(demand)))
+}
+
+/// POST /api/v1/demands/{key}/withdraw
+/// submitted/qualified → cancelled，含開發中檢查
+async fn withdraw_demand(
+    Path(key): Path<String>,
+    Json(payload): Json<serde_json::Value>,
+) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
+    let actor = payload.get("actor").and_then(|v| v.as_str()).unwrap_or("system");
+    let reason = payload.get("reason").and_then(|v| v.as_str());
+    DemandEngine::withdraw(&key, actor, reason).await
+        .map_err(|e| {
+            let code = if e.message.contains("開發") { StatusCode::CONFLICT } else { StatusCode::BAD_REQUEST };
+            (code, Json(serde_json::json!({"error": e.message})))
+        })?;
+    let db = get_db();
+    let docs: Vec<serde_json::Value> = db.aql_bind_vars(
+        "FOR d IN agent_demands FILTER d._key == @key LIMIT 1 RETURN d",
+        [("key", serde_json::json!(key))].into(),
+    ).await.map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error":"DB error"}))))?;
+    let demand = docs.into_iter().next().ok_or((StatusCode::NOT_FOUND, Json(serde_json::json!({"error":"Not found"}))))?;
+    Ok(Json(ApiResponse::success(demand)))
+}
+
+/// POST /api/v1/demands/{key}/change
+/// 建立新版需求 draft，舊版保持 qualified/online
+async fn change_demand(
+    Path(key): Path<String>,
+    Json(payload): Json<serde_json::Value>,
+) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
+    let agent_key = payload.get("agent_key").and_then(|v| v.as_str()).unwrap_or("");
+    let actor = payload.get("actor").and_then(|v| v.as_str()).unwrap_or("system");
+    let change_reason = payload.get("change_reason").and_then(|v| v.as_str()).unwrap_or("需求變更");
+    if agent_key.is_empty() {
+        return Err((StatusCode::BAD_REQUEST, Json(serde_json::json!({"error":"agent_key required"}))));
+    }
+    let new_demand = DemandEngine::change(&key, agent_key, actor, change_reason).await
+        .map_err(|e| (StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": e.message}))))?;
+    Ok(Json(ApiResponse::success(new_demand)))
+}
+
+/// POST /api/v1/demands/{key}/reactivate
+/// cancelled → draft
+async fn reactivate_demand(Path(key): Path<String>) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
+    DemandEngine::reactivate(&key, "system").await
+        .map_err(|e| (StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": e.message}))))?;
+    let db = get_db();
+    let docs: Vec<serde_json::Value> = db.aql_bind_vars(
+        "FOR d IN agent_demands FILTER d._key == @key LIMIT 1 RETURN d",
+        [("key", serde_json::json!(key))].into(),
+    ).await.map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error":"DB error"}))))?;
+    let demand = docs.into_iter().next().ok_or((StatusCode::NOT_FOUND, Json(serde_json::json!({"error":"Not found"}))))?;
+    Ok(Json(ApiResponse::success(demand)))
+}
+
+/// GET /api/v1/demands/{key}/history
+/// 取得需求的變更歷史
+async fn get_demand_history(Path(key): Path<String>) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
+    let history = DemandEngine::get_change_history(&key).await
+        .map_err(|e| (StatusCode::NOT_FOUND, Json(serde_json::json!({"error": e.message}))))?;
+    Ok(Json(ApiResponse::success(history)))
 }
 
 #[derive(serde::Deserialize)]
