@@ -454,3 +454,71 @@ def check_scheduled_reports(self: Any) -> dict[str, Any]:
             continue
 
     return {"scheduled": len(reports), "triggered": triggered}
+
+
+@app.task(bind=True, max_retries=1, acks_late=True)
+def market_intel_refresh(self, keywords: list[str] | None = None) -> dict:
+    """Celery 任務：市場觀察搜尋+摘要+儲存（背景執行，可監控狀態）"""
+    import asyncio
+    from market_intel.scraper import search, fetch_page_content
+    from market_intel.summarizer import summarize_article, generate_daily_report, reset_token_usage, get_token_usage
+    from datetime import datetime, timezone, date
+    import httpx
+
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
+    reset_token_usage()
+
+    try:
+        results = loop.run_until_complete(search(keywords=keywords))
+        if not results:
+            return {"status": "no_results"}
+
+        items = []
+        for i, r in enumerate(results[:8]):
+            self.update_state(state="PROGRESS", meta={"step": f"fetching {i+1}/{len(results[:8])}"})
+            content = loop.run_until_complete(fetch_page_content(r.url))
+            analysis = loop.run_until_complete(summarize_article(r.title, content))
+            items.append({
+                "title": r.title, "url": r.url, "source": r.source,
+                "summary": analysis.get("summary", r.snippet[:200]),
+                "relevance": analysis.get("relevance", "medium"),
+                "action": analysis.get("action"),
+                "impact": analysis.get("impact", "neutral"),
+            })
+
+        self.update_state(state="PROGRESS", meta={"step": "analyzing"})
+        report_data = loop.run_until_complete(generate_daily_report(items))
+
+        today = date.today().isoformat()
+        ts = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
+        report_key = f"report_{today}_{ts}"
+        doc = {
+            "_key": report_key, "date": today, "items": items,
+            "daily_focus": report_data.get("daily_focus", ""),
+            "key_trends": report_data.get("key_trends", []),
+            "attention_points": report_data.get("attention_points", []),
+            "opportunities": report_data.get("opportunities", []),
+            "overall_assessment": report_data.get("overall_assessment", ""),
+            "token_usage": get_token_usage(),
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "task_id": self.request.id,
+        }
+
+        # 寫入 ArangoDB（每次建立新記錄，保留歷史）
+        import base64
+        auth_b64 = base64.b64encode(b"root:abc_desktop_2026").decode()
+        headers = {"Authorization": f"Basic {auth_b64}", "Content-Type": "application/json"}
+        with httpx.Client(timeout=20) as client:
+            client.post(
+                "http://localhost:8529/_db/abc_desktop/_api/document/market_intel_reports",
+                json=doc, headers=headers,
+            )
+
+        return {"status": "completed", "items_count": len(items), "token_usage": get_token_usage()}
+
+    except Exception as e:
+        return {"status": "failed", "error": str(e)}
+    finally:
+        loop.close()

@@ -71,7 +71,8 @@ async def get_param(param_key: str) -> str:
             )
             if resp.status_code == 200:
                 data = resp.json()
-                value = str(data.get("data", {}).get("param_value", ""))
+                raw = data.get("data", {}).get("param_value", "")
+                value = str(raw) if raw is not None else ""
                 if value:
                     _set_cached(param_key, value)
                     return value
