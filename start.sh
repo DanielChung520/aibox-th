@@ -251,13 +251,6 @@ start_frontend() {
   done
   echo "  ❌ Vite failed to start"
   return 1
-    fi
-    sleep 2
-    elapsed=$((elapsed + 2))
-  done
-  echo "  ❌ Frontend failed to start within ${max_wait}s"
-  tail -10 /tmp/abc-frontend.log
-  return 1
 }
 
 stop_frontend() {
@@ -778,7 +771,7 @@ status() {
   fi
 
   printf "  %-22s (port %s): " "Ollama" "11434"
-  if curl -sf --max-time 3 "http://localhost:11434/api/version" > /dev/null 2>&1; then
+  if curl -sf --max-time 3 "http://127.0.0.1:11400/v1/models" > /dev/null 2>&1; then
     echo "✅ Healthy"
   elif lsof -ti :11434 > /dev/null 2>&1; then
     echo "⚠️  Port open but API unreachable"

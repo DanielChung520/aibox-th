@@ -469,6 +469,29 @@ async def handle_line_webhook(
                         mm = resp.json()
                     logger.info(f"[MEDIA] Analyzed: desc={mm.get('description','')[:60]}... seaweed={mm.get('seaweed_url','')}")
 
+                    # OCR 名片辨識（GLM-OCR via MLX）
+                    ocr_result = None
+                    try:
+                        async with httpx.AsyncClient(timeout=30.0) as ocr_c:
+                            ocr_resp = await ocr_c.post(
+                                "http://127.0.0.1:11400/v1/chat/completions",
+                                json={
+                                    "model": "GLM-OCR",
+                                    "messages": [{"role": "user", "content": [
+                                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64_content}"}},
+                                        {"type": "text", "text": "Text Recognition: 請讀出這張名片上所有文字"}
+                                    ]}],
+                                    "max_tokens": 500, "temperature": 0.1,
+                                },
+                            )
+                            if ocr_resp.status_code == 200:
+                                ot = ocr_resp.json().get("choices", [{}])[0].get("message", {}).get("content", "")
+                                if ot and any(k in ot for k in ["公司", "電話", "姓名", "@"]):
+                                    ocr_result = {"text": ot}
+                                    logger.info(f"[MEDIA] GLM-OCR card: {ot[:60]}")
+                    except Exception as e:
+                        logger.warning(f"[MEDIA] GLM-OCR failed: {e}")
+
                     # 儲存使用者發送圖片的紀錄
                     storage = ConversationStorage()
                     await storage.save_message(
@@ -514,7 +537,13 @@ async def handle_line_webhook(
                     # 決定回覆文字
                     reply_text = ""
 
-                    if source_type == "group":
+                    ocr_text = ocr_result.get("text", "") if ocr_result else ""
+                    if ocr_text:
+                        if source_type == "group":
+                            reply_text = f"{user_display_name}您好，感謝您分享名片！\n\n{ocr_text}\n\n我已將資料記錄下來，將轉交業務同仁確認後建檔。"
+                        else:
+                            reply_text = f"感謝您分享名片！\n\n{ocr_text}\n\n我已將您的資料建檔，將轉交業務同仁處理。謝謝您！"
+                    elif source_type == "group":
                         today_str = datetime.now().strftime("%Y-%m-%d")
                         if order_result and order_result.get("status") == "success":
                             reply_text = f"{user_display_name}您好，很抱歉讓您久等。\n\n{order_result.get('message', '')}"

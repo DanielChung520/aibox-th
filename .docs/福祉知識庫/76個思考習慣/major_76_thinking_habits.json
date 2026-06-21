@@ -1,0 +1,638 @@
+{
+  "_key": "major_76_thinking_habits",
+  "type": "major",
+  "name": "76_Thinking_Habits",
+  "version": "1.0",
+  "default_version": true,
+  "ontology_name": "76_Thinking_Habits_Major_Ontology",
+  "description": "76 個世界名校思考習慣專業本體論，繼承 domain_76_thinking_habits 領域本體。定義 76 個思考習慣的具體實例（Habit_BreakItDown ~ Habit_ShapingBehavior），每個習慣包含完整的中文名稱、ID、Hashtag、所屬分類與子分類、簡述。並延伸定義學習路徑規劃（學習模組、路徑、熟練度分級）、習慣協同框架（多習慣組合工作流）、應用領域映射與自我評量機制。用於思維訓練課程設計、RAG 精準檢索、個人學習路徑推薦與組織技能盤點。",
+  "author": "Daniel Chung",
+  "last_modified": "2026-06-18",
+  "inherits_from": [
+    "5W1H_Base_Ontology_OWL",
+    "76_Thinking_Habits_Domain_Ontology"
+  ],
+  "compatible_domains": ["Human_Resource_Development", "Education_Training", "Organizational_Behavior"],
+  "tags": [
+    "ThinkingHabits",
+    "CriticalThinking",
+    "CreativeThinking",
+    "CommunicationThinking",
+    "InteractiveThinking",
+    "CognitiveSkills",
+    "MentalModels",
+    "LearningPath",
+    "TrainingModule",
+    "SkillAssessment"
+  ],
+  "use_cases": [
+    "76 個思考習慣具體實例查詢 — 依 ID 或 Hashtag 檢索習慣定義",
+    "RAG 精準檢索 — 依問題意圖檢索特定習慣及其檢查清單",
+    "訓練課程模組設計 — 依場景組合習慣為訓練單元",
+    "學習路徑規劃 — 依先備關係與熟練度推薦學習順序",
+    "習慣協同框架應用 — 多習慣組合工作流（問題診斷/決策分析/溝通規劃）",
+    "自我評量 — 從檢查清單轉化為 proficiency 評量問卷",
+    "團隊技能盤點 — 分析團隊的思考技能覆蓋率與缺口"
+  ],
+  "entity_classes": [
+    {
+      "name": "Habit_BreakItDown",
+      "base_class": "Thinking_Habit",
+      "description": "拆解問題（ID: breakitdown, Hashtag: #breakitdown）。所屬：批判思考 / 分析問題。將超級複雜的大問題拆成一個一個小問題來解決。計算思維的四大支柱之一。適用於專案管理、程式開發、論文研究、AI 對話。檢查清單含 6 項。"
+    },
+    {
+      "name": "Habit_GameTheory",
+      "base_class": "Thinking_Habit",
+      "description": "賽局理論（ID: gametheory, Hashtag: #gametheory）。所屬：批判思考 / 分析問題。在多人決策情況下預測別人會怎麼做、自己該怎麼做才能拿到最好的結果。適用於商業競爭、談判協商、AI 系統設計。檢查清單含 6 項。"
+    },
+    {
+      "name": "Habit_GapAnalysis",
+      "base_class": "Thinking_Habit",
+      "description": "差距分析（ID: gapanalysis, Hashtag: #gapanalysis）。所屬：批判思考 / 分析問題。在創造新解方之前先確認真的有需要被填補的缺口，盤點既有方案是否夠用。適用於新產品開發、新流程設計、政策制定。檢查清單含 6 項。"
+    },
+    {
+      "name": "Habit_RightProblem",
+      "base_class": "Thinking_Habit",
+      "description": "問對問題（ID: rightproblem, Hashtag: #rightproblem）。所屬：批判思考 / 分析問題。解決問題最關鍵的第一步不是找答案，而是先搞清楚問題到底是什麼。適用於新專案啟動、問題診斷、AI 提示設計。檢查清單含 6 項。"
+    },
+    {
+      "name": "Habit_Variables",
+      "base_class": "Thinking_Habit",
+      "description": "變數控制（ID: variables, Hashtag: #variables）。所屬：批判思考 / 分析問題。精確地隔離和測量特定因素對結果的影響，從相關性中找出真正的因果關係。適用於實驗設計、A/B 測試、AI 模型驗證。檢查清單含 6 項。"
+    },
+    {
+      "name": "Habit_BiasIdentification",
+      "base_class": "Thinking_Habit",
+      "description": "偏誤檢驗（ID: biasidentification, Hashtag: #biasidentification）。所屬：批判思考 / 分析決策。發現自己腦袋裡的隱形眼鏡，識別那些不知不覺中塑造思考方式的認知偏差。適用於心理學研究、AI 系統評估、策略決策。檢查清單含 6 項。"
+    },
+    {
+      "name": "Habit_BiasMitigation",
+      "base_class": "Thinking_Habit",
+      "description": "偏誤緩解（ID: biasmitigation, Hashtag: #biasmitigation）。所屬：批判思考 / 分析決策。發現認知偏差後採取具體行動來減少偏差的影響。光知道自己有偏誤是不夠的。適用於高風險決策、AI 系統設計、群體決策。檢查清單含 6 項。"
+    },
+    {
+      "name": "Habit_DecisionTrees",
+      "base_class": "Thinking_Habit",
+      "description": "決策樹（ID: decisiontrees, Hashtag: #decisiontrees）。所屬：批判思考 / 分析決策。將複雜的大決策拆解成一連串簡單的是非題，視覺化評估不同選擇路徑的預期價值。適用於多階段決策、量化評估、風險分析。檢查清單含 5 項。"
+    },
+    {
+      "name": "Habit_PsychologicalExplanation",
+      "base_class": "Thinking_Habit",
+      "description": "心理成因（ID: psychologicalexplanation, Hashtag: #psychologicalexplanation）。所屬：批判思考 / 分析決策。理解人們為什麼會這樣做，挖掘行為背後的心理機制、動機、認知過程和情緒。適用於 UX 設計、行為改變、人機互動。檢查清單含 6 項。"
+    },
+    {
+      "name": "Habit_Purpose",
+      "base_class": "Thinking_Habit",
+      "description": "目的（ID: purpose, Hashtag: #purpose）。所屬：批判思考 / 分析決策。驅動行動的根本原因，不只是具體的目標，而是持續的方向感，引導在各種情境下做出選擇。適用於個人目標設定、組織策略、AI 系統設計。檢查清單含 6 項。"
+    },
+    {
+      "name": "Habit_Utility",
+      "base_class": "Thinking_Habit",
+      "description": "效用理論（ID: utility, Hashtag: #utility）。所屬：批判思考 / 分析決策。把所有在乎的東西——時間、風險、快樂、機會成本——量化成可比較的數字，系統性評估不同選項的價值。適用於多標準決策、資源配置、政策評估。檢查清單含 6 項。"
+    },
+    {
+      "name": "Habit_ConfidenceIntervals",
+      "base_class": "Thinking_Habit",
+      "description": "信賴區間（ID: confidenceintervals, Hashtag: #confidenceintervals）。所屬：批判思考 / 分析資料。用範圍來表達對估計的信心，誠實地說真實的答案大概在這個範圍內。適用於估計總體參數、解釋研究結果、AI 模型不確定性量化。檢查清單含 6 項。"
+    },
+    {
+      "name": "Habit_Correlation",
+      "base_class": "Thinking_Habit",
+      "description": "相關性（ID: correlation, Hashtag: #correlation）。所屬：批判思考 / 分析資料。兩個變量一起變化的趨勢，但相關不等於因果。適用於數據分析、AI 輸出評估、實驗設計。檢查清單含 4 項。"
+    },
+    {
+      "name": "Habit_DescriptiveStats",
+      "base_class": "Thinking_Habit",
+      "description": "敘述統計（ID: descriptivestats, Hashtag: #descriptivestats）。所屬：批判思考 / 分析資料。用平均數、中位數、標準差等幾個簡單的數字來概括整堆數據的特徵。適用於探索性數據分析、數據報告、機器學習準備。檢查清單含 5 項。"
+    },
+    {
+      "name": "Habit_Distributions",
+      "base_class": "Thinking_Habit",
+      "description": "機率分布（ID: distributions, Hashtag: #distributions）。所屬：批判思考 / 分析資料。告訴你在隨機過程中什麼結果最常見、什麼最罕見的數學藍圖。適用於統計推斷、風險建模、生成式 AI 理解。檢查清單含 5 項。"
+    },
+    {
+      "name": "Habit_Probability",
+      "base_class": "Thinking_Habit",
+      "description": "機率理論（ID: probability, Hashtag: #probability）。所屬：批判思考 / 分析資料。用數學量化不確定性的工具，從 0 到 1 告訴你一件事發生的可能性。適用於預測預報、風險評估、機器學習。檢查清單含 5 項。"
+    },
+    {
+      "name": "Habit_Regression",
+      "base_class": "Thinking_Habit",
+      "description": "迴歸分析（ID: regression, Hashtag: #regression）。所屬：批判思考 / 分析資料。用數學找出變量之間關係的工具，將散亂數據變成一條可預測的趨勢線。適用於預測、探索因果關係、控制變量。檢查清單含 6 項。"
+    },
+    {
+      "name": "Habit_Significance",
+      "base_class": "Thinking_Habit",
+      "description": "顯著性檢定（ID: significance, Hashtag: #significance）。所屬：批判思考 / 分析資料。詢問這個結果有多大機會只是隨機波動，是證據強度的量化工具。適用於研究結果評估、A/B 測試、AI 模型比較。檢查清單含 5 項。"
+    },
+    {
+      "name": "Habit_Context",
+      "base_class": "Thinking_Habit",
+      "description": "情境脈絡（ID: context, Hashtag: #context）。所屬：批判思考 / 評估主張。任何表達都脫離不了它產生的背景，理解情境是解讀意義、評估有效性、避免誤解的關鍵。適用於文本分析、AI 互動、跨文化交流。檢查清單含 5 項。"
+    },
+    {
+      "name": "Habit_Critique",
+      "base_class": "Thinking_Habit",
+      "description": "批判（ID: critique, Hashtag: #critique）。所屬：批判思考 / 評估主張。批判不是批評，是透過細讀深入檢視作品的主張、假設、模糊之處與語言，分析其優點和弱點。適用於學術研究、同儕評審、資訊消費。檢查清單含 5 項。"
+    },
+    {
+      "name": "Habit_Estimation",
+      "base_class": "Thinking_Habit",
+      "description": "估計（ID: estimation, Hashtag: #estimation）。所屬：批判思考 / 評估主張。當精確計算不可能時，用費米估計從不完整資訊中快速做出合理近似。適用於可行性分析、合理性檢查、資源規劃。檢查清單含 6 項。"
+    },
+    {
+      "name": "Habit_InterpretiveLens",
+      "base_class": "Thinking_Habit",
+      "description": "詮釋視角（ID: interpretivelens, Hashtag: #interpretivelens）。所屬：批判思考 / 評估主張。保持開放的心態，察覺自己一直戴著眼鏡，並嘗試摘下來看看不同的觀點。適用於文本解讀、人際衝突、跨領域對話。檢查清單含 6 項。"
+    },
+    {
+      "name": "Habit_Plausibility",
+      "base_class": "Thinking_Habit",
+      "description": "合理性評估（ID: plausibility, Hashtag: #plausibility）。所屬：批判思考 / 評估主張。判斷一個說法有多靠譜，基於可用的證據、先前知識和邏輯一致性。適用於資訊來源評估、假說生成、AI 輸出驗證。檢查清單含 6 項。"
+    },
+    {
+      "name": "Habit_Testability",
+      "base_class": "Thinking_Habit",
+      "description": "可驗證性（ID: testability, Hashtag: #testability）。所屬：批判思考 / 評估主張。一個說法能不能被證明是錯的，可證偽性是區分科學和偽科學的終極防線。適用於實驗設計、避免確認偏誤、AI 系統測試。檢查清單含 6 項。"
+    },
+    {
+      "name": "Habit_EvidenceBased",
+      "base_class": "Thinking_Habit",
+      "description": "證據基礎（ID: evidencebased, Hashtag: #evidencebased）。所屬：批判思考 / 評估理由。讓每一個主張都有證據撐腰，用數據、研究、事實來支持論點。適用於學術寫作、政策決策、AI 內容驗證。檢查清單含 6 項。"
+    },
+    {
+      "name": "Habit_Deduction",
+      "base_class": "Thinking_Habit",
+      "description": "演繹推理（ID: deduction, Hashtag: #deduction）。所屬：批判思考 / 評估理由。從普遍原則推導出特定結論，如果前提是對的，結論就一定是對的。適用於數學證明、法律推理、程式調試。檢查清單含 5 項。"
+    },
+    {
+      "name": "Habit_Fallacies",
+      "base_class": "Thinking_Habit",
+      "description": "邏輯謬誤（ID: fallacies, Hashtag: #fallacies）。所屬：批判思考 / 評估理由。推理中的錯誤，讓論證看起來有道理但實際上站不住腳。適用於論點評估、辯論、錯誤資訊偵測。檢查清單含 5 項。"
+    },
+    {
+      "name": "Habit_Induction",
+      "base_class": "Thinking_Habit",
+      "description": "歸納推理（ID: induction, Hashtag: #induction）。所屬：批判思考 / 評估理由。從特定觀察推導出普遍結論，結論是可能的而不是必然的。適用於科學研究、數據分析、機器學習。檢查清單含 5 項。"
+    },
+    {
+      "name": "Habit_SourceQuality",
+      "base_class": "Thinking_Habit",
+      "description": "來源品質（ID: sourcequality, Hashtag: #sourcequality）。所屬：批判思考 / 評估理由。系統性評估資訊來源的可信度，將主觀感知轉化為嚴謹的評估過程。適用於資訊消費、論證建構、AI 內容驗證。檢查清單含 6 項。"
+    },
+    {
+      "name": "Habit_ScienceOfLearning",
+      "base_class": "Thinking_Habit",
+      "description": "科學學習法（ID: scienceoflearning, Hashtag: #scienceoflearning）。所屬：創意思考 / 問題解決。將認知科學、神經科學的研究成果應用到學習上，用有證據支持的策略來學習。適用於教學設計、自主學習、教育科技開發。檢查清單含 6 項。"
+    },
+    {
+      "name": "Habit_Constraints",
+      "base_class": "Thinking_Habit",
+      "description": "限制條件（ID: constraints, Hashtag: #constraints）。所屬：創意思考 / 問題解決。將資源稀缺或邊界視為創新催化劑而不是障礙，限制提供必要的結構和焦點。適用於系統管理、創意設計、研究方法。檢查清單含 4 項。"
+    },
+    {
+      "name": "Habit_Analogies",
+      "base_class": "Thinking_Habit",
+      "description": "類比（ID: analogies, Hashtag: #analogies）。所屬：創意思考 / 問題解決。將已知領域的深層結構應用到新問題上，打破思維定勢、激發跨領域創新。適用於打破思維定勢、概念化新事物、複雜問題結構化。檢查清單含 4 項。"
+    },
+    {
+      "name": "Habit_Algorithms",
+      "base_class": "Thinking_Habit",
+      "description": "演算法（ID: algorithms, Hashtag: #algorithms）。所屬：創意思考 / 問題解決。將複雜挑戰系統化、結構化的認知工具，將邏輯指令轉化為創造性解決方案的藍圖。適用於流程設計、AI 決策評估、數據分析。檢查清單含 5 項。"
+    },
+    {
+      "name": "Habit_DesignThinking",
+      "base_class": "Thinking_Habit",
+      "description": "設計思考（ID: designthinking, Hashtag: #designthinking）。所屬：創意思考 / 問題解決。以人為中心的創新方法論，透過同理心、迭代原型和快速測試創造解決方案。適用於產品創新、組織轉型、社會問題。檢查清單含 4 項。"
+    },
+    {
+      "name": "Habit_Heuristics",
+      "base_class": "Thinking_Habit",
+      "description": "捷思法（ID: heuristics, Hashtag: #heuristics）。所屬：創意思考 / 問題解決。在資訊爆炸時代用來快速做出夠好決策的心理捷徑，是雙刃劍。適用於時間壓力決策、複雜問題初步探索、行為經濟學。檢查清單含 4 項。"
+    },
+    {
+      "name": "Habit_Optimization",
+      "base_class": "Thinking_Habit",
+      "description": "最佳化（ID: optimization, Hashtag: #optimization）。所屬：創意思考 / 問題解決。從一堆選項中根據定義好的標準和約束條件系統性找出最好的方案。適用於資源分配、設計工程、機器學習。檢查清單含 4 項。"
+    },
+    {
+      "name": "Habit_Sampling",
+      "base_class": "Thinking_Habit",
+      "description": "抽樣（ID: sampling, Hashtag: #sampling）。所屬：創意思考 / 應用研究方法。從一大群裡挑出一小部分來研究，用這小部分來推論整體。適用於問卷調查、品質控制、機器學習訓練集。檢查清單含 5 項。"
+    },
+    {
+      "name": "Habit_CaseStudy",
+      "base_class": "Thinking_Habit",
+      "description": "個案研究（ID: casestudy, Hashtag: #casestudy）。所屬：創意思考 / 應用研究方法。給你一個複雜的真實情境，訓練在資訊不完整的情況下做出判斷。適用於複雜決策、培訓教育、策略規劃。檢查清單含 5 項。"
+    },
+    {
+      "name": "Habit_ComparisonGroups",
+      "base_class": "Thinking_Habit",
+      "description": "比較組（ID: comparisongroups, Hashtag: #comparisongroups）。所屬：創意思考 / 應用研究方法。透過與沒接受干預的群體比較來判斷因果關係。適用於臨床試驗、A/B 測試、政策評估。檢查清單含 5 項。"
+    },
+    {
+      "name": "Habit_InterventionalStudy",
+      "base_class": "Thinking_Habit",
+      "description": "介入性研究（ID: interventionalstudy, Hashtag: #interventionalstudy）。所屬：創意思考 / 應用研究方法。主動干預變數來觀察結果變化，證明因果關係的黃金標準。適用於醫學研究、產品開發、AI 系統評估。檢查清單含 5 項。"
+    },
+    {
+      "name": "Habit_InterviewSurvey",
+      "base_class": "Thinking_Habit",
+      "description": "訪談式研究（ID: interviewsurvey, Hashtag: #interviewsurvey）。所屬：創意思考 / 應用研究方法。直接問人們怎麼想、怎麼做。訪談深入了解少數人，問卷廣泛調查多人。適用於使用者研究、市場調查、學術研究。檢查清單含 5 項。"
+    },
+    {
+      "name": "Habit_ObservationalStudy",
+      "base_class": "Thinking_Habit",
+      "description": "觀察性研究（ID: observationalstudy, Hashtag: #observationalstudy）。所屬：創意思考 / 應用研究方法。不干預，只是觀察自然發生的事，分析暴露和結果之間的關聯。適用於倫理受限研究、長期追蹤、真實世界評估。檢查清單含 5 項。"
+    },
+    {
+      "name": "Habit_StudyReplication",
+      "base_class": "Thinking_Habit",
+      "description": "可複製性（ID: studyreplication, Hashtag: #studyreplication）。所屬：創意思考 / 應用研究方法。如果研究結果是真的，別人用同樣的方法應該能得到同樣的結果。適用於研究評估、知識建立、AI 研究驗證。檢查清單含 5 項。"
+    },
+    {
+      "name": "Habit_HypothesisDevelopment",
+      "base_class": "Thinking_Habit",
+      "description": "建立假說（ID: hypothesisdevelopment, Hashtag: #hypothesisdevelopment）。所屬：創意思考 / 資料與探索。把觀察、理論與實證檢驗連結起來，提出可檢驗的推測性解釋。適用於科學研究、問題診斷、產品迭代。檢查清單含 5 項。"
+    },
+    {
+      "name": "Habit_DataViz",
+      "base_class": "Thinking_Habit",
+      "description": "資料視覺化（ID: dataviz, Hashtag: #dataviz）。所屬：創意思考 / 資料與探索。把複雜數據變成直觀圖形，透過視覺編碼揭示隱藏的模式與趨勢。適用於探索性數據分析、溝通發現、解釋 AI 模型。檢查清單含 5 項。"
+    },
+    {
+      "name": "Habit_Modeling",
+      "base_class": "Thinking_Habit",
+      "description": "模型建構（ID: modeling, Hashtag: #modeling）。所屬：創意思考 / 資料與探索。用簡化的方式來代表複雜的東西，讓我們能理解、預測甚至操控現實。適用於理解複雜系統、預測未來、訓練 AI。檢查清單含 5 項。"
+    },
+    {
+      "name": "Habit_Audience",
+      "base_class": "Thinking_Habit",
+      "description": "受眾（ID: audience, Hashtag: #audience）。所屬：溝通思考 / 語言溝通。在溝通之前系統性地研究聽眾或讀者，搞清楚他們是誰、在乎什麼，然後調整內容與策略。適用於公開演講、寫作、行銷。檢查清單含 5 項。"
+    },
+    {
+      "name": "Habit_Composition",
+      "base_class": "Thinking_Habit",
+      "description": "內容組織（ID: composition, Hashtag: #composition）。所屬：溝通思考 / 語言溝通。把散亂的想法整理成有邏輯、有結構的訊息，決定資訊呈現的順序與結構。適用於寫作、簡報、編輯 AI 內容。檢查清單含 5 項。"
+    },
+    {
+      "name": "Habit_Connotation",
+      "base_class": "Thinking_Habit",
+      "description": "語義內涵（ID: connotation, Hashtag: #connotation）。所屬：溝通思考 / 語言溝通。字詞背後的情感色彩和聯想，選擇最精準、最有效的用詞。適用於對外文件、給予回饋、編輯 AI 內容。檢查清單含 5 項。"
+    },
+    {
+      "name": "Habit_Organization",
+      "base_class": "Thinking_Habit",
+      "description": "組織結構（ID: organization, Hashtag: #organization）。所屬：溝通思考 / 語言溝通。設計資訊的架構，安排章節順序與層次，讓讀者能輕鬆找到他們要的東西。適用於論文報告、演講簡報、文件範本設計。檢查清單含 5 項。"
+    },
+    {
+      "name": "Habit_Professionalism",
+      "base_class": "Thinking_Habit",
+      "description": "專業素養（ID: professionalism, Hashtag: #professionalism）。所屬：溝通思考 / 語言溝通。讓人覺得你靠得住、值得信任的整體表現，是持續穩定可預期的工作展現。適用於所有職場溝通、壓力情境、數位溝通。檢查清單含 5 項。"
+    },
+    {
+      "name": "Habit_Thesis",
+      "base_class": "Thinking_Habit",
+      "description": "論點陳述（ID: thesis, Hashtag: #thesis）。所屬：溝通思考 / 語言溝通。一句話告訴讀者你要論證什麼，是核心主張不是主題。適用於學術寫作、商業提案、說服性寫作。檢查清單含 5 項。"
+    },
+    {
+      "name": "Habit_CommunicationDesign",
+      "base_class": "Thinking_Habit",
+      "description": "溝通設計（ID: communicationdesign, Hashtag: #communicationdesign）。所屬：溝通思考 / 非語言溝通。有策略地運用視覺元素來傳達訊息，結合美學、心理學和溝通策略。適用於簡報提案、報告排版、行銷素材。檢查清單含 4 項。"
+    },
+    {
+      "name": "Habit_Expression",
+      "base_class": "Thinking_Habit",
+      "description": "表達（ID: expression, Hashtag: #expression）。所屬：溝通思考 / 非語言溝通。非語言溝通：身體姿勢、手勢、面部表情、語調、節奏。不說什麼而怎麼說。適用於口頭簡報、面試、跨文化溝通。檢查清單含 5 項。"
+    },
+    {
+      "name": "Habit_Medium",
+      "base_class": "Thinking_Habit",
+      "description": "媒介選擇（ID: medium, Hashtag: #medium）。所屬：溝通思考 / 非語言溝通。藝術或創意作品的表達載體（詩、散文、繪畫、音樂、電影），每種媒介有獨有的表達工具。適用於文學分析、藝術評論、創作選擇。檢查清單含 6 項。"
+    },
+    {
+      "name": "Habit_Multimedia",
+      "base_class": "Thinking_Habit",
+      "description": "多媒體運用（ID: multimedia, Hashtag: #multimedia）。所屬：溝通思考 / 非語言溝通。策略性結合文字、圖片、影音，理解媒體之間的互補、強化與干擾關係。適用於簡報、教學、行銷。檢查清單含 4 項。"
+    },
+    {
+      "name": "Habit_Conformity",
+      "base_class": "Thinking_Habit",
+      "description": "一致性（ID: conformity, Hashtag: #conformity）。所屬：互動思考 / 與他人合作。人類傾向於把自己的信念、態度或行為調整成跟群體一致，受規範性與資訊性影響。適用於道德 AI 設計、組織變革、群體迷思緩解。檢查清單含 5 項。"
+    },
+    {
+      "name": "Habit_Differences",
+      "base_class": "Thinking_Habit",
+      "description": "個體差異（ID: differences, Hashtag: #differences）。所屬：互動思考 / 與他人合作。在團隊合作時，每個人的技能、態度、身份、社會位置都不一樣，這些差異形塑合作體驗。適用於團隊組建、衝突處理、包容性設計。檢查清單含 5 項。"
+    },
+    {
+      "name": "Habit_EmotionalIQ",
+      "base_class": "Thinking_Habit",
+      "description": "情商（ID: emotionaliq, Hashtag: #emotionaliq）。所屬：互動思考 / 與他人合作。感知自己和別人的情緒、理解這些情緒從哪來、然後適當地管理它們。適用於領導管理、衝突解決、銷售客服。檢查清單含 5 項。"
+    },
+    {
+      "name": "Habit_LeadPrinciples",
+      "base_class": "Thinking_Habit",
+      "description": "領導原則（ID: leadprinciples, Hashtag: #leadprinciples）。所屬：互動思考 / 與他人合作。理解和評估領導者如何影響群體的框架，涉及權力的運用、目標達成與價值體現。適用於領導分析、組織框架設計、歷史研究。檢查清單含 6 項。"
+    },
+    {
+      "name": "Habit_PowerDynamics",
+      "base_class": "Thinking_Habit",
+      "description": "權力動態（ID: powerdynamics, Hashtag: #powerdynamics）。所屬：互動思考 / 與他人合作。在任何人際互動中，誰有影響力、這個影響力從哪來、怎麼運作。適用於團隊會議、談判、衝突解決。檢查清單含 5 項。"
+    },
+    {
+      "name": "Habit_Responsibility",
+      "base_class": "Thinking_Habit",
+      "description": "當責（ID: responsibility, Hashtag: #responsibility）。所屬：互動思考 / 與他人合作。先搞清楚什麼是你能控制的、什麼不是，然後在你可控的範圍內負起最大責任。適用於專案管理、團隊協作、個人發展。檢查清單含 5 項。"
+    },
+    {
+      "name": "Habit_SelfAwareness",
+      "base_class": "Thinking_Habit",
+      "description": "自我覺察（ID: selfawareness, Hashtag: #selfawareness）。所屬：互動思考 / 與他人合作。清楚地知道自己現在在想什麼、感覺什麼、為什麼會這樣反應，所有自我改進的起點。適用於領導管理、衝突解決、情緒調節。檢查清單含 5 項。"
+    },
+    {
+      "name": "Habit_Strategize",
+      "base_class": "Thinking_Habit",
+      "description": "制定策略（ID: strategize, Hashtag: #strategize）。所屬：互動思考 / 與他人合作。有取捨的、面向未來的計劃，在變動的環境中建立持久的優勢，決定什麼該做、什麼不該做。適用於企業策略、生涯規劃、資源分配。檢查清單含 5 項。"
+    },
+    {
+      "name": "Habit_ComplexCausality",
+      "base_class": "Thinking_Habit",
+      "description": "複雜因果關係（ID: complexcausality, Hashtag: #complexcausality）。所屬：互動思考 / 複雜系統互動。現實中的事情往往不是 A 導致 B 這麼簡單，而是多因素互相影響、纏繞、延遲反應的網路。適用於棘手問題、政策設計、意外結果分析。檢查清單含 5 項。"
+    },
+    {
+      "name": "Habit_EmergentProperties",
+      "base_class": "Thinking_Habit",
+      "description": "湧現（ID: emergentproperties, Hashtag: #emergentproperties）。所屬：互動思考 / 複雜系統互動。整體大於部分的總和，很多簡單的東西互相作用後產生原本不存在的新特性。適用於 AI 系統設計、多代理系統、預測緩解風險。檢查清單含 5 項。"
+    },
+    {
+      "name": "Habit_LevelsOfAnalysis",
+      "base_class": "Thinking_Habit",
+      "description": "多層次分析（ID: levelsofanalysis, Hashtag: #levelsofanalysis）。所屬：互動思考 / 複雜系統互動。同一個問題從個人、團隊、組織三個不同層次來看，會看到完全不同的原因和解法。適用於問題診斷、變革管理、策略制定。檢查清單含 5 項。"
+    },
+    {
+      "name": "Habit_Networks",
+      "base_class": "Thinking_Habit",
+      "description": "網絡分析（ID: networks, Hashtag: #networks）。所屬：互動思考 / 複雜系統互動。看理念、資源、資訊、疾病這些東西在系統裡是怎麼傳開的，分析節點與連結。適用於改善協作、領導發展、變革管理。檢查清單含 5 項。"
+    },
+    {
+      "name": "Habit_SystemDynamics",
+      "base_class": "Thinking_Habit",
+      "description": "系統動力學（ID: systemdynamics, Hashtag: #systemdynamics）。所屬：互動思考 / 複雜系統互動。用電腦模擬理解複雜系統隨時間變化的行為，揭示反直覺的結果。適用於供應鏈、長期策略、高槓桿點識別。檢查清單含 5 項。"
+    },
+    {
+      "name": "Habit_SystemMapping",
+      "base_class": "Thinking_Habit",
+      "description": "系統描繪（ID: systemmapping, Hashtag: #systemmapping）。所屬：互動思考 / 複雜系統互動。把複雜系統的所有組成部分和它們之間的關係畫出來，整合多元觀點。適用於持續性問題、多方利害關係人、設計新政策。檢查清單含 5 項。"
+    },
+    {
+      "name": "Habit_EthicalConsiderations",
+      "base_class": "Thinking_Habit",
+      "description": "倫理考量（ID: ethicalconsiderations, Hashtag: #ethicalconsiderations）。所屬：互動思考 / 解決道德問題。在每一次互動中問自己：我這樣做公平嗎？誠實嗎？有沒有尊重對方？適用於領導管理、衝突解決、AI 使用。檢查清單含 5 項。"
+    },
+    {
+      "name": "Habit_EthicalCourage",
+      "base_class": "Thinking_Habit",
+      "description": "倫理勇氣（ID: ethicalcourage, Hashtag: #ethicalcourage）。所屬：互動思考 / 解決道德問題。明知道可能會有不好的後果，但還是選擇做對的事。適用於領導決策、挑戰權威、為他人發聲。檢查清單含 5 項。"
+    },
+    {
+      "name": "Habit_EthicalJudgment",
+      "base_class": "Thinking_Habit",
+      "description": "倫理判斷（ID: ethicaljudgment, Hashtag: #ethicaljudgment）。所屬：互動思考 / 解決道德問題。面對道德灰色地帶時，用結構化的思考方式來判斷什麼是對的。適用於資源分配、政策制定、AI 應用。檢查清單含 5 項。"
+    },
+    {
+      "name": "Habit_Negotiate",
+      "base_class": "Thinking_Habit",
+      "description": "談判協商（ID: negotiate, Hashtag: #negotiate）。所屬：互動思考 / 談判和說服。把對抗性的衝突變成合作性的問題解決，不是分餅而是一起把餅做大。原則式談判四核心。適用於薪資談判、專案範圍、衝突解決。檢查清單含 5 項。"
+    },
+    {
+      "name": "Habit_Persuasion",
+      "base_class": "Thinking_Habit",
+      "description": "說服技巧（ID: persuasion, Hashtag: #persuasion）。所屬：互動思考 / 談判和說服。通過邏輯推理、可信證據、情感連結來影響別人的信念、態度或行為。亞里士多德三模式：Ethos、Logos、Pathos。適用於領導管理、銷售行銷、公開演講。檢查清單含 5 項。"
+    },
+    {
+      "name": "Habit_ShapingBehavior",
+      "base_class": "Thinking_Habit",
+      "description": "行為塑造（ID: shapingbehavior, Hashtag: #shapingbehavior）。所屬：互動思考 / 談判和說服。影響行為的三大類工具：事前的誘因、事後的獎懲、選擇架構（Nudge）。適用於組織管理、公共政策、產品設計。檢查清單含 6 項。"
+    },
+    {
+      "name": "Learning_Module",
+      "base_class": "Course",
+      "description": "學習模組。將多個思考習慣依特定主題、角色或應用場景打包為訓練單元。模組跨越原始分類界線，依實際應用需求組合習慣。每個模組包含：目標角色、適用場景、習慣清單、學習時數建議、評量方式。"
+    },
+    {
+      "name": "Learning_Pathway",
+      "base_class": "Planning",
+      "description": "學習路徑。為達成特定學習目標而設計的結構化學習序列。路徑由多個學習模組組成，模組之間有先後依賴關係。支援角色型路徑（如管理者思維訓練）與主題型路徑（如系統思考專精）。"
+    },
+    {
+      "name": "Proficiency_Level",
+      "base_class": "Classification",
+      "description": "思考習慣熟練度層級。共四級：L1 覺察（Awareness）、L2 應用（Application）、L3 精通（Proficiency）、L4 教練（Coaching）。"
+    },
+    {
+      "name": "Proficiency_Assessment",
+      "base_class": "Assessment",
+      "description": "熟練度評量。針對特定思考習慣的掌握程度進行評估的結構化工具。評量方式包含：自我評量問卷、情境判斷測驗、實作觀察評量。"
+    },
+    {
+      "name": "Self_Assessment_Item",
+      "base_class": "Concept",
+      "description": "自我評量題項。由思考習慣的檢查清單項目轉化而成的自我評量問題。每個習慣的檢查清單項目可轉為李克特量表（1~5 分）題項。總計約 400 題。"
+    },
+    {
+      "name": "Habit_Combination_Framework",
+      "base_class": "Framework",
+      "description": "習慣協同框架。將多個思考習慣組合成結構化的工作流程，用於解決特定類型的問題或完成特定任務。"
+    },
+    {
+      "name": "Problem_Diagnosis_Framework",
+      "base_class": "Habit_Combination_Framework",
+      "description": "問題診斷框架。組合 5 個習慣：① 問對問題 → ② 拆解問題 → ③ 變數控制 → ④ 複雜因果關係 → ⑤ 證據基礎。適用於製造現場異常分析、品質問題追溯。"
+    },
+    {
+      "name": "Decision_Analysis_Framework",
+      "base_class": "Habit_Combination_Framework",
+      "description": "決策分析框架。組合 6 個習慣：① 目的 → ② 效用理論 → ③ 決策樹 → ④ 機率理論 → ⑤ 偏誤檢驗 → ⑥ 倫理判斷。適用於高風險投資、供應商評選、策略方向選擇。"
+    },
+    {
+      "name": "Communication_Planning_Framework",
+      "base_class": "Habit_Combination_Framework",
+      "description": "溝通規劃框架。組合 4 個習慣：① 受眾 → ② 內容組織 → ③ 組織結構 → ④ 溝通設計。適用於重要簡報、文件撰寫、變革溝通。"
+    },
+    {
+      "name": "System_Analysis_Framework",
+      "base_class": "Habit_Combination_Framework",
+      "description": "系統分析框架。組合 5 個習慣：① 系統描繪 → ② 多層次分析 → ③ 網絡分析 → ④ 系統動力學 → ⑤ 湧現。適用於組織變革、供應鏈優化、政策影響評估。"
+    },
+    {
+      "name": "Application_Domain",
+      "base_class": "Classification",
+      "description": "應用領域。思考習慣可被應用的外部領域分類。主要領域：商業管理、科學研究、技術工程、日常生活、AI 與數位科技、教育學習、人際關係、藝術創作。"
+    },
+    {
+      "name": "Target_Role",
+      "base_class": "Classification",
+      "description": "目標角色。學習路徑與模組所設計的目標學習者角色。範例：高階管理者、中階主管、專案經理、工程師、分析師、研究人員。"
+    },
+    {
+      "name": "Prerequisite_Chain",
+      "base_class": "Concept",
+      "description": "先備習慣鏈。定義思考習慣之間的學習依賴關係鏈。例如：偏誤緩解 → 偏誤檢驗 → 證據基礎 → 歸納推理。"
+    },
+    {
+      "name": "Team_Skill_Matrix",
+      "base_class": "Concept",
+      "description": "團隊技能矩陣。將個別成員的熟練度評量彙總為團隊層級的思考技能分布矩陣。用於團隊組成分析與技能缺口識別。"
+    }
+  ],
+  "object_properties": [
+    {
+      "name": "packaged_in_module",
+      "description": "思考習慣被收錄於特定學習模組中。一個習慣可出現在多個模組，一個模組包含多個習慣。",
+      "domain": ["Thinking_Habit"],
+      "range": ["Learning_Module"]
+    },
+    {
+      "name": "has_prerequisite_habit",
+      "description": "學習某個習慣前建議先掌握的基礎習慣。用於建立學習路徑的先備知識鏈。",
+      "domain": ["Thinking_Habit"],
+      "range": ["Thinking_Habit", "Prerequisite_Chain"]
+    },
+    {
+      "name": "achieves_proficiency",
+      "description": "學習者在特定習慣上達到指定的熟練度層級。用於個人學習進度追蹤。",
+      "domain": ["Proficiency_Assessment"],
+      "range": ["Proficiency_Level"]
+    },
+    {
+      "name": "assesses_habit",
+      "description": "評量工具針對特定思考習慣進行評估。一個習慣可被多種評量方式評估。",
+      "domain": ["Proficiency_Assessment", "Self_Assessment_Item"],
+      "range": ["Thinking_Habit"]
+    },
+    {
+      "name": "composes_framework",
+      "description": "思考習慣是某個協同框架的組成部分。框架定義多習慣的組合順序與協作方式。",
+      "domain": ["Thinking_Habit"],
+      "range": ["Habit_Combination_Framework"]
+    },
+    {
+      "name": "applies_to_domain",
+      "description": "思考習慣可應用於特定的外部領域。支援跨領域映射與領域推薦。",
+      "domain": ["Thinking_Habit"],
+      "range": ["Application_Domain"]
+    },
+    {
+      "name": "recommended_for_role",
+      "description": "思考習慣或學習模組被推薦給特定目標角色。用於角色型學習路徑推薦。",
+      "domain": ["Thinking_Habit", "Learning_Module"],
+      "range": ["Target_Role"]
+    },
+    {
+      "name": "maps_from_checklist",
+      "description": "自我評量題項源自思考習慣的檢查清單項目。將定性檢查轉化為定量評量。",
+      "domain": ["Self_Assessment_Item"],
+      "range": ["Checklist_Item"]
+    },
+    {
+      "name": "follows_pathway",
+      "description": "學習模組按照特定的學習路徑順序排列。路徑定義模組之間的先後關係。",
+      "domain": ["Learning_Module"],
+      "range": ["Learning_Pathway"]
+    },
+    {
+      "name": "aggregates_to_matrix",
+      "description": "個別評量結果彙總至團隊技能矩陣。用於團隊層級的技能分析。",
+      "domain": ["Proficiency_Assessment"],
+      "range": ["Team_Skill_Matrix"]
+    }
+  ],
+  "metadata": {
+    "domain_owner": "Management_Knowledge",
+    "domain": "76_Thinking_Habits",
+    "major_owner": "Thinking_Training_Team",
+    "data_classification": "INTERNAL",
+    "intended_usage": [
+      "76 個具體思考習慣查詢與檢索",
+      "RAG 精準檢索：依意圖檢索特定習慣及檢查清單",
+      "訓練課程設計：依 Learning_Module 組合習慣",
+      "學習路徑規劃：依 Prerequisite_Chain 排序",
+      "熟練度評量：Proficiency_Assessment → Team_Skill_Matrix",
+      "習慣協同框架導入：Problem_Diagnosis_Framework 等工作流應用"
+    ]
+  },
+  "learning_modules": [
+    {
+      "name": "基礎批判思維",
+      "target_roles": ["所有角色"],
+      "habits": ["問對問題", "拆解問題", "證據基礎", "歸納推理", "演繹推理", "來源品質"],
+      "prerequisites": [],
+      "estimated_hours": 12
+    },
+    {
+      "name": "進階分析與決策",
+      "target_roles": ["管理者", "分析師", "工程師"],
+      "habits": ["變數控制", "相關性", "敘述統計", "決策樹", "效用理論", "偏誤檢驗", "偏誤緩解"],
+      "prerequisites": ["基礎批判思維"],
+      "estimated_hours": 16
+    },
+    {
+      "name": "系統思考與複雜問題",
+      "target_roles": ["高階管理者", "策略規劃者", "專案經理"],
+      "habits": ["複雜因果關係", "系統描繪", "系統動力學", "多層次分析", "網絡分析", "湧現", "模型建構"],
+      "prerequisites": ["基礎批判思維"],
+      "estimated_hours": 20
+    },
+    {
+      "name": "創意思維與創新",
+      "target_roles": ["研發人員", "設計師", "產品經理"],
+      "habits": ["設計思考", "類比", "限制條件", "建立假說", "最佳化", "捷思法"],
+      "prerequisites": ["基礎批判思維"],
+      "estimated_hours": 14
+    },
+    {
+      "name": "研究方法與實證",
+      "target_roles": ["研究人員", "品檢人員", "分析師"],
+      "habits": ["抽樣", "比較組", "介入性研究", "觀察性研究", "訪談式研究", "個案研究", "可複製性"],
+      "prerequisites": ["進階分析與決策"],
+      "estimated_hours": 18
+    },
+    {
+      "name": "高效溝通與呈現",
+      "target_roles": ["所有角色"],
+      "habits": ["受眾", "內容組織", "組織結構", "論點陳述", "語義內涵", "溝通設計", "多媒體運用"],
+      "prerequisites": [],
+      "estimated_hours": 10
+    },
+    {
+      "name": "團隊協作與領導",
+      "target_roles": ["管理者", "團隊領導者"],
+      "habits": ["情商", "自我覺察", "權力動態", "領導原則", "個體差異", "一致性", "當責", "制定策略"],
+      "prerequisites": [],
+      "estimated_hours": 16
+    },
+    {
+      "name": "談判說服與衝突處理",
+      "target_roles": ["業務人員", "採購人員", "管理者"],
+      "habits": ["談判協商", "說服技巧", "行為塑造", "心理成因", "賽局理論"],
+      "prerequisites": ["高效溝通與呈現"],
+      "estimated_hours": 12
+    },
+    {
+      "name": "倫理與責任決策",
+      "target_roles": ["高階管理者", "法規人員", "所有角色"],
+      "habits": ["倫理考量", "倫理勇氣", "倫理判斷", "目的", "合理性評估", "可驗證性"],
+      "prerequisites": ["基礎批判思維"],
+      "estimated_hours": 8
+    },
+    {
+      "name": "AI 時代思維素養",
+      "target_roles": ["所有角色"],
+      "habits": ["問對問題", "來源品質", "合理性評估", "可驗證性", "機率理論", "信賴區間", "模型建構", "資料視覺化", "邏輯謬誤"],
+      "prerequisites": ["基礎批判思維"],
+      "estimated_hours": 14
+    }
+  ],
+  "status": "enabled"
+}

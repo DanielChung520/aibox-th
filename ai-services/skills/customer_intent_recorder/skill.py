@@ -106,7 +106,7 @@ async def _analyze_intent(message: str, customer_name: str) -> dict:
             {"role": "system", "content": "你是一個精準的業務意圖分析器。請嚴格按照 JSON 格式回傳。"},
             {"role": "user", "content": prompt},
         ],
-        model="ollama:gemma4:31b",
+        model="mlx:Qwen3-Coder-30B",
         temperature=0.1,
         max_tokens=256,
     )

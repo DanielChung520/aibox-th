@@ -1,0 +1,249 @@
+{
+  "_key": "domain_iso_quality_mgmt",
+  "type": "domain",
+  "name": "ISO_Quality_Management",
+  "version": "1.0",
+  "default_version": true,
+  "ontology_name": "ISO_Quality_Management_Domain_Ontology",
+  "description": "ISO 品質管理系統領域本體論，定義 ISO 9001 文件化品質管理系統的核心概念、文件四階層架構、文件生命週期管理與品質管理要素。本體適用於製造業 ISO 文件管理、ERP 作業流程標準化、RAG 知識檢索與 AI 推斷輔助決策。",
+  "author": "Daniel Chung",
+  "last_modified": "2026-05-30",
+  "inherits_from": ["5W1H_Base_Ontology_OWL"],
+  "compatible_domains": ["Manufacturing_Operations"],
+  "tags": [
+    "ISO9001",
+    "QualityManagement",
+    "QMS",
+    "DocumentControl",
+    "QualityAssurance",
+    "ERP",
+    "Manufacturing"
+  ],
+  "use_cases": [
+    "ISO 文件體系知識管理與檢索",
+    "文件四階層結構查詢與導航",
+    "品質記錄追溯與符合性分析",
+    "ERP 作業流程標準查詢",
+    "RAG 輔助品質管理決策",
+    "內部稽核與管理審查支援",
+    "AI 推斷文件關聯性與合規性"
+  ],
+  "entity_classes": [
+    {
+      "name": "QMS_Framework",
+      "base_class": "System",
+      "description": "ISO 品質管理系統框架，定義品質管理系統的整體範圍、方針與目標。為所有ISO文件的頂層概念。"
+    },
+    {
+      "name": "Quality_Policy",
+      "base_class": "Concept",
+      "description": "品質方針，由組織高階管理者訂定的品質管理系統總體意圖與方向。"
+    },
+    {
+      "name": "Quality_Objective",
+      "base_class": "Concept",
+      "description": "品質目標，在品質方針框架下設定的可量測目標，通常記錄於目標管理總表（TB-S99）。"
+    },
+    {
+      "name": "QMS_Document",
+      "base_class": "Document",
+      "description": "ISO 品質管理系統文件，為文件四階層體系的抽象基底類別，涵蓋一階至四階所有文件類型。"
+    },
+    {
+      "name": "Level1_QualityManual",
+      "base_class": "QMS_Document",
+      "description": "一階文件：品質手冊。闡述組織的品質管理系統範圍、品質政策、程序架構與職責分配，為品質管理系統的最高指導文件。文件代碼：QM。"
+    },
+    {
+      "name": "Level2_ManagementProcedure",
+      "base_class": "QMS_Document",
+      "description": "二階文件：管理辦法。定義跨部門或部門內為達成品質目標所需的流程、職責與作業程序。文件代碼：QP（含 QP-P 業務類、QP-S 服務類、QP-T 技術類）。"
+    },
+    {
+      "name": "Level3_WorkInstruction",
+      "base_class": "QMS_Document",
+      "description": "三階文件：作業規範/工作指導書。針對特定作業或製程步驟的詳細操作說明、技術參數與檢驗標準。文件代碼：W（含 WC 檢驗規範、WP 製程規範、WI 工作要領書、WO 風險管理表）。"
+    },
+    {
+      "name": "Level4_Form",
+      "base_class": "QMS_Document",
+      "description": "四階文件：表單/紀錄。用於記錄品質管理系統運作過程中所產生的數據、結果與證據。為文件體系中最底層，也是數量最多的一類。文件代碼：TB。"
+    },
+    {
+      "name": "Form_Template",
+      "base_class": "Level4_Form",
+      "description": "表單模板（空白表單）。定義表單的欄位結構、填寫規範與格式，為尚未填寫的空白版本。通常包含 V02. 20240325 等版本標記。"
+    },
+    {
+      "name": "Form_Instance",
+      "base_class": "Level4_Form",
+      "description": "表單實例（填寫記錄）。依據表單模板實際填寫的具體記錄，包含特定時間、特定產品、特定批次的檢驗或作業數據。如 SM01 儀器履歷表即為 TB-T17 模板的實例。"
+    },
+    {
+      "name": "Document_Code",
+      "base_class": "Identifier",
+      "description": "文件編號，用於唯一識別每份ISO文件的編碼系統。編碼規則反映文件層級、類別與流水號。範例：QM-P01（品質手冊）、QP-S01（服務類管理辦法）、WP-T01（技術類製程規範）、TB-T17（技術類表單）。"
+    },
+    {
+      "name": "Document_Version",
+      "base_class": "Concept",
+      "description": "文件版本號與版次紀錄。遵循 V{major}.{minor} YYYYMMDD 格式，例如 V11. 20240925。追蹤文件修訂歷程與生效日期。"
+    },
+    {
+      "name": "Document_Status",
+      "base_class": "Status",
+      "description": "文件生命週期狀態，包含：發行中（issued）、待發行（pending_issue）、已下市/停產（discontinued）、已作廢（obsolete）、未入ISO（non_iso）。"
+    },
+    {
+      "name": "Factory_Unit",
+      "base_class": "Location",
+      "description": "營運單位與廠區。本系統涵蓋樹八廠（樹林廠）與土城廠兩個製造廠區，各有獨立的儀器、設備、工具與治具管理體系。"
+    },
+    {
+      "name": "ERP_Module",
+      "base_class": "System",
+      "description": "ERP 系統功能模組。ISO 文件規範的作業流程對應的 ERP 模組，包括：物料管理、庫存管理、採購管理、生產管理、品質管理、資產管理、人力資源、銷售管理。"
+    },
+    {
+      "name": "Quality_Record",
+      "base_class": "Document",
+      "description": "品質紀錄，品質管理系統運作所產生的客觀證據。包括檢驗紀錄、稽核報告、校正紀錄、管理審查紀錄等。"
+    },
+    {
+      "name": "Nonconformity",
+      "base_class": "Event",
+      "description": "不符合事項。產品或流程未能滿足要求標準的狀況，需要啟動矯正措施。記錄於 TB-T02 矯正及預防措施要求表。"
+    },
+    {
+      "name": "Corrective_Action",
+      "base_class": "Process",
+      "description": "矯正與預防措施。為消除不符合事項的根本原因所採取的行動，涵蓋問題分析、對策執行與效果確認。規範文件：QP-T02。"
+    },
+    {
+      "name": "Internal_Audit",
+      "base_class": "Event",
+      "description": "內部品質稽核。定期執行的品質管理系統符合性檢查活動，由內部稽核員依據 QP-S10 進行。相關表單：TB-S14~S16、TB-S20。"
+    },
+    {
+      "name": "Management_Review",
+      "base_class": "Event",
+      "description": "管理審查。高階管理者定期檢討品質管理系統的適切性、有效性與持續改善。規範文件：QP-S11。相關表單：TB-S17。"
+    },
+    {
+      "name": "Document_Change_Log",
+      "base_class": "Document",
+      "description": "文件變更紀錄。追蹤ISO文件的申請、審核、發行與改版歷程。相關表單：TB-S21 文件申請單、TB-S22 文件申請附件。"
+    },
+    {
+      "name": "Continual_Improvement",
+      "base_class": "Process",
+      "description": "持續改善機制。包含員工提案（QP-S13）、資料分析（QP-S12）、機會與風險管理（QP-S14）等持續改善活動。"
+    }
+  ],
+  "object_properties": [
+    {
+      "name": "has_document_level",
+      "description": "文件所屬的ISO層級（一階至四階）。",
+      "domain": ["QMS_Document"],
+      "range": ["Level1_QualityManual", "Level2_ManagementProcedure", "Level3_WorkInstruction", "Level4_Form"]
+    },
+    {
+      "name": "has_version",
+      "description": "文件擁有的版本號。",
+      "domain": ["QMS_Document"],
+      "range": ["Document_Version"]
+    },
+    {
+      "name": "has_document_code",
+      "description": "文件擁有的唯一編號。",
+      "domain": ["QMS_Document"],
+      "range": ["Document_Code"]
+    },
+    {
+      "name": "has_status",
+      "description": "文件目前的生命週期狀態。",
+      "domain": ["QMS_Document"],
+      "range": ["Document_Status"]
+    },
+    {
+      "name": "belongs_to_factory",
+      "description": "實體（儀器、設備、工具、治具）所屬的廠區。",
+      "domain": ["Factory_Unit"],
+      "range": ["Factory_Unit"]
+    },
+    {
+      "name": "defines_form",
+      "description": "管理辦法定義了某個表單模板的格式與欄位。",
+      "domain": ["Level2_ManagementProcedure"],
+      "range": ["Form_Template"]
+    },
+    {
+      "name": "references_document",
+      "description": "文件引用或參照其他文件。",
+      "domain": ["QMS_Document"],
+      "range": ["QMS_Document"]
+    },
+    {
+      "name": "governed_by_procedure",
+      "description": "作業規範或表單所遵循的管理辦法。",
+      "domain": ["Level3_WorkInstruction", "Level4_Form"],
+      "range": ["Level2_ManagementProcedure"]
+    },
+    {
+      "name": "implements_policy",
+      "description": "管理辦法或作業規範具體實現品質方針的某項要求。",
+      "domain": ["Level2_ManagementProcedure", "Level3_WorkInstruction"],
+      "range": ["Quality_Policy"]
+    },
+    {
+      "name": "maps_to_erp_module",
+      "description": "文件規範的流程對應的 ERP 系統模組。",
+      "domain": ["Level2_ManagementProcedure", "Level3_WorkInstruction"],
+      "range": ["ERP_Module"]
+    },
+    {
+      "name": "records_evidence_for",
+      "description": "品質紀錄做為某項活動或事件的客觀證據。",
+      "domain": ["Quality_Record"],
+      "range": ["QMS_Document", "Nonconformity", "Internal_Audit", "Management_Review"]
+    },
+    {
+      "name": "triggers_corrective_action",
+      "description": "不符合事項觸發矯正措施。",
+      "domain": ["Nonconformity"],
+      "range": ["Corrective_Action"]
+    },
+    {
+      "name": "evaluates_qms",
+      "description": "內部稽核或管理審查評估品質管理系統的有效性。",
+      "domain": ["Internal_Audit", "Management_Review"],
+      "range": ["QMS_Framework"]
+    },
+    {
+      "name": "has_quality_objective",
+      "description": "品質管理系統或組織單位訂定了某項品質目標。",
+      "domain": ["QMS_Framework", "Factory_Unit"],
+      "range": ["Quality_Objective"]
+    },
+    {
+      "name": "succeeds_version",
+      "description": "文件版本之間的繼承關係，新版取代舊版。",
+      "domain": ["Document_Version"],
+      "range": ["Document_Version"]
+    }
+  ],
+  "metadata": {
+    "domain_owner": "QA_Team",
+    "domain": null,
+    "major_owner": null,
+    "data_classification": "INTERNAL",
+    "intended_usage": [
+      "ISO 文件體系知識分類與檢索路由",
+      "文件四階層層級識別與導航",
+      "品質管理系統 AI 推斷基礎",
+      "ERP 流程標準符合性分析",
+      "RAG 查詢重排序與過濾"
+    ]
+  },
+  "status": "enabled"
+}

@@ -45,7 +45,7 @@ async def execute(params: dict[str, Any]) -> dict[str, Any]:
 
     result = await resolve_and_call(
         messages=messages,
-        model="ollama:gemma4:31b",
+        model="mlx:Qwen3-Coder-30B",
         temperature=0.3,
         max_tokens=256,
     )

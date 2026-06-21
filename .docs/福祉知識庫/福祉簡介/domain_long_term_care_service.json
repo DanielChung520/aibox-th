@@ -1,0 +1,302 @@
+{
+  "_key": "domain_long_term_care_service",
+  "type": "domain",
+  "name": "Long_Term_Care_Service",
+  "version": "1.0",
+  "default_version": true,
+  "ontology_name": "Long_Term_Care_Service_Domain_Ontology",
+  "description": "長照服務業領域本體論，定義台灣長照2.0體系下的核心概念、服務對象、服務類型、法規政策與品質管理要素。涵蓋：長照需求者與照顧者、長照服務體系（居家/社區/機構）、長照給付與支付制度、長照服務品質管理、長照資源連結。所有實體與關係對應長照服務業的實務運作與管理體系。",
+  "author": "Sisyphus",
+  "last_modified": "2026-06-21",
+  "inherits_from": ["5W1H_Base_Ontology_OWL"],
+  "compatible_domains": ["Social_Welfare", "Healthcare_Service", "Transportation_Service"],
+  "tags": [
+    "LongTermCare",
+    "LTC2.0",
+    "ElderlyCare",
+    "DisabilityService",
+    "HomeCare",
+    "CommunityCare",
+    "InstitutionalCare",
+    "CareManagement",
+    "SocialWelfare",
+    "TaiwanLTC"
+  ],
+  "use_cases": [
+    "長照服務體系知識管理與檢索",
+    "長照2.0給付與服務項目查詢",
+    "服務對象資格與等級判定輔助",
+    "長照資源連結與轉介支援",
+    "RAG 輔助長照服務決策",
+    "服務品質監測與評鑑管理",
+    "AI 推斷需求者照顧計畫建議"
+  ],
+  "entity_classes": [
+    {
+      "name": "LTC_System_Framework",
+      "base_class": "System",
+      "description": "長照服務體系框架。我國長照2.0政策下的整體服務體系，包含服務類型、給付制度、管理機制與資源網絡。"
+    },
+    {
+      "name": "Care_Recipient",
+      "base_class": "Person",
+      "description": "長照服務對象/需求者。經長照管理中心評估後，符合長照服務請領資格之民眾，包含：65歲以上失能老人、55歲以上失能原住民、50歲以上失智症患者、任何年齡之失能身心障礙者。"
+    },
+    {
+      "name": "Family_Caregiver",
+      "base_class": "Person",
+      "description": "家庭照顧者。實際提供長照需求者日常生活照顧之家庭成員，可申請照顧者支持服務與喘息服務。"
+    },
+    {
+      "name": "Disability_Level",
+      "base_class": "Classification",
+      "description": "失能等級/長照等級。依據 ADL（日常生活活動功能）與 IADL（工具性日常生活活動功能）評估結果，分為第1級至第8級，級數越高代表失能程度越重。"
+    },
+    {
+      "name": "Care_Need_Assessment",
+      "base_class": "Event",
+      "description": "長照需求評估。由長照管理中心照管專員進行的多元評估，包含 ADL、IADL、認知功能、居家環境、支持網絡等面向，決定失能等級與服務計畫。"
+    },
+    {
+      "name": "Care_Plan",
+      "base_class": "Planning",
+      "description": "長照服務計畫/照顧計畫。依據需求評估結果，由照管專員與個案及其家屬共同擬定的個人化服務計畫，載明服務項目、頻率、額度與服務提供單位。"
+    },
+    {
+      "name": "LTC_Service_Type",
+      "base_class": "Classification",
+      "description": "長照服務類型分類。長照2.0四大類服務：① 居家式服務（居家照護、居家復健等）② 社區式服務（日間照顧、家庭托顧等）③ 機構住宿式服務（住宿長照機構）④ 其他整合型服務（交通接送、輔具購買等）。"
+    },
+    {
+      "name": "Home_Care_Service",
+      "base_class": "LTC_Service_Type",
+      "description": "居家式長照服務。包含：居家照護、居家復健、居家營養、居家藥事、居家護理、居家醫療、居家喘息等以案家為服務場域之服務。"
+    },
+    {
+      "name": "Community_Care_Service",
+      "base_class": "LTC_Service_Type",
+      "description": "社區式長照服務。包含：日間照顧中心、家庭托顧、巷弄長照站（C級）、社區整體照顧服務體系（A/B/C據點）、失智社區服務據點等。"
+    },
+    {
+      "name": "Institutional_Care_Service",
+      "base_class": "LTC_Service_Type",
+      "description": "機構住宿式長照服務。包含：長期照顧機構（養護型/長期照護型/失智型）、住宿式長照機構、護理之家等。"
+    },
+    {
+      "name": "Transportation_Service",
+      "base_class": "LTC_Service_Type",
+      "description": "長照交通接送服務。長照2.0給付項目之一，提供失能者就醫、復健、日間照顧等目的之交通接送，以復康巴士或無障礙車輛提供服務。"
+    },
+    {
+      "name": "Respite_Service",
+      "base_class": "LTC_Service_Type",
+      "description": "喘息服務。為減輕家庭照顧者照顧負擔提供的短期替代照顧服務，包含居家喘息、機構喘息、日間照顧喘息等。"
+    },
+    {
+      "name": "Care_Service_Provider",
+      "base_class": "Organization",
+      "description": "長照服務提供單位。經特約管理單位核可，實際提供長照服務之組織，包含居家服務機構、日間照顧中心、長照機構、交通接送業者、輔具業者等。"
+    },
+    {
+      "name": "LTC_Management_Center",
+      "base_class": "Organization",
+      "description": "長照管理中心/照管中心。縣市政府設立之長照服務單一窗口，負責需求評估、服務核定、資源連結與品質監測。"
+    },
+    {
+      "name": "Care_Manager",
+      "base_class": "Role",
+      "description": "照管專員/個案管理員。長照管理中心之專業人員，負責需求評估、照顧計畫擬定、服務連結與追蹤訪視。"
+    },
+    {
+      "name": "Care_Worker",
+      "base_class": "Role",
+      "description": "照顧服務員。直接提供長照服務之第一線人員，須完成照顧服務員訓練並取得證書，可分為居家服務員與機構服務員。"
+    },
+    {
+      "name": "Social_Worker",
+      "base_class": "Role",
+      "description": "社會工作人員。長照體系中負責社會資源連結、家庭支持、福利諮詢等之專業人員。"
+    },
+    {
+      "name": "LTC_Regulation",
+      "base_class": "Regulation",
+      "description": "長照法規政策。規範長照服務體系的法規框架，包含：長期照顧服務法、長期照顧保險法（施行規劃中）、長照2.0政策、各項子法與行政規則。"
+    },
+    {
+      "name": "LTC_Benefit_Plan",
+      "base_class": "Planning",
+      "description": "長照給付制度/補助方案。長照2.0之服務費用給付架構，包含：長照服務給付額度（依據失能等級核給）、部分負擔比率、自費項目、補助申請流程等。"
+    },
+    {
+      "name": "Copayment_Rate",
+      "base_class": "Concept",
+      "description": "部分負擔比率。長照服務費用中使用者自付比例，一般戶16%、中低收入戶5%、低收入戶0%。"
+    },
+    {
+      "name": "LTC_Quality_Indicator",
+      "base_class": "Metric",
+      "description": "長照服務品質指標。用於監測與評鑑長照服務提供單位服務品質之指標體系，包含結構面、過程面與結果面指標。"
+    },
+    {
+      "name": "Service_Evaluation",
+      "base_class": "Event",
+      "description": "長照服務評鑑/督導考核。主管機關定期對長照服務提供單位進行之服務品質評鑑，評鑑結果分為優等、甲等、乙等、丙等。"
+    },
+    {
+      "name": "Care_Coordination",
+      "base_class": "Process",
+      "description": "照顧協調/資源連結。跨專業、跨機構之間的服務協調與資源轉介，確保長照需求者獲得連續性與整合性之服務。"
+    },
+    {
+      "name": "Assistive_Device",
+      "base_class": "Product",
+      "description": "輔具/輔助器具。用於維持或增進長照需求者日常生活功能之設備與器具，包含：輪椅、助行器、電動代步車、居家無障礙設備等。長照2.0提供輔具購買及租賃補助。"
+    },
+    {
+      "name": "Home_Accessibility_Improvement",
+      "base_class": "Service",
+      "description": "居家無障礙改善。針對長照需求者居家環境進行的無障礙設施設備改善，包含：扶手安裝、坡道設置、浴廁改造、門寬拓寬等，長照2.0提供補助。"
+    },
+    {
+      "name": "LTC_Information_System",
+      "base_class": "System",
+      "description": "長照資訊系統。長照服務管理之資訊平台，包含：長照管理資訊系統（LTCMIS）、照顧服務管理系統、交通接送管理平台等。"
+    },
+    {
+      "name": "LTC_Workforce",
+      "base_class": "Concept",
+      "description": "長照人力資源。長照服務體系之從業人力，包含照顧服務員、社工、護理人員、復健人員、營養師、藥師等各類專業人員之培訓、認證與管理。"
+    }
+  ],
+  "object_properties": [
+    {
+      "name": "receives_service",
+      "description": "長照需求者接受特定類型的長照服務。",
+      "domain": ["Care_Recipient"],
+      "range": ["LTC_Service_Type"]
+    },
+    {
+      "name": "has_care_level",
+      "description": "長照需求者經評估後有特定失能等級。",
+      "domain": ["Care_Recipient"],
+      "range": ["Disability_Level"]
+    },
+    {
+      "name": "assessed_by",
+      "description": "需求評估由照管專員執行。",
+      "domain": ["Care_Need_Assessment"],
+      "range": ["Care_Manager"]
+    },
+    {
+      "name": "has_care_plan",
+      "description": "長照需求者擁有個人化照顧計畫。",
+      "domain": ["Care_Recipient"],
+      "range": ["Care_Plan"]
+    },
+    {
+      "name": "provided_by",
+      "description": "長照服務由特定服務提供單位供給。",
+      "domain": ["LTC_Service_Type"],
+      "range": ["Care_Service_Provider"]
+    },
+    {
+      "name": "managed_by",
+      "description": "長照服務提供單位受長照管理中心監管。",
+      "domain": ["Care_Service_Provider"],
+      "range": ["LTC_Management_Center"]
+    },
+    {
+      "name": "regulated_by",
+      "description": "長照服務體系遵循特定法規政策。",
+      "domain": ["LTC_System_Framework", "Care_Service_Provider"],
+      "range": ["LTC_Regulation"]
+    },
+    {
+      "name": "has_benefit_plan",
+      "description": "服務類型對應特定給付制度與補助方案。",
+      "domain": ["LTC_Service_Type"],
+      "range": ["LTC_Benefit_Plan"]
+    },
+    {
+      "name": "has_copayment",
+      "description": "服務使用者適用特定部分負擔比率。",
+      "domain": ["Care_Recipient"],
+      "range": ["Copayment_Rate"]
+    },
+    {
+      "name": "has_quality_indicator",
+      "description": "服務品質透過特定指標進行監測。",
+      "domain": ["LTC_Service_Type", "Care_Service_Provider"],
+      "range": ["LTC_Quality_Indicator"]
+    },
+    {
+      "name": "evaluated_by",
+      "description": "服務提供單位定期接受服務評鑑。",
+      "domain": ["Care_Service_Provider"],
+      "range": ["Service_Evaluation"]
+    },
+    {
+      "name": "served_by",
+      "description": "照顧計畫由照顧服務員等人員實際提供服務。",
+      "domain": ["Care_Plan"],
+      "range": ["Care_Worker", "Social_Worker"]
+    },
+    {
+      "name": "provides_transportation",
+      "description": "長照交通接送服務由特定業者提供。",
+      "domain": ["Transportation_Service"],
+      "range": ["Care_Service_Provider"]
+    },
+    {
+      "name": "uses_assistive_device",
+      "description": "長照需求者使用特定輔具維持生活功能。",
+      "domain": ["Care_Recipient"],
+      "range": ["Assistive_Device"]
+    },
+    {
+      "name": "has_accessibility_improvement",
+      "description": "長照需求者居家環境有進行無障礙改善。",
+      "domain": ["Care_Recipient"],
+      "range": ["Home_Accessibility_Improvement"]
+    },
+    {
+      "name": "has_coordination",
+      "description": "服務提供單位之間有照顧協調機制。",
+      "domain": ["Care_Service_Provider", "LTC_Management_Center"],
+      "range": ["Care_Coordination"]
+    },
+    {
+      "name": "managed_in_system",
+      "description": "服務流程與資料記錄於長照資訊系統。",
+      "domain": ["LTC_Service_Type", "Care_Plan", "Care_Need_Assessment"],
+      "range": ["LTC_Information_System"]
+    },
+    {
+      "name": "staffed_by",
+      "description": "服務提供單位配置特定長照人力。",
+      "domain": ["Care_Service_Provider"],
+      "range": ["LTC_Workforce"]
+    },
+    {
+      "name": "provides_respite",
+      "description": "家庭照顧者可申請之替代照顧服務。",
+      "domain": ["Family_Caregiver"],
+      "range": ["Respite_Service"]
+    }
+  ],
+  "metadata": {
+    "domain_owner": "LTC_Service_Team",
+    "domain": null,
+    "major_owner": null,
+    "data_classification": "INTERNAL",
+    "intended_usage": [
+      "長照服務體系知識分類與檢索路由",
+      "長照2.0給付制度查詢與說明",
+      "長照服務品質管理 AI 推斷基礎",
+      "服務對象資格與等級判定輔助",
+      "RAG 查詢重排序與過濾",
+      "長照資源連結與轉介推薦"
+    ]
+  },
+  "status": "enabled"
+}

@@ -1,0 +1,339 @@
+{
+  "_key": "domain_76_thinking_habits",
+  "type": "domain",
+  "name": "76_Thinking_Habits",
+  "version": "1.0",
+  "default_version": true,
+  "ontology_name": "76_Thinking_Habits_Domain_Ontology",
+  "description": "76 個世界名校思考習慣知識庫領域本體論。定義思考習慣知識庫的頂層概念結構：4 大主分類（批判思考/創意思考/溝通思考/互動思考）與 14 子分類的層級體系、Thinking_Habit 抽象實體、Hashtag 標籤系統、檢查清單與應用場景等元件結構。本體為思維訓練領域的基礎分類框架，可被多個 major 專業本體繼承（如學習路徑專業本體、職能發展專業本體等）。",
+  "author": "Daniel Chung",
+  "last_modified": "2026-06-18",
+  "inherits_from": ["5W1H_Base_Ontology_OWL"],
+  "compatible_domains": ["Human_Resource_Development", "Education_Training", "Organizational_Behavior", "Cognitive_Science"],
+  "tags": [
+    "ThinkingHabits",
+    "KnowledgeBase",
+    "ThinkingCategory",
+    "ThinkingClassification",
+    "CriticalThinking",
+    "CreativeThinking",
+    "CommunicationThinking",
+    "InteractiveThinking",
+    "CognitiveSkills"
+  ],
+  "use_cases": [
+    "思考習慣知識庫頂層分類框架 — 4 大分類 × 14 子分類體系定義",
+    "RAG 領域路由 — 依查詢意圖路由至正確的思維分類",
+    "知識圖譜基礎結構 — Category ↔ Subcategory ↔ ThinkingHabit 抽象層",
+    "多 major 繼承基礎 — 供學習路徑、職能發展等專業本體繼承",
+    "跨域語意對接 — 與管理知識領域（ISO）進行分類映射"
+  ],
+  "entity_classes": [
+    {
+      "name": "Thinking_Habit_KnowledgeBase",
+      "base_class": "System",
+      "description": "76 個世界名校思考習慣知識庫，為所有思考習慣的頂層容器。總計 76 個思考習慣（ThinkingHabit）、4 個主分類（Category）、14 個子分類（Subcategory）、76 個標籤（Hashtag）、約 400 個檢查清單項目（ChecklistItem）、約 350 個應用場景（ApplicationScenario）。來源：AI超級大腦課。"
+    },
+    {
+      "name": "Thinking_Category",
+      "base_class": "Classification",
+      "description": "思考習慣主分類。共 4 大類，定義思考習慣的核心思維面向。各分類有獨立標籤與視覺色彩：批判思考（#7B3FD4 紫色）、創意思考（#C47F0A 金色）、溝通思考（#1A9B50 綠色）、互動思考（#0098C4 藍色）。"
+    },
+    {
+      "name": "Critical_Thinking_Category",
+      "base_class": "Thinking_Category",
+      "description": "批判思考主分類。核心在於審慎分析、邏輯推理與證據評估。包含 5 子類：分析問題、分析決策、分析資料、評估主張、評估理由。共 29 個思考習慣。標籤：批判思考。"
+    },
+    {
+      "name": "Creative_Thinking_Category",
+      "base_class": "Thinking_Category",
+      "description": "創意思考主分類。核心在於突破框架、生成新可能與系統性創新。包含 3 子類：問題解決、應用研究方法、資料與探索。共 17 個思考習慣。標籤：創意思考。"
+    },
+    {
+      "name": "Communication_Thinking_Category",
+      "base_class": "Thinking_Category",
+      "description": "溝通思考主分類。核心在於有效傳達訊息、理解受眾與選擇適切媒介。包含 2 子類：語言溝通、非語言溝通。共 10 個思考習慣。標籤：溝通思考。"
+    },
+    {
+      "name": "Interactive_Thinking_Category",
+      "base_class": "Thinking_Category",
+      "description": "互動思考主分類。核心在於與他人協作、理解複雜系統與處理道德困境。包含 4 子類：與他人合作、複雜系統互動、解決道德問題、談判和說服。共 20 個思考習慣。標籤：互動思考。"
+    },
+    {
+      "name": "Thinking_Subcategory",
+      "base_class": "Classification",
+      "description": "思考習慣子分類。共 14 子類，為主分類內更細緻的思維領域分組。每個子類包含 3~8 個思考習慣。子類為知識庫檢索與訓練模組組合的中介語意層級。"
+    },
+    {
+      "name": "Critical_Analysis_Problem",
+      "base_class": "Thinking_Subcategory",
+      "description": "分析問題子分類。訓練如何拆解複雜問題、定義正確問題、識別關鍵變數。包含 5 個習慣：拆解問題、賽局理論、差距分析、問對問題、變數控制。"
+    },
+    {
+      "name": "Critical_Analysis_Decision",
+      "base_class": "Thinking_Subcategory",
+      "description": "分析決策子分類。訓練如何識別決策偏誤、系統性評估選項、做出理性判斷。包含 6 個習慣：偏誤檢驗、偏誤緩解、決策樹、心理成因、目的、效用理論。"
+    },
+    {
+      "name": "Critical_Analysis_Data",
+      "base_class": "Thinking_Subcategory",
+      "description": "分析資料子分類。訓練如何理解數據、評估不確定性、區分相關與因果。包含 7 個習慣：信賴區間、相關性、敘述統計、機率分布、機率理論、迴歸分析、顯著性檢定。"
+    },
+    {
+      "name": "Critical_Evaluate_Claim",
+      "base_class": "Thinking_Subcategory",
+      "description": "評估主張子分類。訓練如何判斷主張的合理性、可驗證性與情境適用性。包含 6 個習慣：情境脈絡、批判、估計、詮釋視角、合理性評估、可驗證性。"
+    },
+    {
+      "name": "Critical_Evaluate_Reason",
+      "base_class": "Thinking_Subcategory",
+      "description": "評估理由子分類。訓練如何評估證據品質、識別邏輯謬誤、運用演繹與歸納推理。包含 5 個習慣：證據基礎、演繹推理、邏輯謬誤、歸納推理、來源品質。"
+    },
+    {
+      "name": "Creative_Problem_Solving",
+      "base_class": "Thinking_Subcategory",
+      "description": "問題解決子分類。訓練如何在限制條件下創新、運用類比與設計思考、最佳化方案。包含 7 個習慣：科學學習法、限制條件、類比、演算法、設計思考、捷思法、最佳化。"
+    },
+    {
+      "name": "Creative_Research_Method",
+      "base_class": "Thinking_Subcategory",
+      "description": "應用研究方法子分類。訓練如何設計研究、選擇適當方法、確保結果可靠性。包含 7 個習慣：抽樣、個案研究、比較組、介入性研究、訪談式研究、觀察性研究、可複製性。"
+    },
+    {
+      "name": "Creative_Data_Exploration",
+      "base_class": "Thinking_Subcategory",
+      "description": "資料與探索子分類。訓練如何從資料中建立假說、視覺化發現、建構模型。包含 3 個習慣：建立假說、資料視覺化、模型建構。"
+    },
+    {
+      "name": "Communication_Verbal",
+      "base_class": "Thinking_Subcategory",
+      "description": "語言溝通子分類。訓練如何針對受眾組織內容、選擇精準用詞、陳述有力論點。包含 6 個習慣：受眾、內容組織、語義內涵、組織結構、專業素養、論點陳述。"
+    },
+    {
+      "name": "Communication_Nonverbal",
+      "base_class": "Thinking_Subcategory",
+      "description": "非語言溝通子分類。訓練如何運用視覺設計、肢體語言與多媒體強化溝通效果。包含 4 個習慣：溝通設計、表達、媒介選擇、多媒體運用。"
+    },
+    {
+      "name": "Interactive_Collaboration",
+      "base_class": "Thinking_Subcategory",
+      "description": "與他人合作子分類。訓練如何理解群體動力、發揮領導力、建立信任與當責。包含 8 個習慣：一致性、個體差異、情商、領導原則、權力動態、當責、自我覺察、制定策略。"
+    },
+    {
+      "name": "Interactive_Complex_System",
+      "base_class": "Thinking_Subcategory",
+      "description": "複雜系統互動子分類。訓練如何理解非線性因果、湧現現象、網路效應與系統動態。包含 6 個習慣：複雜因果關係、湧現、多層次分析、網絡分析、系統動力學、系統描繪。"
+    },
+    {
+      "name": "Interactive_Ethics",
+      "base_class": "Thinking_Subcategory",
+      "description": "解決道德問題子分類。訓練如何辨識倫理議题、做出道德判斷、展現倫理勇氣。包含 3 個習慣：倫理考量、倫理勇氣、倫理判斷。"
+    },
+    {
+      "name": "Interactive_Negotiation",
+      "base_class": "Thinking_Subcategory",
+      "description": "談判和說服子分類。訓練如何在利益衝突中創造共贏、運用說服技巧、塑造他人行為。包含 3 個習慣：談判協商、說服技巧、行為塑造。"
+    },
+    {
+      "name": "Thinking_Habit",
+      "base_class": "Concept",
+      "description": "思考習慣抽象實體，為知識庫的核心節點。每個習慣包含唯一 ID（如 breakitdown）、中文名稱、所屬分類與子分類、Hashtag 標籤、簡述、操作型定義、使用時機與檢查清單。共 76 個具體實例定義於 major 本體中。"
+    },
+    {
+      "name": "Hashtag",
+      "base_class": "Identifier",
+      "description": "思考習慣的唯一標籤。每個思考習慣對應一個 Hashtag，格式為 #snake_case。用於知識庫檢索、RAG 向量索引與分類標記。共 76 個 Hashtag 實例。"
+    },
+    {
+      "name": "Checklist_Item",
+      "base_class": "Concept",
+      "description": "思考檢查清單項目。每個思考習慣包含 4~6 個檢查清單項目，用於自我評估是否正確應用了該習慣。總計約 400 個項目。檢查清單為操作型定義的實踐落地工具。"
+    },
+    {
+      "name": "Application_Scenario",
+      "base_class": "Concept",
+      "description": "思考習慣的應用場景。定義每個習慣在什麼情境下應該使用。每個習慣包含 4~7 個應用場景，涵蓋個人決策、職場應用、學術研究、AI 時代應用等面向。總計約 350 個場景描述。"
+    },
+    {
+      "name": "Operational_Definition",
+      "base_class": "Concept",
+      "description": "思考習慣的操作型定義。每個習慣有詳細的定義說明，包含核心概念、認知機制、歷史背景與實際案例。為習慣的深度理解提供結構化知識。"
+    },
+    {
+      "name": "Brief_Description",
+      "base_class": "Concept",
+      "description": "思考習慣的簡述。每個習慣以一句提問開頭（如「你知道 X 是什麼嗎？」），用簡潔語言說明習慣的核心價值。用於快速理解與初步篩選。"
+    },
+    {
+      "name": "Core_Insight",
+      "base_class": "Concept",
+      "description": "思考習慣的核心洞見。每個習慣提煉出一句最關鍵的洞察語句，作為知識點記憶與傳播的最小單元。例如拆解問題的核心洞察：把複雜的東西變成看得懂的東西。"
+    }
+  ],
+  "object_properties": [
+    {
+      "name": "belongs_to_category",
+      "description": "思考習慣所屬的主分類。共 4 類：批判思考、創意思考、溝通思考、互動思考。單一習慣僅屬於一個主分類。",
+      "domain": ["Thinking_Habit"],
+      "range": ["Thinking_Category"]
+    },
+    {
+      "name": "belongs_to_subcategory",
+      "description": "思考習慣所屬的子分類。共 14 子類，單一習慣僅屬於一個子分類。子分類為知識庫的中介語意層級，用於檢索聚類與訓練模組組合。",
+      "domain": ["Thinking_Habit"],
+      "range": ["Thinking_Subcategory"]
+    },
+    {
+      "name": "has_hashtag",
+      "description": "思考習慣對應的唯一 Hashtag 標籤。格式為 #snake_case。用於 RAG 向量檢索、分類過濾與知識圖譜節點標記。每個習慣對應一個 Hashtag。",
+      "domain": ["Thinking_Habit"],
+      "range": ["Hashtag"]
+    },
+    {
+      "name": "has_checklist_item",
+      "description": "思考習慣包含的檢查清單項目。數量依習慣不同而異（4~6 項）。檢查清單用於自我評估與實踐落地。",
+      "domain": ["Thinking_Habit"],
+      "range": ["Checklist_Item"]
+    },
+    {
+      "name": "has_application_scenario",
+      "description": "思考習慣適用的應用場景。每個習慣包含多個場景，描述在什麼情境下應該使用該習慣。",
+      "domain": ["Thinking_Habit"],
+      "range": ["Application_Scenario"]
+    },
+    {
+      "name": "has_operational_definition",
+      "description": "思考習慣的操作型定義。包含核心概念說明、認知機制解釋、實際案例與隱喻故事。每個習慣有唯一的操作型定義。",
+      "domain": ["Thinking_Habit"],
+      "range": ["Operational_Definition"]
+    },
+    {
+      "name": "has_brief_description",
+      "description": "思考習慣的簡述。以提問句開頭，用簡潔語言概括習慣的核心價值。用於快速了解與初步篩選。",
+      "domain": ["Thinking_Habit"],
+      "range": ["Brief_Description"]
+    },
+    {
+      "name": "has_core_insight",
+      "description": "思考習慣的核心洞察語句。將習慣的本質提煉為一句話，便於記憶與傳播。",
+      "domain": ["Thinking_Habit"],
+      "range": ["Core_Insight"]
+    },
+    {
+      "name": "subcategory_of",
+      "description": "子分類所屬的主分類。14 子分類分別歸屬於 4 個主分類。",
+      "domain": ["Thinking_Subcategory"],
+      "range": ["Thinking_Category"]
+    },
+    {
+      "name": "related_to",
+      "description": "思考習慣之間的語義關聯。定義跨習慣的互補、延伸或對比關係，用於知識圖譜推理與學習路徑推薦。如同子分類習慣間的互補關係、跨分類的思維組合關係。",
+      "domain": ["Thinking_Habit"],
+      "range": ["Thinking_Habit"]
+    },
+    {
+      "name": "contains_habit",
+      "description": "知識庫包含的思考習慣實體。指 KnowledgeBase 對 Thinking_Habit 的容器關係。",
+      "domain": ["Thinking_Habit_KnowledgeBase"],
+      "range": ["Thinking_Habit"]
+    },
+    {
+      "name": "contains_category",
+      "description": "知識庫包含的主分類。指 KnowledgeBase 對 Thinking_Category 的容器關係。",
+      "domain": ["Thinking_Habit_KnowledgeBase"],
+      "range": ["Thinking_Category"]
+    },
+    {
+      "name": "contains_subcategory",
+      "description": "知識庫包含的子分類。指 KnowledgeBase 對 Thinking_Subcategory 的容器關係。",
+      "domain": ["Thinking_Habit_KnowledgeBase"],
+      "range": ["Thinking_Subcategory"]
+    }
+  ],
+  "metadata": {
+    "domain_owner": "Knowledge_Base_Team",
+    "domain": null,
+    "major_owner": null,
+    "data_classification": "INTERNAL",
+    "intended_usage": [
+      "76 思考習慣知識庫頂層分類框架查詢",
+      "RAG 領域路由：依查詢意圖路由至正確的思維分類",
+      "知識圖譜基礎結構：Category ↔ Subcategory ↔ ThinkingHabit 抽象層",
+      "多 major 專業本體繼承基礎",
+      "跨域語意對接：與 ISO 管理知識領域進行分類映射"
+    ]
+  },
+  "entity_relationship_matrix": [
+    {
+      "from": "Thinking_Habit_KnowledgeBase",
+      "via": "contains_category",
+      "to": "Thinking_Category",
+      "cardinality": "1:4",
+      "description": "知識庫包含 4 大主分類"
+    },
+    {
+      "from": "Thinking_Habit_KnowledgeBase",
+      "via": "contains_subcategory",
+      "to": "Thinking_Subcategory",
+      "cardinality": "1:14",
+      "description": "知識庫包含 14 子分類"
+    },
+    {
+      "from": "Thinking_Habit_KnowledgeBase",
+      "via": "contains_habit",
+      "to": "Thinking_Habit",
+      "cardinality": "1:76",
+      "description": "知識庫包含 76 個思考習慣"
+    },
+    {
+      "from": "Thinking_Subcategory",
+      "via": "subcategory_of",
+      "to": "Thinking_Category",
+      "cardinality": "14:4",
+      "description": "14 子分類歸屬 4 大主分類"
+    },
+    {
+      "from": "Thinking_Habit",
+      "via": "belongs_to_category",
+      "to": "Thinking_Category",
+      "cardinality": "76:4",
+      "description": "76 個習慣各歸屬一個主分類"
+    },
+    {
+      "from": "Thinking_Habit",
+      "via": "belongs_to_subcategory",
+      "to": "Thinking_Subcategory",
+      "cardinality": "76:14",
+      "description": "76 個習慣各歸屬一個子分類"
+    },
+    {
+      "from": "Thinking_Habit",
+      "via": "has_hashtag",
+      "to": "Hashtag",
+      "cardinality": "76:76",
+      "description": "每個習慣有唯一 Hashtag"
+    },
+    {
+      "from": "Thinking_Habit",
+      "via": "has_checklist_item",
+      "to": "Checklist_Item",
+      "cardinality": "76:~400",
+      "description": "每個習慣有 4~6 個檢查項"
+    },
+    {
+      "from": "Thinking_Habit",
+      "via": "has_application_scenario",
+      "to": "Application_Scenario",
+      "cardinality": "76:~350",
+      "description": "每個習慣有 4~7 個應用場景"
+    },
+    {
+      "from": "Thinking_Habit",
+      "via": "related_to",
+      "to": "Thinking_Habit",
+      "cardinality": "M:N",
+      "description": "習慣之間的語義關聯網路"
+    }
+  ],
+  "status": "enabled"
+}

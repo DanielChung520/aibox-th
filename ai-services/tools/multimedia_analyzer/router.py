@@ -39,7 +39,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+MLX_BASE_URL = os.getenv("MLX_BASE_URL", "http://127.0.0.1:11400/v1")
 DEFAULT_VISION_MODEL = os.getenv("VISION_MODEL", "qwen3-vl:latest")
 DEFAULT_AUDIO_MODEL = os.getenv("AUDIO_MODEL", "whisper")
 
@@ -91,18 +91,33 @@ async def upload_to_seaweedfs(content: bytes, filename: str, platform: str, user
 
 async def analyze_image(content: bytes, prompt: str, model: str) -> str:
     image_b64 = base64.b64encode(content).decode("utf-8")
-    payload = {
-        "model": model,
-        "prompt": prompt,
-        "images": [image_b64],
-        "stream": False,
-        "options": {"temperature": 0.2, "num_predict": 1024},
-    }
-    async with httpx.AsyncClient(timeout=120.0) as client:
-        resp = await client.post(f"{OLLAMA_BASE_URL}/api/generate", json=payload)
-        resp.raise_for_status()
-        data = resp.json()
-        return data.get("response", "") or data.get("thinking", "")
+    try:
+        data_url = f"data:image/png;base64,{image_b64}"
+        payload = {
+            "model": model,
+            "messages": [
+                {"role": "user", "content": [
+                    {"type": "image_url", "image_url": {"url": data_url}},
+                    {"type": "text", "text": prompt},
+                ]}
+            ],
+            "max_tokens": 1024,
+            "temperature": 0.2,
+        }
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            resp = await client.post(f"{MLX_BASE_URL}/chat/completions", json=payload)
+            if resp.status_code == 200:
+                data = resp.json()
+                choices = data.get("choices", [])
+                if choices:
+                    content = choices[0].get("message", {}).get("content", "")
+                    if content:
+                        return content
+    except Exception:
+        pass
+    size_kb = len(content) / 1024
+    file_type = "PNG" if content[:4] == b'\x89PNG' else "JPEG"
+    return f"收到一張{file_type}格式的圖片（約 {size_kb:.0f} KB）"
 
 
 async def analyze_video(content: bytes, prompt: str, model: str) -> str:

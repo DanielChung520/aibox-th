@@ -134,7 +134,7 @@ async def _parse_instruction(instruction: str) -> dict:
             {"role": "system", "content": PARSE_SYSTEM_PROMPT},
             {"role": "user", "content": prompt},
         ],
-        model="ollama:gemma4:31b",
+        model="mlx:Qwen3-Coder-30B",
         temperature=0.1,
         max_tokens=512,
     )

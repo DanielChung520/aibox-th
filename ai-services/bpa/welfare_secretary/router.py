@@ -134,32 +134,30 @@ async def build_persona_prompt(identity: dict) -> str:
     return "\n".join(parts)
 
 
-async def call_llm(messages: list[dict], model: str, api_base: str, api_key: str = "") -> str:
-    """多 Provider LLM 呼叫（Ollama / OpenAI-compatible）"""
+async def call_llm(messages: list[dict], model: str, api_base: str, api_key: str = "", temperature: float | None = None) -> str:
+    """多 Provider LLM 呼叫（OpenAI-compatible / MLX）"""
     import httpx
 
-    if "localhost" in api_base or "127.0.0.1" in api_base:
-        url = f"{api_base}/api/chat"
-        payload = {"model": model, "messages": messages, "stream": False}
-        async with httpx.AsyncClient(timeout=180.0) as c:
-            r = await c.post(url, json=payload)
-            if r.status_code == 200:
-                return str(r.json().get("message", {}).get("content", ""))
-    else:
-        url = f"{api_base}/chat/completions"
-        headers = {"Content-Type": "application/json"}
-        if api_key:
-            headers["Authorization"] = f"Bearer {api_key}"
-        payload = {"model": model, "messages": messages, "stream": False}
-        async with httpx.AsyncClient(timeout=180.0) as c:
-            r = await c.post(url, json=payload, headers=headers)
-            if r.status_code == 200:
-                data = r.json()
-                choices = data.get("choices", [])
-                if choices:
-                    content = choices[0].get("message", {}).get("content", "")
-                    if content:
-                        return str(content)
+    llm_options = {}
+    if temperature is not None:
+        llm_options["temperature"] = temperature
+    base = api_base.rstrip("/")
+    if not base.endswith("/v1"):
+        base = f"{base}/v1"
+    url = f"{base}/chat/completions"
+    headers = {"Content-Type": "application/json"}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+    payload = {"model": model, "messages": messages, "stream": False, **llm_options}
+    async with httpx.AsyncClient(timeout=180.0) as c:
+        r = await c.post(url, json=payload, headers=headers)
+        if r.status_code == 200:
+            data = r.json()
+            choices = data.get("choices", [])
+            if choices:
+                content = choices[0].get("message", {}).get("content", "")
+                if content:
+                    return str(content)
     return "抱歉，暫時無法處理您的請求。請稍後再試。"
 
 

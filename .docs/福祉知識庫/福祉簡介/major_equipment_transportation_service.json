@@ -1,0 +1,398 @@
+{
+  "_key": "major_equip_transport_service",
+  "type": "major",
+  "name": "Equipment_Readiness_and_Transportation_Service",
+  "version": "1.0",
+  "default_version": true,
+  "ontology_name": "Equipment_Transportation_Service_Major_Ontology",
+  "description": "設備整備與交通服務專業本體論，涵蓋長照交通接送與福祉設備整備之營運全流程。包含：無障礙車輛改裝製造、福祉車輛買賣與租賃、長照交通接送服務營運、車隊與司機管理、設備整備與保養、到宅沐浴車服務、車輛捐贈服務等。所有實體與關係對應台灣福祉科技有限公司實際營運架構。",
+  "author": "Sisyphus",
+  "last_modified": "2026-06-21",
+  "inherits_from": [
+    "5W1H_Base_Ontology_OWL",
+    "Long_Term_Care_Service_Domain_Ontology"
+  ],
+  "compatible_domains": null,
+  "tags": [
+    "AccessibleVehicle",
+    "TransportationService",
+    "FleetManagement",
+    "VehicleModification",
+    "WheelchairVehicle",
+    "RehabBus",
+    "BathCar",
+    "DriverManagement",
+    "EquipmentMaintenance",
+    "LTCPickupService"
+  ],
+  "use_cases": [
+    "無障礙交通接送服務 SOP 查詢與導航",
+    "車隊營運管理與排程排班",
+    "車輛整備狀態與保養追蹤",
+    "司機人員管理與教育訓練",
+    "長照交通接送服務查詢與預約",
+    "車輛捐贈服務流程指引",
+    "到宅沐浴車營運管理",
+    "RAG 輔助交通服務營運決策",
+    "設備檢修與安全檢查管理",
+    "福祉車輛買賣與租賃管理"
+  ],
+  "entity_classes": [
+    {
+      "name": "Accessible_Vehicle",
+      "base_class": "Product",
+      "description": "無障礙車輛/福祉車輛。經改裝後可供輪椅使用者安全乘載之車輛，包含：復康巴士（升降機式）、福祉車（斜坡板式）、到宅沐浴車、巡迴診療車、特種車等。"
+    },
+    {
+      "name": "Rehab_Bus",
+      "base_class": "Accessible_Vehicle",
+      "description": "復康巴士（升降機式）。配備輪椅升降機之無障礙車輛，可讓輪椅使用者直接乘坐輪椅上下車。車型包含：現代STARIA、福特旅行家、福斯T6.1/T7 Kombi、三菱得利卡、中華JSPACE等。"
+    },
+    {
+      "name": "Wheelchair_Accessible_Vehicle",
+      "base_class": "Accessible_Vehicle",
+      "description": "福祉車（斜坡板式）。配備活動式斜坡板之無障礙車輛，輪椅使用者可經由斜坡板上下車。車型包含：福特旅玩家、福斯Caddy Maxi、現代STARIA、中華JSPACE、中華菱利E300電動福祉車等。"
+    },
+    {
+      "name": "Home_Bath_Car",
+      "base_class": "Accessible_Vehicle",
+      "description": "到宅沐浴車。專為失能者設計之行動沐浴車輛，配有全套沐浴設備（浴槽、熱水器、供水系統），可到宅提供沐浴服務。車型：三菱得利卡到宅沐浴車、三菱ZINGER到宅沐浴車。"
+    },
+    {
+      "name": "Special_Purpose_Vehicle",
+      "base_class": "Accessible_Vehicle",
+      "description": "特種車輛。非標準載運輪椅車輛之特殊用途改裝車輛，包含：救護車、巡迴診療車、早療車、圖書車、八合一多功能車、行動生活復能車、消防氣墊車、寢具消毒乾燥車等。"
+    },
+    {
+      "name": "Vehicle_Platform_Base",
+      "base_class": "Vehicle",
+      "description": "車輛平台/底盤車。改裝所依據的原始車款平台，如：福特旅行家、福斯 Transporter/Caddy、現代 STARIA、中華 Delica/JSPACE/Veryca、三菱得利卡/ZINGER、Toyota Sienta 等。"
+    },
+    {
+      "name": "Accessibility_Equipment",
+      "base_class": "Product",
+      "description": "無障礙設備/福祉設備。用於車輛或居家環境之無障礙輔助設備，包含：輪椅升降機、斜坡板、輪椅固定帶、汽車電動轉向椅、樓梯升降椅、無障礙升降平台、車頂輪椅收納機等。"
+    },
+    {
+      "name": "Wheelchair_Lift",
+      "base_class": "Accessibility_Equipment",
+      "description": "輪椅升降機。安裝於車輛側門或後門之電動升降設備，可將輪椅使用者從地面安全昇降至車廂內。品牌：義大利進口升降機、Braun百齡牌升降機。"
+    },
+    {
+      "name": "Wheelchair_Ramp",
+      "base_class": "Accessibility_Equipment",
+      "description": "斜坡板/活動式坡道。安裝於車輛側門或後門之斜坡板，輪椅使用者可經由坡道推行上下車。類型包含：內嵌式斜坡板、快拆式斜坡板、活動式坡道。"
+    },
+    {
+      "name": "Vehicle_Modification_Service",
+      "base_class": "Service",
+      "description": "車輛改裝服務。由合格改裝廠執行之福祉車輛改裝作業，包含：升降機安裝、斜坡板安裝、輪椅束縛系統安裝、車身結構補強、內裝改裝等。"
+    },
+    {
+      "name": "Vehicle_Sales",
+      "base_class": "Service",
+      "description": "福祉車輛買賣/銷售服務。包含新車改裝販售、中古福祉車買賣、車輛租賃服務。"
+    },
+    {
+      "name": "Vehicle_Donation_Service",
+      "base_class": "Service",
+      "description": "復康巴士捐贈服務。企業、宮廟、個人捐贈復康巴士之完整服務流程，包含：車輛選擇、捐贈儀式安排、貨物稅減免與抵稅說明、車籍管理。台灣福祉為復康巴士捐贈第一品牌。"
+    },
+    {
+      "name": "LTC_Pickup_Service",
+      "base_class": "Service",
+      "description": "長照交通接送服務。依據長照2.0給付制度，提供失能者就醫、復健、日間照顧等目的之無障礙交通接送，由合法立案之交通服務單位提供。"
+    },
+    {
+      "name": "Airport_Transfer_Service",
+      "base_class": "Service",
+      "description": "機場無障礙接送服務。提供桃園機場與松山機場之無障礙接送，包含輪椅使用者之出入境接送。"
+    },
+    {
+      "name": "Accessible_Tour_Service",
+      "base_class": "Service",
+      "description": "無障礙旅遊服務。為行動不便者規劃之無障礙旅遊行程，包含交通接送、景點安排、專人陪同等。"
+    },
+    {
+      "name": "Stair_Climbing_Service",
+      "base_class": "Service",
+      "description": "爬梯機服務。針對無電梯公寓或住宅之行動不便者，使用爬梯機協助上下樓梯之服務。"
+    },
+    {
+      "name": "Chartered_Service",
+      "base_class": "Service",
+      "description": "包車/長期合作服務。提供機關、團體或個人長期或單次之包車接送服務，含異業合作與長期合約方案。"
+    },
+    {
+      "name": "Trip_Order",
+      "base_class": "Event",
+      "description": "接送訂單/行程訂單。記錄客戶預約之接送服務資訊，包含：乘車時間、起訖點、乘客資訊、特殊需求、車型指定等。"
+    },
+    {
+      "name": "Driver",
+      "base_class": "Agent",
+      "description": "司機/駕駛人員。提供交通接送服務之專業駕駛，須具備：職業駕照、營業登記證、CPR訓練合格證書、長照交通服務訓練等資格。"
+    },
+    {
+      "name": "Driver_Qualification",
+      "base_class": "Concept",
+      "description": "司機資格要求。擔任長照交通服務駕駛所需之資格條件，包含：職業小型車以上駕照、計程車駕駛人執業登記證、急救/CPR訓練合格、長照交通服務訓練、無犯罪記錄等。"
+    },
+    {
+      "name": "Fleet",
+      "base_class": "Group",
+      "description": "車隊。由多輛無障礙車輛組成之服務車隊，如台灣福祉車隊（1799）。車隊管理包含車輛調度、司機排班、服務品質監控等。"
+    },
+    {
+      "name": "Service_Area",
+      "base_class": "Location",
+      "description": "服務區域/營運範圍。交通接送服務之營運地理範圍，如：北北基桃宜（大台北地區）。"
+    },
+    {
+      "name": "Fare_Rate",
+      "base_class": "Concept",
+      "description": "收費費率。交通接送服務之收費計算方式，包含：跳錶計費（依里程）+ 服務費（如300元）、長照給付額度內之政府補助、部分負擔金額、自費項目價格等。"
+    },
+    {
+      "name": "Payment_Method",
+      "base_class": "Classification",
+      "description": "付款方式。客戶支付交通服務費用之方式，包含：現金、銀行轉帳、悠遊卡、長照給付扣抵等。"
+    },
+    {
+      "name": "Vehicle_Inspection",
+      "base_class": "Event",
+      "description": "車輛檢查/安檢。車輛每日出車前與收車後之安全檢查作業，包含：輪椅升降機/斜坡板功能測試、固定帶檢查、煞車系統、輪胎、燈光、滅火器等項目。"
+    },
+    {
+      "name": "Vehicle_Maintenance",
+      "base_class": "Process",
+      "description": "車輛保養維護。車輛定期保養與維修作業，包含：定期保養（依里程/時間）、故障維修、年度驗車、保險管理等。"
+    },
+    {
+      "name": "Cleaning_Sanitization",
+      "base_class": "Process",
+      "description": "車輛清潔消毒。車輛內外清潔與消毒作業，尤其 COVID-19 後對無障礙車輛之衛生管理要求，包含：每日清潔、定期深層消毒、寢具乾燥消毒等。"
+    },
+    {
+      "name": "Dispatch_Schedule",
+      "base_class": "Planning",
+      "description": "車輛調度排班。車隊車輛與司機之每日排程與調度作業，依據訂單需求、車輛狀態、司機班表進行最佳化分配。"
+    },
+    {
+      "name": "Service_Quality_Record",
+      "base_class": "Document",
+      "description": "服務品質紀錄。交通接送服務之品質監測紀錄，包含：客戶滿意度調查、服務準點率、投訴處理紀錄、行車安全紀錄等。"
+    },
+    {
+      "name": "Customer_Feedback",
+      "base_class": "Event",
+      "description": "客戶回饋/抱怨。乘客對交通服務之評價、建議或抱怨，需進行記錄、處理與改善追蹤。"
+    },
+    {
+      "name": "Wheelchair_Fixing_System",
+      "base_class": "Accessibility_Equipment",
+      "description": "輪椅束縛系統/固定帶。用於車輛行進間固定輪椅，確保輪椅使用者安全之裝置，包含：四點式固定帶、軌道式固定帶、三點式安全帶等。"
+    },
+    {
+      "name": "Vehicle_Rental",
+      "base_class": "Service",
+      "description": "車輛租賃服務。提供無障礙車輛短期或長期租賃服務，包含：自駕租車、含司機租車、企業長租等方案。"
+    },
+    {
+      "name": "Home_Accessibility_Service",
+      "base_class": "Service",
+      "description": "居家無障礙改善服務。針對居家環境進行無障礙改善工程，包含：樓梯升降椅安裝、浴室扶手、無障礙坡道、門寬拓寬等。"
+    },
+    {
+      "name": "Driver_Training",
+      "base_class": "Process",
+      "description": "司機教育訓練。司機人員之在職訓練與技能提升課程，包含：無障礙服務禮儀、輪椅上下車操作、緊急應變處理、長照服務認知等。"
+    },
+    {
+      "name": "Insurance_Management",
+      "base_class": "Process",
+      "description": "保險管理。車隊營運所需之保險管理，包含：車輛強制險、第三人責任險、乘客險、旅責險等。"
+    }
+  ],
+  "object_properties": [
+    {
+      "name": "modified_from_platform",
+      "description": "無障礙車輛基於特定車輛平台改裝而成。",
+      "domain": ["Accessible_Vehicle"],
+      "range": ["Vehicle_Platform_Base"]
+    },
+    {
+      "name": "equipped_with",
+      "description": "車輛裝配特定無障礙設備。",
+      "domain": ["Accessible_Vehicle"],
+      "range": ["Accessibility_Equipment"]
+    },
+    {
+      "name": "provides_transport_type",
+      "description": "車隊提供特定類型之交通服務。",
+      "domain": ["Fleet"],
+      "range": ["LTC_Pickup_Service", "Airport_Transfer_Service", "Accessible_Tour_Service", "Stair_Climbing_Service", "Chartered_Service"]
+    },
+    {
+      "name": "operates_fleet",
+      "description": "服務單位經營管理特定車隊。",
+      "domain": ["Care_Service_Provider"],
+      "range": ["Fleet"]
+    },
+    {
+      "name": "has_driver",
+      "description": "車隊所屬之司機人員。",
+      "domain": ["Fleet"],
+      "range": ["Driver"]
+    },
+    {
+      "name": "has_vehicle",
+      "description": "車隊所屬之車輛。",
+      "domain": ["Fleet"],
+      "range": ["Accessible_Vehicle"]
+    },
+    {
+      "name": "requires_qualification",
+      "description": "司機需具備特定資格條件。",
+      "domain": ["Driver"],
+      "range": ["Driver_Qualification"]
+    },
+    {
+      "name": "has_trip_order",
+      "description": "車隊或司機承接之接送訂單。",
+      "domain": ["Fleet", "Driver"],
+      "range": ["Trip_Order"]
+    },
+    {
+      "name": "serves_area",
+      "description": "車隊服務涵蓋特定地理區域。",
+      "domain": ["Fleet"],
+      "range": ["Service_Area"]
+    },
+    {
+      "name": "has_fare_rate",
+      "description": "服務項目有對應之收費費率。",
+      "domain": ["LTC_Pickup_Service", "Airport_Transfer_Service", "Accessible_Tour_Service"],
+      "range": ["Fare_Rate"]
+    },
+    {
+      "name": "accepts_payment",
+      "description": "服務接受特定付款方式。",
+      "domain": ["Fleet", "Care_Service_Provider"],
+      "range": ["Payment_Method"]
+    },
+    {
+      "name": "undergoes_inspection",
+      "description": "車輛每日執行安全檢查。",
+      "domain": ["Accessible_Vehicle"],
+      "range": ["Vehicle_Inspection"]
+    },
+    {
+      "name": "has_maintenance",
+      "description": "車輛有定期保養維護紀錄。",
+      "domain": ["Accessible_Vehicle"],
+      "range": ["Vehicle_Maintenance"]
+    },
+    {
+      "name": "has_cleaning",
+      "description": "車輛執行清潔消毒作業。",
+      "domain": ["Accessible_Vehicle"],
+      "range": ["Cleaning_Sanitization"]
+    },
+    {
+      "name": "scheduled_by",
+      "description": "車輛與司機透過調度排班系統安排。",
+      "domain": ["Driver", "Accessible_Vehicle"],
+      "range": ["Dispatch_Schedule"]
+    },
+    {
+      "name": "has_quality_record",
+      "description": "服務有對應之品質紀錄。",
+      "domain": ["LTC_Pickup_Service", "Fleet"],
+      "range": ["Service_Quality_Record"]
+    },
+    {
+      "name": "has_feedback",
+      "description": "客戶對服務提供回饋意見。",
+      "domain": ["Trip_Order"],
+      "range": ["Customer_Feedback"]
+    },
+    {
+      "name": "donated_as",
+      "description": "車輛以捐贈方式提供予受贈單位。",
+      "domain": ["Accessible_Vehicle"],
+      "range": ["Vehicle_Donation_Service"]
+    },
+    {
+      "name": "rented_as",
+      "description": "車輛以租賃方式提供予客戶。",
+      "domain": ["Accessible_Vehicle"],
+      "range": ["Vehicle_Rental"]
+    },
+    {
+      "name": "sold_as",
+      "description": "車輛以買賣方式售予客戶。",
+      "domain": ["Accessible_Vehicle"],
+      "range": ["Vehicle_Sales"]
+    },
+    {
+      "name": "modified_by",
+      "description": "車輛由合格改裝廠執行改裝服務。",
+      "domain": ["Accessible_Vehicle"],
+      "range": ["Vehicle_Modification_Service"]
+    },
+    {
+      "name": "has_stair_climbing",
+      "description": "車隊提供爬梯機服務。",
+      "domain": ["Fleet"],
+      "range": ["Stair_Climbing_Service"]
+    },
+    {
+      "name": "provides_bath_service",
+      "description": "到宅沐浴車提供到宅沐浴服務。",
+      "domain": ["Home_Bath_Car"],
+      "range": ["Service"]
+    },
+    {
+      "name": "has_driver_training",
+      "description": "司機接受特定教育訓練。",
+      "domain": ["Driver"],
+      "range": ["Driver_Training"]
+    },
+    {
+      "name": "has_insurance",
+      "description": "車隊或車輛投保對應保險。",
+      "domain": ["Fleet", "Accessible_Vehicle"],
+      "range": ["Insurance_Management"]
+    },
+    {
+      "name": "provides_home_accessibility",
+      "description": "服務單位提供居家無障礙改善。",
+      "domain": ["Care_Service_Provider"],
+      "range": ["Home_Accessibility_Service"]
+    },
+    {
+      "name": "conducts_tour_service",
+      "description": "車隊提供無障礙旅遊服務。",
+      "domain": ["Fleet"],
+      "range": ["Accessible_Tour_Service"]
+    }
+  ],
+  "metadata": {
+    "domain_owner": "LTC_Service_Team",
+    "domain": "Long_Term_Care_Service",
+    "major_owner": "Transportation_Service_Team",
+    "data_classification": "INTERNAL",
+    "intended_usage": [
+      "交通接送服務 SOP 知識檢索與導航",
+      "車隊營運管理 AI 輔助決策",
+      "車輛整備與安全檢查追蹤",
+      "無障礙車輛產品查詢與比較",
+      "司機人員管理與培訓規劃",
+      "長照交通服務品質監測",
+      "RAG 查詢重排序與精準過濾",
+      "服務流程知識圖譜三元組抽取"
+    ]
+  },
+  "status": "enabled"
+}

@@ -148,32 +148,76 @@ async def handle_customer_message(request: ChatRequest, identity: dict | None = 
     if intent == "timeline_query":
         return await _handle_timeline_query(sid, msg, agent_key, identity)
 
+    # 公司介紹 / 業務介紹 / 台灣長照
+    if intent == "company_intro":
+        return await _handle_company_intro(sid, msg, agent_key, persona_prefix)
+
     # 圖片處理（名片、問候圖片）
     if request.attachment and request.attachment.get("image_base64"):
         return await _handle_image_attachment(sid, request.attachment["image_base64"], agent_key, identity)
 
-    # 不在正面表列 → 分析意圖、記錄、轉告業務
+    # 不在正面表列 → LLM 先回答，背景記錄意圖
     if intent == "general_chat":
-        from skills.customer_intent_recorder.skill import execute as intent_record
-
+        chat_resp = await _handle_general_chat(sid, msg, history, agent_key, hint=hint, persona_prefix=persona_prefix)
         customer_name = business_user.get("name", "") or sid.split(":")[-1] if ":" in sid else "客戶"
-        result = await intent_record({
-            "message": msg,
-            "business_user_key": identity.get("business_user_key", ""),
-            "channel_key": identity.get("channel_key", ""),
-            "customer_name": customer_name,
-            "session_id": sid,
-        })
-        reply = result.get("reply", "感謝您的訊息，我已經轉達給負責的業務專員。")
-        _save_conversation(sid, msg, reply, history)
-        logger.info(f"[CustomerRouter] intent=general_chat -> recorded analysis={result.get('analysis')}")
+        asyncio.ensure_future(_record_and_notify(
+            message=msg, business_user_key=identity.get("business_user_key", ""),
+            channel_key=identity.get("channel_key", ""),
+            customer_name=customer_name, session_id=sid, business_user=business_user,
+        ))
+        return chat_resp
 
+
+async def _handle_company_intro(sid: str, msg: str, agent_key: str, persona_prefix: str = "") -> ChatResponse:
+    """公司/業務介紹：先查知識庫，再用 LLM 回答"""
+    import httpx
+    kb_context = ""
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post("http://127.0.0.1:8011/ka/hybrid/search", json={
+                "query": msg, "collection": "knowledge_default", "top_k": 3,
+                "root_id": "kb_1782029005450",
+            })
+            if resp.status_code == 200:
+                hits = resp.json().get("results", [])
+                texts = [h["content"].strip()[:400] for h in hits if h.get("content") and len(h["content"].strip()) > 30]
+                if texts:
+                    kb_context = "\n\n參考資料：\n" + "\n---\n".join(texts[:2])
+    except Exception:
+        pass
+
+    model, api_base, api_key, system_prompt = await get_model_config(agent_key)
+    identity_prefix = persona_prefix + "\n\n" if persona_prefix else ""
+    messages = [
+        {"role": "system", "content": f"{identity_prefix}{system_prompt}\n\n你是真人客服，語氣溫暖自然。請根據資料回答，不確定的就誠實說不知道。{kb_context}"},
+        {"role": "user", "content": msg},
+    ]
+    reply = await call_llm(messages, model, api_base, api_key, temperature=0.1)
+    if not reply:
+        from skills.customer_safe_reply.skill import execute as safe_reply
+        fb = await safe_reply({"message": msg, "customer_name": "客戶"})
+        reply = fb.get("reply_text", "感謝您的詢問！")
+    history = _conversations.get(sid, [])
+    _save_conversation(sid, msg, reply, history)
+    _persist_conversation(sid, msg, reply)
+    return ChatResponse(session_id=sid, reply=reply, intent="company_intro")
+
+
+async def _record_and_notify(
+    message: str, business_user_key: str, channel_key: str,
+    customer_name: str, session_id: str, business_user: dict,
+):
+    """背景記錄意圖，僅高度相關時通知業務"""
+    try:
+        from skills.customer_intent_recorder.skill import execute as intent_record
+        result = await intent_record({"message": message, "business_user_key": business_user_key,
+            "channel_key": channel_key, "customer_name": customer_name, "session_id": session_id})
         if result.get("should_notify", False):
             business_line_id = business_user.get("line_id", "")
             if business_line_id:
-                _notify_business(customer_name, result.get("analysis", {}).get("inferred_intent", "客戶詢問"), business_line_id)
-
-        return ChatResponse(session_id=sid, reply=reply, intent="general_chat")
+                _notify_business(customer_name, result.get("analysis",{}).get("inferred_intent","客戶詢問"), business_line_id)
+    except Exception:
+        pass
 
 
 async def _handle_greeting_customer(msg: str) -> str:
@@ -328,13 +372,26 @@ async def _route_to_data_agent(sid: str, msg: str, agent_key: str, intent_label:
 async def _handle_general_chat(
     sid: str, msg: str, history: list, agent_key: str, hint: str = "", persona_prefix: str = ""
 ) -> ChatResponse:
-    """(保留，內部 router 使用) 一般對話 → LLM"""
+    """一般對話 → 先查知識庫輔助，再用 LLM 回答"""
     model, api_base, api_key, system_prompt = await get_model_config(agent_key)
     final_system = system_prompt
     if persona_prefix:
         final_system = f"{persona_prefix}\n\n{system_prompt}"
     if hint:
         final_system += f"\n\n[意圖提示] {hint}"
+    try:
+        import httpx
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.post("http://127.0.0.1:8011/ka/hybrid/search", json={
+                "query": msg, "collection": "knowledge_default", "top_k": 2, "root_id": "kb_1782029005450",
+            })
+            if resp.status_code == 200:
+                hits = resp.json().get("results", [])
+                texts = [h["content"].strip()[:400] for h in hits if h.get("content") and len(h["content"].strip()) > 30]
+                if texts:
+                    final_system += "\n\n參考知識庫：\n" + "\n---\n".join(texts[:2])
+    except Exception:
+        pass
     try:
         from shared.conversation import QueryEngine
         engine = QueryEngine()
@@ -346,7 +403,7 @@ async def _handle_general_chat(
     messages = [{"role": "system", "content": final_system}]
     messages.extend(history[-_MAX_TURNS:])
     messages.append({"role": "user", "content": msg})
-    reply = await call_llm(messages, model, api_base, api_key)
+    reply = await call_llm(messages, model, api_base, api_key, temperature=0.3)
     _save_conversation(sid, msg, reply, history)
     _persist_conversation(sid, msg, reply)
     return ChatResponse(session_id=sid, reply=reply, intent="general_chat")

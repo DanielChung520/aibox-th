@@ -138,7 +138,7 @@ async def _generate_greeting(
 
     result = await resolve_and_call(
         messages=[{"role": "user", "content": prompt}],
-        model="ollama:gemma4:31b",
+        model="mlx:Qwen3-Coder-30B",
         temperature=0.7,
         max_tokens=256,
     )

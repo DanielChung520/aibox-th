@@ -36,7 +36,7 @@ def _parse_model_id(model_id: str) -> tuple[str, str]:
     if ":" in model_id:
         provider, model = model_id.split(":", 1)
         return provider.strip(), model.strip()
-    return "ollama", model_id.strip()
+    return "mlx", model_id.strip()
 
 
 async def _get_providers() -> dict:
@@ -59,7 +59,7 @@ async def _get_providers() -> dict:
     except Exception as e:
         logger.warning("Failed to fetch llm.providers: %s", e)
 
-    fallback = {"ollama": {"base_url": "http://localhost:11434", "api_key_param": None}}
+    fallback = {"mlx": {"base_url": "http://127.0.0.1:11400/v1", "api_key_param": None}}
     _providers_cache = (fallback, now)
     return fallback
 
@@ -106,9 +106,9 @@ async def resolve(model_id: str) -> ResolvedLLMConfig:
             "Provider '%s' not found in llm.providers, falling back to ollama",
             provider_name,
         )
-        provider_cfg = providers.get("ollama", {"base_url": "http://localhost:11434"})
+        provider_cfg = providers.get("mlx", {"base_url": "http://127.0.0.1:11400/v1"})
 
-    base_url = str(provider_cfg.get("base_url", "http://localhost:11434"))
+    base_url = str(provider_cfg.get("base_url", "http://127.0.0.1:11400/v1"))
     api_key_param = provider_cfg.get("api_key_param")
 
     # Priority 1: model_providers collection (user sets API key in UI)

@@ -6,7 +6,7 @@ from typing import Literal
 
 SEAWEEDFS_URL = os.getenv("SEAWEEDFS_URL", "http://localhost:8888")
 PUBLIC_SEAWEED_URL = os.getenv("PUBLIC_SEAWEED_URL", SEAWEEDFS_URL)
-OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+MLX_BASE_URL = os.getenv("MLX_BASE_URL", "http://127.0.0.1:11400/v1")
 VISION_MODEL = os.getenv("VISION_MODEL", "qwen3-vl:latest")
 AUDIO_MODEL = os.getenv("AUDIO_MODEL", "whisper")
 

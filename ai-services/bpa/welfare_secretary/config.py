@@ -19,8 +19,8 @@ ARANGO_DB = os.getenv("ARANGO_DATABASE", "abc_desktop")
 ARANGO_USER = os.getenv("ARANGO_USER", "root")
 ARANGO_PASSWORD = os.getenv("ARANGO_PASSWORD", "")
 
-DEFAULT_MODEL = os.getenv("WELFARE_SECRETARY_MODEL", "qwen3:latest")
-DEFAULT_OLLAMA_URL = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434")
+DEFAULT_MODEL = os.getenv("WELFARE_SECRETARY_MODEL", "Qwen3-Coder-30B")
+DEFAULT_OLLAMA_URL = os.getenv("MLX_BASE_URL", "http://127.0.0.1:11400")
 
 # ---- 預設 System Prompt（被 system_params 覆蓋） ----
 
