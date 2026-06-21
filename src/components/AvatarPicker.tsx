@@ -34,14 +34,28 @@ export default function AvatarPicker({ value, onChange }: AvatarPickerProps) {
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 2 * 1024 * 1024) {
-      message.warning('圖片大小請勿超過 2MB');
+    if (file.size > 5 * 1024 * 1024) {
+      message.warning('圖片大小請勿超過 5MB');
       return;
     }
     const reader = new FileReader();
     reader.onload = () => {
-      onChange(reader.result as string);
-      setOpen(false);
+      const img = new Image();
+      img.onload = () => {
+        // 取中間正方形裁切 + 縮放至 200x200
+        const size = Math.min(img.width, img.height);
+        const offsetX = (img.width - size) / 2;
+        const offsetY = (img.height - size) / 2;
+        const canvas = document.createElement('canvas');
+        canvas.width = 200;
+        canvas.height = 200;
+        const ctx = canvas.getContext('2d')!;
+        ctx.drawImage(img, offsetX, offsetY, size, size, 0, 0, 200, 200);
+        // 以 JPEG 0.8 品質壓縮輸出
+        onChange(canvas.toDataURL('image/jpeg', 0.8));
+        setOpen(false);
+      };
+      img.src = reader.result as string;
     };
     reader.readAsDataURL(file);
   };
