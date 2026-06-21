@@ -771,7 +771,7 @@ status() {
     echo "❌ Not running"
   fi
 
-  printf "  %-22s (port %s): " "Ollama" "11434"
+  printf "  %-22s (port %s): " "oMLX" "11400"
   if curl -sf --max-time 3 "http://127.0.0.1:11400/v1/models" > /dev/null 2>&1; then
     echo "✅ Healthy"
   elif lsof -ti :11434 > /dev/null 2>&1; then
