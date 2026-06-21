@@ -11,9 +11,9 @@ import { Button, Tag, Modal, Form, Input, Select, Switch, Tabs, Drawer, Table,
          Typography, Badge, App, Space, Divider, Card, Row, Col, Empty, Spin, Popconfirm } from 'antd';
 import { PlusOutlined, ReloadOutlined, DeleteOutlined, CloseOutlined, CopyOutlined } from '@ant-design/icons';
 import { useContentTokens } from '../../contexts/AppThemeProvider';
-import { channelsApi, userApi, businessUsersApi } from '../../services/api';
+import { channelsApi, userApi } from '../../services/api';
 import { theme } from 'antd';
-import type { Channel, User, BusinessUser } from '../../services/api';
+import type { Channel, User } from '../../services/api';
 import AvatarPicker from '../../components/AvatarPicker';
 
 const avatarModules = import.meta.glob<{ default: string }>('../../assets/avatar/*.png', { eager: true });
@@ -244,6 +244,14 @@ function ChannelDetailDrawer({ channel, open, onClose, onSaved }: {
               <Select options={[{ label: '業務員', value: '業務員' }, { label: '業務主管', value: '業務主管' }]} />
             </Form.Item>
           </div>
+          <div style={{ display: 'flex', gap: 12 }}>
+            <Form.Item label="團隊" name="team" style={{ flex: 1 }}>
+              <Input placeholder="例如：台北業務一組" />
+            </Form.Item>
+            <Form.Item label="區域" name="region" style={{ flex: 1 }}>
+              <Input placeholder="例如：台北市" />
+            </Form.Item>
+          </div>
           <Form.Item label="綁定使用者" name="business_user_key">
             <Select options={userOptions} placeholder="選擇使用者" allowClear />
           </Form.Item>
@@ -275,171 +283,6 @@ function ChannelDetailDrawer({ channel, open, onClose, onSaved }: {
   );
 }
 
-function BusinessUsersManager() {
-  const { message } = App.useApp();
-  const [users, setUsers] = useState<BusinessUser[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [editingKey, setEditingKey] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [form] = Form.useForm();
-
-  const fetchUsers = async () => {
-    setLoading(true);
-    try {
-      const res = await businessUsersApi.list();
-      setUsers(res?.data?.data || []);
-    } catch { message.error('載入業務員資料失敗'); }
-    finally { setLoading(false); }
-  };
-
-  useEffect(() => { fetchUsers(); }, []);
-
-  const openCreate = () => {
-    setEditingKey(null);
-    form.resetFields();
-    setModalOpen(true);
-  };
-
-  const openEdit = (record: BusinessUser) => {
-    setEditingKey(record._key);
-    form.setFieldsValue({
-      user_key: record.user_key,
-      name: record.name,
-      role: record.role,
-      region: record.region,
-      team: record.team,
-      greeting_style: record.persona_config?.greeting_style || '',
-      expertise: record.persona_config?.expertise?.join(', ') || '',
-      customer_segment: record.persona_config?.customer_segment || '',
-      signature: record.persona_config?.signature || '',
-    });
-    setModalOpen(true);
-  };
-
-  const handleSave = async () => {
-    try {
-      const values = await form.validateFields();
-      setSaving(true);
-      const payload: Record<string, unknown> = {
-        user_key: values.user_key,
-        name: values.name,
-        role: values.role || '業務員',
-        region: values.region || '',
-        team: values.team || '',
-        persona_config: {
-          greeting_style: values.greeting_style || '',
-          expertise: values.expertise ? values.expertise.split(',').map((s: string) => s.trim()).filter(Boolean) : [],
-          customer_segment: values.customer_segment || '',
-          signature: values.signature || '',
-        },
-      };
-
-      if (editingKey) {
-        await businessUsersApi.update(editingKey, payload);
-        message.success('業務員資料已更新');
-      } else {
-        await businessUsersApi.create(payload);
-        message.success('業務員資料已建立');
-      }
-      setModalOpen(false);
-      fetchUsers();
-    } catch { message.error('操作失敗'); }
-    finally { setSaving(false); }
-  };
-
-  const handleDelete = (key: string) => {
-    Modal.confirm({
-      title: '確認刪除',
-      content: '確定要刪除此業務員資料？',
-      okText: '刪除', okType: 'danger', cancelText: '取消',
-      onOk: async () => {
-        try {
-          await businessUsersApi.delete(key);
-          message.success('已刪除');
-          fetchUsers();
-        } catch { message.error('刪除失敗'); }
-      },
-    });
-  };
-
-  const columns = [
-    { title: '姓名', dataIndex: 'name', key: 'name', width: 80 },
-    { title: '角色', dataIndex: 'role', key: 'role', width: 72,
-      render: (v: string) => <Tag color={v === '業務主管' ? 'blue' : 'default'}>{v}</Tag> },
-    { title: '區域', dataIndex: 'region', key: 'region', width: 80 },
-    { title: '團隊', dataIndex: 'team', key: 'team', width: 100 },
-    { title: '問候風格', key: 'greeting_style', width: 72,
-      render: (_: any, r: BusinessUser) => <Text style={{ fontSize: 12 }}>{r.persona_config?.greeting_style || '-'}</Text> },
-    { title: '專業領域', key: 'expertise', width: 160,
-      render: (_: any, r: BusinessUser) => (r.persona_config?.expertise || []).join(', ') || '-' },
-    { title: '狀態', dataIndex: 'status', key: 'status', width: 60,
-      render: (v: string) => <Badge status={v === 'active' ? 'success' : 'default'} text={v === 'active' ? '啟用' : '停用'} /> },
-    { title: '操作', key: 'action', width: 100,
-      render: (_: any, r: BusinessUser) => (
-        <Space size={0}>
-          <Button size="small" type="link" onClick={() => openEdit(r)}>編輯</Button>
-          <Button size="small" type="link" danger icon={<DeleteOutlined />} onClick={() => handleDelete(r._key)} />
-        </Space>
-      )},
-  ];
-
-  return (
-    <div>
-      <div style={{ marginBottom: 12, display: 'flex', gap: 8, alignItems: 'center' }}>
-        <Button type="primary" size="small" icon={<PlusOutlined />} onClick={openCreate}>新增業務員</Button>
-        <Button size="small" icon={<ReloadOutlined />} onClick={fetchUsers}>重新整理</Button>
-      </div>
-
-      <Table dataSource={users} columns={columns} rowKey="_key" loading={loading}
-        pagination={false} size="middle" locale={{ emptyText: '尚無業務員資料，請新增業務員' }} />
-
-      <Modal title={editingKey ? '編輯業務員' : '新增業務員'} open={modalOpen}
-        onCancel={() => setModalOpen(false)} onOk={handleSave} width={600}
-        okText={editingKey ? '更新' : '建立'} confirmLoading={saving} destroyOnClose>
-        <Form form={form} layout="vertical" size="small">
-          <div style={{ display: 'flex', gap: 12 }}>
-            <Form.Item label="姓名" name="name" rules={[{ required: true }]} style={{ flex: 1 }}>
-              <Input placeholder="王大明" />
-            </Form.Item>
-            <Form.Item label="角色" name="role" initialValue="業務員" style={{ flex: 1 }}>
-              <Select options={[{ label: '業務員', value: '業務員' }, { label: '業務主管', value: '業務主管' }]} />
-            </Form.Item>
-          </div>
-          <div style={{ display: 'flex', gap: 12 }}>
-            <Form.Item label="區域" name="region" style={{ flex: 1 }}>
-              <Input placeholder="北區" />
-            </Form.Item>
-            <Form.Item label="團隊" name="team" style={{ flex: 1 }}>
-              <Input placeholder="業務一部" />
-            </Form.Item>
-          </div>
-          <Form.Item label="對應帳號" name="user_key">
-            <Input placeholder="accounts 的 _key（選填）" />
-          </Form.Item>
-
-          <Divider style={{ margin: '8px 0' }} />
-          <Text strong style={{ fontSize: 13 }}>🤖 Persona 設定</Text>
-
-          <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
-            <Form.Item label="問候風格" name="greeting_style" style={{ flex: 1 }}>
-              <Input placeholder="正式 / 親切" />
-            </Form.Item>
-            <Form.Item label="客戶類型" name="customer_segment" style={{ flex: 1 }}>
-              <Input placeholder="醫療器材行" />
-            </Form.Item>
-          </div>
-          <Form.Item label="專業領域（逗號分隔）" name="expertise">
-            <Input placeholder="電動輪椅, 爬梯機, 居家無障礙" />
-          </Form.Item>
-          <Form.Item label="簽名檔" name="signature">
-            <Input.TextArea rows={2} placeholder="業務員 王大明&#10;台灣福祉股份有限公司" />
-          </Form.Item>
-        </Form>
-      </Modal>
-    </div>
-  );
-}
 
 export default function ChannelAdminPage() {
   const { message } = App.useApp();
@@ -548,12 +391,7 @@ export default function ChannelAdminPage() {
             </Spin>
           ),
         },
-        {
-          key: 'business-users',
-          label: '👤 業務員管理',
-          children: <BusinessUsersManager />,
-        },
-      ]} />
+        ]} />
 
       <ChannelDetailDrawer
         channel={selectedChannel}
