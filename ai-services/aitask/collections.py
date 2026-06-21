@@ -43,7 +43,11 @@ def _ensure_collections_sync(db: StandardDatabase) -> None:
 
         col = db.collection(col_name)
         for spec in indexes:
-            col.add_hash_index(fields=spec.fields, unique=spec.unique)
+            col.add_index({
+                "type": "persistent",
+                "fields": spec.fields,
+                "unique": spec.unique,
+            })
 
 
 async def ensure_collections(db: StandardDatabase) -> None:

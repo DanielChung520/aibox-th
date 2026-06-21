@@ -8,12 +8,10 @@
 
 import logging
 import time
-from datetime import datetime, timezone
 from fastapi import APIRouter
-from pydantic import BaseModel
 
 from bpa.welfare_secretary.router import ChatRequest, ChatResponse, call_llm, _conversations, _MAX_TURNS
-from bpa.welfare_secretary.config import get_model_config, SYSTEM_PROMPT_INTERNAL
+from bpa.welfare_secretary.config import get_model_config
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Welfare Secretary - Internal"])
@@ -25,7 +23,6 @@ _pending_greeting_ops: dict[str, dict] = {}  # sid → pending operation
 
 async def _load_internal_intents() -> list[dict]:
     """從 intent_catalog 載入內部助理場景的意圖"""
-    import base64
     import httpx
     from bpa.welfare_secretary.config import ARANGO_URL, ARANGO_DB, ARANGO_USER, ARANGO_PASSWORD
 

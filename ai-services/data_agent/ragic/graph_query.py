@@ -151,7 +151,6 @@ class RagicGraphQuery:
         _ = account
         aql = (
             f"FOR r IN {_COLLECTION} "
-            "FILTER r.data_source == 'ragic' "
             f"LIMIT {_LIMIT} "
             "RETURN r"
         )
@@ -163,8 +162,7 @@ class RagicGraphQuery:
     ) -> list[dict[str, object]]:
         aql = (
             f"FOR r IN {_COLLECTION} "
-            "FILTER r.data_source == 'ragic' "
-            "AND (r.source_table IN @names OR r.target_table IN @names) "
+            "FILTER (r.left_table IN @names OR r.right_table IN @names) "
             f"LIMIT {_LIMIT} "
             "RETURN r"
         )

@@ -9,11 +9,10 @@
 import logging
 import time
 import base64
-from datetime import datetime, timezone
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from pydantic import BaseModel
 
-from bpa.welfare_secretary.config import get_model_config, ARANGO_URL, ARANGO_DB, ARANGO_USER, ARANGO_PASSWORD
+from bpa.welfare_secretary.config import ARANGO_URL, ARANGO_DB, ARANGO_USER, ARANGO_PASSWORD
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Welfare Secretary - Unified"])

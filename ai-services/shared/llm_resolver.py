@@ -145,3 +145,53 @@ def invalidate_cache() -> None:
     global _providers_cache, _model_providers_cache
     _providers_cache = None
     _model_providers_cache = None
+
+
+async def resolve_and_call(
+    messages: list[dict],
+    model: str = "qwen3",
+    temperature: float = 0.7,
+    max_tokens: int = 256,
+) -> dict:
+    """解析 LLM 配置並呼叫，回傳 {"content": "..."} 或 {"error": "..."}。"""
+    try:
+        cfg = await resolve(model)
+    except Exception as e:
+        logger.warning(f"[resolve_and_call] resolve failed: {e}")
+        return {"error": str(e), "content": ""}
+
+    payload: dict = {
+        "messages": messages,
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+        "stream": False,
+    }
+
+    if "api/chat" in cfg.endpoint:
+        # Ollama format
+        payload["model"] = cfg.model_name
+    else:
+        # OpenAI-compatible
+        payload["model"] = cfg.model_name
+
+    headers: dict = {"Content-Type": "application/json"}
+    if cfg.api_key:
+        headers["Authorization"] = f"Bearer {cfg.api_key}"
+
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            resp = await client.post(cfg.endpoint, json=payload, headers=headers)
+            if resp.status_code != 200:
+                return {"error": f"LLM error: {resp.status_code}", "content": ""}
+
+            data = resp.json()
+            # Ollama
+            if "api/chat" in cfg.endpoint:
+                content = data.get("message", {}).get("content", "")
+            else:
+                content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+
+            return {"content": content or ""}
+    except Exception as e:
+        logger.warning(f"[resolve_and_call] LLM call failed: {e}")
+        return {"error": str(e), "content": ""}

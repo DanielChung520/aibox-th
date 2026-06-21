@@ -156,11 +156,13 @@ def is_mentioned(text: str, bot_name: str) -> bool:
     return f"@{bot_name}" in text or f"@{bot_name} " in text
 
 
-async def call_agent_endpoint(endpoint_url: str, session_id: str, message: str, user_id: str, agent_key: str | None = None, platform: str = "line", image_content: str | None = None) -> str:
-    payload = {
+async def call_agent_endpoint(endpoint_url: str, session_id: str, message: str, user_id: str, agent_key: str | None = None, platform: str = "line", image_content: str | None = None, channel_key: str = "") -> str:
+    payload: dict = {
         "session_id": session_id,
         "message": message,
         "user_id": user_id,
+        "source": "customer",
+        "channel_key": channel_key,
     }
     if agent_key:
         payload["agent_key"] = agent_key
@@ -318,7 +320,7 @@ async def handle_line_webhook(
 
                 try:
                     if agent_endpoint:
-                        ai_response = await call_agent_endpoint(agent_endpoint, session_id, text, user_id, agent_key=agent_key)
+                        ai_response = await call_agent_endpoint(agent_endpoint, session_id, text, user_id, agent_key=agent_key, channel_key=channel_key)
                     elif agent_key:
                         ai_response = await call_ragic_helper(agent_key, session_id, text, user_id)
                     else:

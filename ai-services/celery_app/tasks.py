@@ -456,6 +456,64 @@ def check_scheduled_reports(self: Any) -> dict[str, Any]:
     return {"scheduled": len(reports), "triggered": triggered}
 
 
+@app.task(bind=True, max_retries=0)
+def check_market_intel_schedule(self) -> dict:
+    """Celery Beat 任務：每分鐘檢查 market_intel.schedule 設定，決定是否觸發生成快報"""
+    from datetime import datetime
+    import httpx
+    import json
+    import os
+
+    now = datetime.now()
+    current_time = now.strftime("%H:%M")
+    current_weekday = now.weekday()  # 0=Mon..6=Sun
+    gateway = os.getenv("GATEWAY_URL", "http://localhost:6500")
+
+    try:
+        resp = httpx.get(f"{gateway}/api/v1/system-params/market_intel.schedule", timeout=5)
+        if resp.status_code != 200:
+            return {"status": "no_config"}
+        raw = resp.json().get("data", {}).get("param_value")
+        if not raw:
+            return {"status": "no_config"}
+        config = json.loads(raw) if isinstance(raw, str) else raw
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+    # 檢查排程是否啟用
+    if not config.get("scheduleEnabled", False):
+        return {"status": "disabled"}
+
+    freq = config.get("scheduleFreq", "")
+    days = config.get("scheduleDays", [])
+    time = config.get("scheduleTime", "")
+
+    # 檢查時間是否匹配
+    if current_time != time:
+        return {"status": "waiting", "next_time": time}
+
+    # 檢查頻率與星期
+    should_run = False
+    if freq == "daily":
+        should_run = True
+    elif freq == "weekday":
+        should_run = current_weekday < 5  # 週一至週五
+    elif freq == "weekly":
+        # scheduleDays 用 0=Sun..6=Sat, Python weekday 是 0=Mon..6=Sun
+        py_to_config = {0: 1, 1: 2, 2: 3, 3: 4, 4: 5, 5: 6, 6: 0}
+        should_run = py_to_config.get(current_weekday) in days
+
+    if not should_run:
+        return {"status": "skipped", "reason": f"freq={freq} day={current_weekday}"}
+
+    # 觸發生成快報
+    from market_intel.scraper import DEFAULT_KEYWORDS
+    keywords = config.get("keywords", DEFAULT_KEYWORDS)
+    from celery_app.tasks import market_intel_refresh
+    market_intel_refresh.delay(keywords=keywords, user_key="scheduler")
+    return {"status": "triggered", "time": current_time}
+
+
 @app.task(bind=True, max_retries=1, acks_late=True)
 def market_intel_refresh(self, keywords: list[str] | None = None, user_key: str | None = None) -> dict:
     """Celery 任務：市場觀察搜尋+摘要+儲存（背景執行，可監控狀態）"""

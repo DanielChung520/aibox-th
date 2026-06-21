@@ -61,10 +61,12 @@ app.include_router(line_webhook_router, tags=["LINE Webhook"])
 from tools.process_advisor.router import app as process_advisor_app  # noqa: E402
 from tools.report_agent.router import app as report_agent_app  # noqa: E402
 from tools.multimedia_analyzer.router import app as multimedia_analyzer_app  # noqa: E402
+from market_intel.main import app as market_intel_app  # noqa: E402
 
 app.mount("/mcp/process-advisor", process_advisor_app)
 app.mount("/mcp/report-agent", report_agent_app)
 app.mount("/mcp/multimedia-analyzer", multimedia_analyzer_app)
+app.mount("/market-intel", market_intel_app)
 
 from bpa.ragic_agent.router import router as ragic_agent_router  # noqa: E402
 app.include_router(ragic_agent_router, prefix="/ragic-agent")
@@ -97,6 +99,9 @@ from memory_agent.routers.consolidation import router as consolidation_router  #
 from memory_agent.routers.index import router as index_router  # noqa: E402
 
 app.include_router(memory_router, prefix="/memory", tags=["Memory"])
+
+from bpa.welfare_secretary.main import router as welfare_secretary_router  # noqa: E402
+app.include_router(welfare_secretary_router, prefix="/welfare-secretary")
 
 from bpa.ragic_helper.router import router as ragic_router  # noqa: E402
 

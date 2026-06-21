@@ -26,6 +26,7 @@ REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 app = Celery(
     "aibox-th",
     broker=REDIS_URL,
+    backend=REDIS_URL,  # 使用 Redis 作為結果後端（任務狀態查詢用）
     include=["celery_app.tasks"],
 )
 
@@ -42,6 +43,10 @@ app.conf.update(
         "check-scheduled-reports": {
             "task": "celery_app.tasks.check_scheduled_reports",
             "schedule": 60.0,
+        },
+        "check-market-intel-schedule": {
+            "task": "celery_app.tasks.check_market_intel_schedule",
+            "schedule": 60.0,  # 每分鐘檢查一次排程設定
         },
     },
 )

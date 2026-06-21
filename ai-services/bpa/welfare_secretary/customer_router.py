@@ -8,14 +8,12 @@
 
 import logging
 import time
-import json
 import asyncio
 from datetime import datetime, timezone
 from fastapi import APIRouter
-from pydantic import BaseModel
 
 from bpa.welfare_secretary.router import ChatRequest, ChatResponse, call_llm, _conversations, _MAX_TURNS
-from bpa.welfare_secretary.config import get_model_config, SYSTEM_PROMPT_CUSTOMER
+from bpa.welfare_secretary.config import get_model_config
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Welfare Secretary - Customer"])
@@ -36,7 +34,6 @@ _INTENT_CACHE_TTL = 300
 
 async def _load_customer_intents() -> list[dict]:
     """從 intent_catalog 載入客戶端場景的意圖"""
-    import base64
     import httpx
     from bpa.welfare_secretary.config import ARANGO_URL, ARANGO_DB, ARANGO_USER, ARANGO_PASSWORD
 
@@ -250,7 +247,6 @@ async def _save_crm_contact(business_user_key: str, channel_key: str, session_id
     import httpx
     import uuid
     from bpa.welfare_secretary.config import ARANGO_URL, ARANGO_DB, ARANGO_USER, ARANGO_PASSWORD
-    from datetime import datetime, timezone
 
     auth_cred = f"{ARANGO_USER}:{ARANGO_PASSWORD}"
     headers = {

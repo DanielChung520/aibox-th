@@ -130,12 +130,24 @@ async def list_channels(official_account_key: str) -> list[dict[str, Any]]:
 
 async def get_channel(key: str) -> dict[str, Any] | None:
     async with httpx.AsyncClient() as client:
-        url = f"{ARANGO_URL}/_db/{ARANGO_DB}/_api/document/platforms_line_channels/{key}"
+        url = f"{ARANGO_URL}/_db/{ARANGO_DB}/_api/document/channels/{key}"
         resp = await client.get(url, headers=await _arango_headers())
         if resp.status_code == 404:
             return None
         resp.raise_for_status()
-        return resp.json()
+        raw = resp.json()
+        # Map from unified channels schema to legacy field names
+        config = raw.get("config") or {}
+        return {
+            "_key": raw.get("_key", key),
+            "channel_id": config.get("channel_id", ""),
+            "channel_secret": config.get("channel_secret", ""),
+            "channel_access_token": config.get("access_token", ""),
+            "channel_name": raw.get("business_user_name", ""),
+            "webhook_enabled": raw.get("status") == "active",
+            "linked_agent_key": raw.get("linked_agent_key", "welfare_secretary"),
+            "platform": raw.get("platform", "line"),
+        }
 
 
 async def create_channel(data: dict[str, Any]) -> dict[str, Any]:
