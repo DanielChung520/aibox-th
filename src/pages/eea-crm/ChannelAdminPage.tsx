@@ -7,7 +7,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import { Button, Tag, Modal, Form, Input, Select, Switch, Tabs, Drawer, Table,
+import { Button, Tag, Modal, Form, Input, Select, Switch, Drawer, Table,
          Typography, Badge, App, Space, Divider, Card, Row, Col, Empty, Spin, Popconfirm } from 'antd';
 import { PlusOutlined, ReloadOutlined, DeleteOutlined, CloseOutlined, CopyOutlined } from '@ant-design/icons';
 import { useContentTokens } from '../../contexts/AppThemeProvider';
@@ -371,33 +371,25 @@ export default function ChannelAdminPage() {
         </Button>
       </div>
 
-      <Tabs defaultActiveKey="channels" items={[
-        {
-          key: 'channels',
-          label: '💬 業務員/通信管理',
-          children: (
-            <Spin spinning={loading}>
-              {channels.length === 0 ? (
-                <Empty description={<span>尚無頻道設定<br /><span style={{ fontSize: 12, color: '#999' }}>點擊上方「新增頻道」開始設定</span></span>}
-                  style={{ marginTop: 60 }} />
-              ) : (
-                <>
-                  <div style={{ marginBottom: 12, color: '#666', fontSize: 13 }}>
-                    共 {channels.length} 個頻道
-                  </div>
-                  <Row gutter={[16, 16]}>
-                    {channels.map(ch => (
-                      <Col key={ch._key} xs={24} sm={12} md={8} lg={6}>
-                        <ChannelCardComponent channel={ch} onClick={handleCardClick} onToggle={handleToggle} />
-                      </Col>
-                    ))}
-                  </Row>
-                </>
-              )}
-            </Spin>
-          ),
-        },
-        ]} />
+      <Spin spinning={loading}>
+        {channels.length === 0 ? (
+          <Empty description={<span>尚無頻道設定<br /><span style={{ fontSize: 12, color: '#999' }}>點擊上方「新增頻道」開始設定</span></span>}
+            style={{ marginTop: 60 }} />
+        ) : (
+          <>
+            <div style={{ marginBottom: 12, color: '#666', fontSize: 13 }}>
+              共 {channels.length} 個頻道
+            </div>
+            <Row gutter={[16, 16]}>
+              {channels.map(ch => (
+                <Col key={ch._key} xs={24} sm={12} md={8} lg={6}>
+                  <ChannelCardComponent channel={ch} onClick={handleCardClick} onToggle={handleToggle} />
+                </Col>
+              ))}
+            </Row>
+          </>
+        )}
+      </Spin>
 
       <ChannelDetailDrawer
         channel={selectedChannel}
