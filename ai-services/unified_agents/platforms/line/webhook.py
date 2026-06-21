@@ -500,9 +500,10 @@ async def handle_line_webhook(
                         metadata={"user_name": user_display_name, "media_type": msg_type, "content_id": content_id},
                     )
 
-                    # 分流：先判斷是否為祝福圖片（不看長度，只看關鍵字）
+                    # 分流：用 Qwen2.5-VL-7B 的描述判斷是否為賀卡/問候
                     desc = (mm.get("description") or "").lower()
-                    greeting_keywords = ["早安", "午安", "晚安", "祝福", "生日", "新年", "端午", "中秋", "佳節", "安好", "順心"]
+                    greeting_keywords = ["早安", "午安", "晚安", "祝福", "生日", "新年", "端午", "中秋", "佳節", "安好", "順心",
+                                         "賀卡", "慶祝", "聖誕", "除夕", "元宵", "母親節", "父親節", "感恩"]
                     is_greeting = any(kw in desc for kw in greeting_keywords)
 
                     # 若不是祝福圖片，且描述長度足夠，嘗試解析訂單
@@ -557,9 +558,14 @@ async def handle_line_webhook(
                             reply_text = f"{user_display_name}您好，很抱歉讓您久等。\n\n收到您的{msg_type}，已備份完成。若需要建立預購單，請提供品名、數量和單位等訂購資訊。"
                     else:
                         if order_result and order_result.get("status") == "success":
-                            reply_text = order_result.get("message", "") or f"收到您的{msg_type}，已備份完成。若需要建立預購單，請提供品名、數量和單位等訂購資訊。"
+                            reply_text = order_result.get("message", "")
                         else:
-                            reply_text = f"收到您的{msg_type}，已備份完成。若需要建立預購單，請提供品名、數量和單位等訂購資訊。"
+                            # 一般圖片：用 Qwen2.5-VL-7B 的描述來回覆
+                            scene_desc = mm.get("description", "") if mm else ""
+                            if scene_desc and not scene_desc.startswith("收到一張"):
+                                reply_text = f"感謝您的分享！這是一張{scene_desc[:80]}。已為您備份完成。"
+                            else:
+                                reply_text = f"收到您的{msg_type}，已備份完成。"
 
                 except Exception as e:
                     logger.error(f"[MEDIA] Processing failed: {type(e).__name__}: {e}", exc_info=True)

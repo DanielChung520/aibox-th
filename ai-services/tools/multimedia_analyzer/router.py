@@ -40,7 +40,7 @@ app.add_middleware(
 )
 
 MLX_BASE_URL = os.getenv("MLX_BASE_URL", "http://127.0.0.1:11400/v1")
-DEFAULT_VISION_MODEL = os.getenv("VISION_MODEL", "qwen3-vl:latest")
+DEFAULT_VISION_MODEL = os.getenv("VISION_MODEL", "Qwen2.5-VL-7B")
 DEFAULT_AUDIO_MODEL = os.getenv("AUDIO_MODEL", "whisper")
 
 SEAWEED_URL = os.getenv("SEAWEED_URL", "http://localhost:8888")

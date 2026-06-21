@@ -28,7 +28,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self' https://eeaapi.ent4i.com http://localhost:*; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://eeaapi.ent4i.com http://localhost:*; style-src 'self' 'unsafe-inline' https://unpkg.com http://localhost:*; img-src 'self' data: blob: https://eeaapi.ent4i.com; connect-src 'self' https://eeaapi.ent4i.com wss://eeaapi.ent4i.com ipc://localhost blob: https://unpkg.com http://localhost:*; font-src 'self' https://unpkg.com http://localhost:*; worker-src 'self' blob: http://localhost:*; frame-src http://localhost:*",
+      "csp": "default-src 'self' https://eeaapi.ent4i.com http://localhost:*; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://eeaapi.ent4i.com http://localhost:*; style-src 'self' 'unsafe-inline' https://unpkg.com http://localhost:*; img-src 'self' data: blob: https://eeaapi.ent4i.com https://*.basemaps.cartocdn.com; connect-src 'self' https://eeaapi.ent4i.com wss://eeaapi.ent4i.com ipc://localhost blob: https://unpkg.com http://localhost:*; font-src 'self' https://unpkg.com http://localhost:*; worker-src 'self' blob: http://localhost:*; frame-src http://localhost:*",
       "assetProtocol": {
         "enable": true,
         "scope": [
