@@ -178,6 +178,8 @@ function ChannelDetailDrawer({ channel, open, onClose, onSaved }: {
         business_user_key: values.business_user_key,
         business_user_name: values.business_user_name || users.find(u => u._key === values.business_user_key)?.name || '',
         role: values.role,
+        org_tags: values.org_tags || [],
+        region_tags: values.region_tags || [],
         linked_agent_key: values.linked_agent_key,
         status: values.status,
         avatar: values.avatar || '',
@@ -245,11 +247,13 @@ function ChannelDetailDrawer({ channel, open, onClose, onSaved }: {
             </Form.Item>
           </div>
           <div style={{ display: 'flex', gap: 12 }}>
-            <Form.Item label="團隊" name="team" style={{ flex: 1 }}>
-              <Input placeholder="例如：台北業務一組" />
+            <Form.Item label="業務組織" name="org_tags" style={{ flex: 1 }}>
+              <Select mode="tags" placeholder="輸入後按 Enter" open={false}
+                tokenSeparators={[',', '，', '|', '/']} />
             </Form.Item>
-            <Form.Item label="區域" name="region" style={{ flex: 1 }}>
-              <Input placeholder="例如：台北市" />
+            <Form.Item label="負責區域" name="region_tags" style={{ flex: 1 }}>
+              <Select mode="tags" placeholder="輸入後按 Enter" open={false}
+                tokenSeparators={[',', '，', '|', '/']} />
             </Form.Item>
           </div>
           <Form.Item label="綁定使用者" name="business_user_key">
@@ -341,6 +345,8 @@ export default function ChannelAdminPage() {
         business_user_key: values.business_user_key,
         business_user_name: values.business_user_name || users.find(u => u._key === values.business_user_key)?.name || '',
         role: values.role || '業務員',
+        org_tags: values.org_tags || [],
+        region_tags: values.region_tags || [],
         linked_agent_key: values.linked_agent_key || 'welfare_secretary',
         avatar: values.avatar || '',
         config: {
@@ -368,7 +374,7 @@ export default function ChannelAdminPage() {
       <Tabs defaultActiveKey="channels" items={[
         {
           key: 'channels',
-          label: '💬 頻道管理',
+          label: '💬 業務員/通信管理',
           children: (
             <Spin spinning={loading}>
               {channels.length === 0 ? (
@@ -400,7 +406,7 @@ export default function ChannelAdminPage() {
         onSaved={fetchChannels}
       />
 
-      <Modal title="新增通訊頻道" open={createModalOpen}
+      <Modal title="新增業務員/通訊頻道" open={createModalOpen}
         onCancel={() => setCreateModalOpen(false)} onOk={handleCreate} width={520}
         okText="建立" confirmLoading={saving} destroyOnClose>
         <Form form={form} layout="vertical" size="small" initialValues={{ platform: 'line', role: '業務員', linked_agent_key: 'welfare_secretary' }}>
@@ -410,6 +416,16 @@ export default function ChannelAdminPage() {
             </Form.Item>
             <Form.Item label="角色" name="role" style={{ flex: 1 }}>
               <Select options={[{ label: '業務員', value: '業務員' }, { label: '業務主管', value: '業務主管' }]} />
+            </Form.Item>
+          </div>
+          <div style={{ display: 'flex', gap: 12 }}>
+            <Form.Item label="業務組織" name="org_tags" style={{ flex: 1 }}>
+              <Select mode="tags" placeholder="輸入後按 Enter" open={false}
+                tokenSeparators={[',', '，', '|', '/']} />
+            </Form.Item>
+            <Form.Item label="負責區域" name="region_tags" style={{ flex: 1 }}>
+              <Select mode="tags" placeholder="輸入後按 Enter" open={false}
+                tokenSeparators={[',', '，', '|', '/']} />
             </Form.Item>
           </div>
           <Form.Item label="綁定使用者" name="business_user_key">
