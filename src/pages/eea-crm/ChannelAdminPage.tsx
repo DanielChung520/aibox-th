@@ -365,21 +365,21 @@ export default function ChannelAdminPage() {
 
   return (
     <div style={{ padding: 24, background: contentTokens.contentBg, minHeight: '100%' }}>
-      <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'flex-end' }}>
+      <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span style={{ color: '#666', fontSize: 13 }}>
+          {channels.length > 0 ? `共 ${channels.length} 個頻道` : ''}
+        </span>
         <Button type="primary" icon={<PlusOutlined />} onClick={() => { form.resetFields(); setCreateModalOpen(true); }}>
-          新增頻道
+          新增業務員/頻道
         </Button>
       </div>
 
       <Spin spinning={loading}>
         {channels.length === 0 ? (
-          <Empty description={<span>尚無頻道設定<br /><span style={{ fontSize: 12, color: '#999' }}>點擊上方「新增頻道」開始設定</span></span>}
+          <Empty description={<span>尚無頻道設定<br /><span style={{ fontSize: 12, color: '#999' }}>點擊上方「新增業務員/頻道」開始設定</span></span>}
             style={{ marginTop: 60 }} />
         ) : (
           <>
-            <div style={{ marginBottom: 12, color: '#666', fontSize: 13 }}>
-              共 {channels.length} 個頻道
-            </div>
             <Row gutter={[16, 16]}>
               {channels.map(ch => (
                 <Col key={ch._key} xs={24} sm={12} md={8} lg={6}>
