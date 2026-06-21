@@ -9,7 +9,25 @@ from typing import Optional
 logger = logging.getLogger("unified_agents.line_webhook")
 
 MLX_API = os.getenv("MLX_BASE_URL", "http://127.0.0.1:11400/v1")
-CARD_MODEL = "Qwen3-Coder-30B"
+CARD_MODEL = "Qwen3-VL-8B"
+
+
+# 簡繁轉換對照表（LLM 常錯的字）
+_S2T = str.maketrans({
+    '吕':'呂','实':'實','识':'識','认':'認','荣':'榮','幸':'幸','会':'會','机':'機','与':'與',
+    '关':'關','系':'係','门':'門','开':'開','发':'發','长':'長','国':'國','为':'為',
+    '说':'說','话':'話','时':'時','间':'間','对':'對','动':'動','业':'業','经':'經','来':'來',
+    '过':'過','还':'還','这':'這','个':'個','谢':'謝','称':'稱','呼':'呼',
+    '电':'電','导':'導','师':'師','总':'總','理':'理',
+    '后':'後','前':'前','点':'點','钱':'錢','体':'體','复':'複','兩':'兩','過':'過',
+    '現':'現','將':'將','從':'從','時':'時','書':'書','萬':'萬','歷':'歷',
+    '气':'氣','兴':'興','们':'們','尔':'爾','吗':'嗎','么':'麼','乐':'樂',
+    '几':'幾','尽':'盡','当':'當','只':'隻','双':'雙','队':'隊','阳':'陽',
+    '阴':'陰','险':'險','际':'際','陆':'陸','际':'際','虽':'雖','随':'隨',
+})
+
+def _ensure_traditional(text: str) -> str:
+    return text.translate(_S2T)
 
 
 async def _llm_reply(system_prompt: str, user_msg: str) -> str:
@@ -26,7 +44,11 @@ async def _llm_reply(system_prompt: str, user_msg: str) -> str:
                 "temperature": 0.7,
             })
             if resp.status_code == 200:
-                return resp.json().get("choices", [{}])[0].get("message", {}).get("content", "")
+                content = resp.json().get("choices", [{}])[0].get("message", {}).get("content", "")
+                if content:
+                    content = _ensure_traditional(content)
+                    logger.info(f"[LLM Reply] generated ({len(content)} chars): {content[:100]}")
+                return content
     except Exception as e:
         logger.warning(f"[LLM Reply] failed: {e}")
     return ""
@@ -492,28 +514,28 @@ async def handle_line_webhook(
                         mm = resp.json()
                     logger.info(f"[MEDIA] Analyzed: desc={mm.get('description','')[:60]}... seaweed={mm.get('seaweed_url','')}")
 
-                    # OCR 名片辨識（GLM-OCR via MLX）
+                    # Qwen3-VL-8B 場景描述已包含所有資訊，直接從描述提取名片結構
                     ocr_result = None
-                    try:
-                        async with httpx.AsyncClient(timeout=30.0) as ocr_c:
-                            ocr_resp = await ocr_c.post(
-                                "http://127.0.0.1:11400/v1/chat/completions",
-                                json={
-                                    "model": "GLM-OCR",
-                                    "messages": [{"role": "user", "content": [
-                                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64_content}"}},
-                                        {"type": "text", "text": "Text Recognition: 請讀出這張名片上所有文字"}
-                                    ]}],
-                                    "max_tokens": 500, "temperature": 0.1,
-                                },
-                            )
-                            if ocr_resp.status_code == 200:
-                                ot = ocr_resp.json().get("choices", [{}])[0].get("message", {}).get("content", "")
-                                if ot and any(k in ot for k in ["公司", "電話", "姓名", "@"]):
-                                    ocr_result = {"text": ot}
-                                    logger.info(f"[MEDIA] GLM-OCR card: {ot[:60]}")
-                    except Exception as e:
-                        logger.warning(f"[MEDIA] GLM-OCR failed: {e}")
+                    scene_desc = mm.get("description", "") if mm else ""
+                    if scene_desc and any(k in scene_desc for k in ["名片", "公司", "電話", "姓名"]):
+                        _extract = await _llm_reply(
+                            "你只會輸出 JSON，不准輸出其他文字。",
+                            f"從以下名片描述提取姓名(name)和職稱(title)，只回 JSON：\n{scene_desc[:500]}"
+                        )
+                        if _extract:
+                            import json as _json
+                            _e = _extract.strip()
+                            if "```json" in _e: _e = _e.split("```json")[1].split("```")[0].strip()
+                            elif "```" in _e: _e = _e.split("```")[1].split("```")[0].strip()
+                            try:
+                                _c = _json.loads(_e)
+                                _n = _c.get("name") or _c.get("姓名") or ""
+                                _t = _c.get("title") or _c.get("職稱") or ""
+                                if _n and not any(k in _n for k in ["黨","會","社","公司","企業","集團"]):
+                                    ocr_result = {"name": _n, "title": _t, "raw": _e}
+                                    logger.info(f"[MEDIA] VL card: {_n} / {_t}")
+                            except:
+                                pass
 
                     # 儲存使用者發送圖片的紀錄
                     storage = ConversationStorage()
@@ -561,16 +583,57 @@ async def handle_line_webhook(
                     # 決定回覆文字（由 LLM 生成）
                     reply_text = ""
                     scene_desc = (mm.get("description") or "") if mm else ""
-                    ocr_text = ocr_result.get("text", "") if ocr_result else ""
+                    card_name = ocr_result.get("name", "") if ocr_result else ""
+                    card_title = ocr_result.get("title", "") if ocr_result else ""
+                    card_company = ocr_result.get("company", "") if ocr_result else ""
 
-                    if ocr_text:
-                        prompt = f"名片內容：\n{ocr_text}\n\n請根據以上名片內容，用溫暖且不刻板的語氣回覆對方，感謝對方分享名片，表達榮幸認識。若名片有職稱可用稱謂（如王總經理、李醫師），否則用先生/女士。不要描述名片內容，只要感謝與認識的用語即可。"
-                        sys_p = "你是商務場合中非常有禮貌的助理，說話溫暖真誠、不失莊重。"
+                    logger.info(f"[IMG] GLM-OCR: name={card_name} title={card_title} company={card_company}")
+                    logger.info(f"[IMG] Scene desc: {scene_desc[:100]}")
+                    # 用 GLM-OCR 結構化輸出提取稱呼
+                    import re
+                    TITLES = {"副總經理":"總經理", "總經理":"總經理", "協理":"協理", "經理":"經理", "副理":"經理",
+                              "主任":"主任", "組長":"組長", "工程師":"老師", "設計師":"老師", "分析師":"老師",
+                              "導入師":"老師", "醫師":"老師", "律師":"老師", "教授":"老師", "副總":"副總",
+                              "董事長":"執行長", "執行長":"執行長", "院長":"院長", "所長":"所長", "顧問":"顧問", "專員":"專員"}
+
+                    if card_name:
+                        surname = ""
+                        for ch in card_name:
+                            if '\u4e00' <= ch <= '\u9fff':
+                                surname = ch
+                                break
+                        # 檢查 title 是否真的像職稱（不是公司名）
+                        raw_title = card_title if card_title and not any(card_title.endswith(k) for k in ["公司","企業","集團","行號"]) else ""
+                        matched_title = ""
+                        for t, short in TITLES.items():
+                            if t in raw_title:
+                                matched_title = short
+                                break
+                        greeting = "您"
+                        if surname and matched_title:
+                            if matched_title == "老師":
+                                greeting = f"{surname}老師"
+                            else:
+                                greeting = f"{surname}{matched_title}"
+                        elif surname:
+                            greeting = f"{surname}老師"
+
+                        logger.info(f"[IMG] Card greeting resolved: {greeting}")
+                        # 判斷語言：姓名或公司有中文字→繁體中文，否則英文
+                        check_text = f"{card_name} {card_company}"
+                        is_chinese = any('\u4e00' <= c <= '\u9fff' for c in check_text)
+                        if is_chinese:
+                            prompt = f"用繁體中文寫這句話：{greeting}，感謝您分享名片，很高興認識您。全中文，不要任何英文單字。"
+                            sys_p = "你是台灣的業務助理，只能用繁體中文，不可以夾雜英文。"
+                        else:
+                            prompt = f"Reply in English: Address the person as \"{greeting}\", thank them for sharing their business card, express pleasure in meeting them. One sentence only."
+                            sys_p = "You are a professional business assistant. Respond politely and warmly."
                         reply_text = await _llm_reply(sys_p, prompt)
                         if not reply_text:
                             reply_text = "您好！感謝您分享的名片。"
 
                     elif is_greeting:
+                        logger.info(f"[IMG] Greeting card detected: {scene_desc[:60]}")
                         today_str = datetime.now().strftime("%Y-%m-%d")
                         greeted = await storage.get_greeting_responded_at(session_id)
                         if greeted != today_str:
@@ -588,8 +651,16 @@ async def handle_line_webhook(
 
                     if not reply_text:
                         if scene_desc and not scene_desc.startswith("收到一張"):
-                            prompt = f"對方傳了一張圖片。圖片描述：{scene_desc}\n\n請用自然的語氣感謝對方分享，簡單提及圖片內容，語氣溫暖不刻板。"
-                            reply_text = await _llm_reply("你是親切的客服助理，語氣溫暖自然。", prompt)
+                            # 判斷是否包含名片資訊（GLM-OCR 沒抓到但 vision 有看到）
+                            is_card_scene = any(kw in scene_desc for kw in ["名片", "醫院", "公司", "電話", "醫師", "經理"])
+                            if is_card_scene:
+                                logger.info(f"[IMG] Fallback card detected from scene desc")
+                                prompt = f"圖片描述：{scene_desc}\n\n注意：對方傳了一張名片。請用繁體中文回覆，感謝對方分享名片。若名片有姓氏和職稱，用「姓氏+職稱」稱呼（如：藍醫師、王總經理）。職稱含「師」字者也可稱「姓氏+老師」（如：藍老師）。簡短溫暖，一兩句話即可。不要描述場景。"
+                                sys_p = "你是專業的業務助理，使用繁體中文，回應簡潔溫暖得體。"
+                            else:
+                                prompt = f"對方傳了一張圖片。圖片描述：{scene_desc}\n\n請用繁體中文、簡單感謝對方分享即可，一句話就好。語氣溫暖。"
+                                sys_p = "你是親切的客服助理，使用繁體中文。"
+                            reply_text = await _llm_reply(sys_p, prompt)
                         if not reply_text:
                             reply_text = f"收到您的{msg_type}，已備份完成。"
 
@@ -597,7 +668,10 @@ async def handle_line_webhook(
                     logger.error(f"[MEDIA] Processing failed: {type(e).__name__}: {e}", exc_info=True)
                     reply_text = f"收到您的{msg_type}，處理時發生錯誤，請稍後再試。"
 
-                # Step 2: 用 reply_message 回覆結果（個人/群組皆可用 reply_token）
+                # Step 2: 用 reply_message 回覆結果
+                if reply_text:
+                    logger.info(f"[MEDIA] Reply to user: {reply_text[:120]}")
+                    await storage.save_message(session_id=session_id, platform="line", role="assistant", message=reply_text)
                 try:
                     if reply_text:
                         await reply_message(
