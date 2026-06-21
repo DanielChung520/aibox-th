@@ -146,15 +146,17 @@ export default function MainLayout() {
     setThemeMode(isDark ? 'light' : 'dark');
   };
 
-  const getPageTitle = () => {
+  const getPageInfo = () => {
     const path = location.pathname;
     const func = functions.find(f => f.path === path);
-    if (func) return func.name;
-    if (path.includes('users')) return '账户管理';
-    if (path.includes('roles')) return '角色管理';
-    if (path.includes('params')) return '系統參數';
-    return '首页';
+    if (func) return { title: func.name, desc: func.description || '' };
+    if (path.includes('users')) return { title: '账户管理', desc: '使用者帳號管理' };
+    if (path.includes('roles')) return { title: '角色管理', desc: '角色與權限設定' };
+    if (path.includes('params')) return { title: '系統參數', desc: '系統配置與設定' };
+    return { title: '首页', desc: '' };
   };
+
+  const pageInfo = getPageInfo();
 
   return (
     <Layout style={{ minHeight: '100vh', background: contentTokens.pageBg || shellTokens.headerBg, display: 'flex', flexDirection: 'row' }}>
@@ -221,7 +223,10 @@ export default function MainLayout() {
                 onClick={() => setCollapsed(!collapsed)}
                 style={{ fontSize: '16px', color: textColor }}
               />
-              <span style={{ color: textColor, fontSize: 16, fontWeight: 500 }}>{getPageTitle()}</span>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                <span style={{ color: textColor, fontSize: 16, fontWeight: 600 }}>{pageInfo.title}</span>
+                {pageInfo.desc && <span style={{ color: '#a0aec0', fontSize: 12 }}>{pageInfo.desc}</span>}
+              </div>
             </div>
             <HeaderControls
               user={user}

@@ -1,0 +1,34 @@
+Agent 編號,Agent 名稱,協助處理問題類型與目標價值,工作職責,細化意圖,意圖對應行動路由
+A01,福祉業務小秘（LINE 助手）,外部客戶即時互動＆內部業務效率提升;目標：縮短客戶回應時間、自動化日常業務溝通、減少人工作業,1. 場景一客戶端 LINE Bot：自動回覆問候/FAQ/Timeline摘要/名片收藏/機密拒答;2. 場景二內部助理：代理問候、ERP/CRM查詢、Timeline完整查詢、名片直接建檔;3. 多頻道管理：每個業務員獨立 LINE 頻道，資料隔離,greeting（客戶問候）,CustomerGreetingSkill → CRM查詢職稱 → LLM 個人化問候
+A01,福祉業務小秘（LINE 助手）,,,,greeting_image（問候圖片）,image_processor.handle_greeting() → qwen3-vl 分析 → 回覆
+A01,福祉業務小秘（LINE 助手）,,,,faq_question（產品FAQ）,Knowledge Agent 向量檢索 → FAQ 回覆
+A01,福祉業務小秘（LINE 助手）,,,,timeline_query（客戶摘要查詢）,TimelineQuerySkill(summary) → customer_timelines 摘要回傳
+A01,福祉業務小秘（LINE 助手）,,,,confidential_q（機密問題）,SafeRejectSkill → 婉轉拒答 + BusinessNotificationSkill 通知業務
+A01,福祉業務小秘（LINE 助手）,,,,business_card（名片）,image_processor.handle_business_card() → 場景一 pending_contacts / 場景二 CRM 直接寫入
+A01,福祉業務小秘（LINE 助手）,,,,unclear（無法分類）,CustomerSafeReplySkill → LLM 安全回覆（L0-L4 規則）
+A01,福祉業務小秘（LINE 助手）,,,,erp_query（ERP查詢/場景二）,ErpQuerySkill → Data Agent NL2SQL
+A01,福祉業務小秘（LINE 助手）,,,,crm_query（CRM查詢/場景二）,CrmQuerySkill → CRM API 直接查詢
+A01,福祉業務小秘（LINE 助手）,,,,greeting_customer（代理問候/場景二）,ManualGreetingSkill → LINE Messaging API push
+A01,福祉業務小秘（LINE 助手）,,,,broadcast（群發/場景二）,BroadcastSkill → 預覽確認 → 逐筆 push → broadcast_logs
+A02,市場觀察助手（Market Intel）,市場資訊蒐集與分析自動化;目標：每日自動產出產業快報、減少業務手動搜尋時間、掌握競爭動態,1. 每日關鍵字搜尋（DuckDuckGo）→ 網頁內容抓取;2. LLM 摘要 + 關聯性判斷 + 行動建議;3. 整合分析（趨勢/注意/商機/總評）;4. 權限設定（主管配權/業務唯讀或可更新）;5. 歷史記錄查詢與刪除;6. 保留天數自動清理,refresh（產生快報）,market_intel_refresh Celery task → DuckDuckGo 搜尋 → fetch_page_content → LLM summarize_article → LLM generate_daily_report
+A02,市場觀察助手（Market Intel）,,,,view_latest（檢閱最新快報）,GET /api/v1/market-intel/latest?user_key=X
+A02,市場觀察助手（Market Intel）,,,,view_history（檢閱執行記錄）,GET /api/v1/market-intel/history?user_key=X
+A02,市場觀察助手（Market Intel）,,,,delete_records（刪除記錄）,POST /api/v1/market-intel/delete-reports
+A02,市場觀察助手（Market Intel）,,,,set_retention（設定保留天數）,paramsApi.update('market_intel.retention_days')
+A02,市場觀察助手（Market Intel）,,,,set_permissions（設定業務權限）,paramsApi.update('market_intel.permissions')
+A03,業務戰情助手（Sales Intel）,銷售數據視覺化與業績洞察;目標：取代人工彙整 Excel 報表、即時掌握業績進度、數據驅動決策,1. 彙總 Ragic ERP 訂單/銷貨/報價資料產出 KPI;2. 區域/產品/業務員多維度分析;3. 每月趨勢圖與年度比較;4. 目標達成率追蹤;5. 異常預警（業績驟降/目標落後）,view_kpi（檢視KPI儀表板）,GET /api/v1/sales/kpi → Ragic ERP 彙總查詢 → 回傳營收/成長率/達標率/活躍客戶數
+A03,業務戰情助手（Sales Intel）,,,,view_regional（區域分析）,GET /api/v1/sales/regional → Ragic 訂購單依區域分群
+A03,業務戰情助手（Sales Intel）,,,,view_product（產品分析）,GET /api/v1/sales/product → Ragic 訂購單依產品分類
+A03,業務戰情助手（Sales Intel）,,,,view_ranking（業務員排名）,GET /api/v1/sales/ranking → Ragic 訂購單依業務員彙總
+A03,業務戰情助手（Sales Intel）,,,,view_trend（趨勢圖）,GET /api/v1/sales/trend?months=12 → Ragic 銷貨單依月份彙總
+A03,業務戰情助手（Sales Intel）,,,,view_ragic_detail（查詢原始單據）,GET /api/v1/ragic/query → Data Agent NL2SQL
+A04,業務行程小秘（Visit & Expense）,拜訪規劃與費用報銷自動化;目標：減少行程安排時間、即時記錄報銷、提升業務外出效率,1. 拜訪行程 CRUD（客戶/日期/地點/狀態）;2. Google Maps 地圖估程（路程+時間）;3. 行程提醒（當天早上 LINE 通知）;4. 報銷單 CRUD（日期/項目/金額/憑證）;5. 報銷審核流程（送出→主管審核→會計付款）;6. Timeline 自動記錄,create_visit（新增行程）,POST /api/v1/visits → 寫入 visit_plans + 地圖估程 + LINE 提醒設定
+A04,業務行程小秘（Visit & Expense）,,,,update_visit（修改行程）,PUT /api/v1/visits/{key}
+A04,業務行程小秘（Visit & Expense）,,,,delete_visit（刪除行程）,DELETE /api/v1/visits/{key}
+A04,業務行程小秘（Visit & Expense）,,,,list_visits（檢視行程表）,GET /api/v1/visits?date_range=...&status=planned|done|cancelled
+A04,業務行程小秘（Visit & Expense）,,,,create_expense（新增報銷）,POST /api/v1/expenses → 寫入 expense_reports + 憑證上傳 SeaweedFS
+A04,業務行程小秘（Visit & Expense）,,,,update_expense（修改報銷）,PUT /api/v1/expenses/{key}
+A04,業務行程小秘（Visit & Expense）,,,,delete_expense（刪除報銷）,DELETE /api/v1/expenses/{key}
+A04,業務行程小秘（Visit & Expense）,,,,list_expenses（檢視報銷清單）,GET /api/v1/expenses?status=draft|submitted|approved|paid
+A04,業務行程小秘（Visit & Expense）,,,,approve_expense（審核報銷/主管）,PUT /api/v1/expenses/{key}/approve
+A04,業務行程小秘（Visit & Expense）,,,,view_calendar（行事曆視圖）,GET /api/v1/visits/calendar?month=YYYY-MM

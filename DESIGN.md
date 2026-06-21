@@ -80,9 +80,79 @@
 |---------|------|--------|-------------|
 | Page Title | 20px | 600 | 1.4 |
 | Section Title | 16px | 600 | 1.4 |
+
+---
+
+## Page Header & Title Convention
+
+### 原則
+
+頁面不使用重複的 h1/h2 標題。功能名稱與描述統一由 **系統 Header**（頂部欄）顯示，頁面內容區不再重複標題。
+
+### Header 格式
+
+```
+Header:  系統資料管理  |  SeaweedFS 儲存空間管理
+         ↑ 功能名稱（大字）  ↑ 功能說明（小字、灰色）
+```
+
+- 功能名稱：從 `functions` 集合的 `name` 欄位讀取
+- 功能說明：從 `functions` 集合的 `description` 欄位讀取
+- 頁面內容區：禁止重複顯示相同標題
+
+### 範例
+
+| ✅ 正確 | ❌ 錯誤 |
+|---------|---------|
+| Header: 系統資料管理 \| SeaweedFS 儲存空間管理 | Header: 系統資料管理 |
+| 內容區（無標題） | 內容區：🗂️ 系統資料管理（重複） |
 | Body Text | 14px | 400 | 1.5 |
 | Secondary Text | 12px | 400 | 1.4 |
 | Small Text | 12px | 400 | 1.4 |
+
+---
+
+## Theme Token Usage Rules
+
+### 優先使用 System Param 定義的 Token
+
+所有頁面元件的顏色、背景、邊框、陰影，**優先使用 `contentTokens` 系統變數**，禁止直接硬編寫色碼：
+
+```tsx
+// ✅ 正確
+<div style={{ background: contentTokens.containerBg, color: contentTokens.textSecondary }}>
+
+// ❌ 錯誤
+<div style={{ background: '#fff', color: '#888' }}>
+```
+
+### 可用的 ContentTokens
+
+| Token | 淺色模式 | 深色模式 | 用途 |
+|-------|----------|----------|------|
+| `contentBg` | `#ffffff` | `#0f172a` | 頁面內容背景 |
+| `containerBg` | `#ffffff` | `#1e293b` | Card/Table/Tabs 容器背景 |
+| `textSecondary` | `#64748b` | `#8892a0` | 次要文字、說明文字 |
+| `tableHeaderBg` | `#f0f4ff` | `#1a2235` | 表格表頭、區隔線、進度條基底 |
+| `tableRowHoverBg` | `#e6f0ff` | `#1a2744` | 懸停背景色 |
+| `chatInputBg` | 淺色 | 深色 | 輸入框背景 |
+| `boxShadow` | 淺陰影 | 深陰影 | 卡片陰影 |
+
+### 自訂顏色的原則
+
+若特殊需求必須使用自訂色碼，必須同時確保深色與淺色主題下的可讀性：
+
+- **文字 vs 背景對比度**：至少 4.5:1（WCAG AA 標準）
+- **深色主題禁止使用**：`#fff` 背景 + `#888` 文字（看不見）
+- **淺色主題禁止使用**：`#000` 背景 + `#333` 文字（沒對比）
+- **建議做法**：使用 `rgba(255,255,255,0.85)` 在深色背景上，`rgba(0,0,0,0.85)` 在淺色背景上
+
+### 簡易判斷方式
+
+```
+切換到深色主題 → 頁面上所有文字和背景都應該清楚可讀
+如果有任何文字「消失」或「刺眼」 → 表示沒有遵循 Token 規則
+```
 
 ---
 

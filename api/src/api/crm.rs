@@ -841,6 +841,7 @@ pub struct CreateContactPayload {
     pub line_status: Option<String>,
     pub is_primary: Option<bool>,
     pub owner_key: Option<String>,
+    pub channel_key: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -859,6 +860,7 @@ pub struct UpdateContactPayload {
     pub line_status: Option<String>,
     pub is_primary: Option<bool>,
     pub owner_key: Option<String>,
+    pub channel_key: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -1002,6 +1004,7 @@ async fn create_contact(
     if let Some(v) = payload.organizations { doc_map.insert("organizations".into(), v); }
     if let Some(v) = payload.notes { doc_map.insert("notes".into(), json!(v)); }
     if let Some(v) = payload.card_images { doc_map.insert("card_images".into(), v); }
+    if let Some(v) = payload.channel_key { doc_map.insert("channel_key".into(), json!(v)); }
 
     let doc = Value::Object(doc_map);
 
@@ -1053,6 +1056,7 @@ async fn update_contact(
     if let Some(v) = payload.organizations { patch.insert("organizations".into(), v); }
     if let Some(v) = payload.notes { patch.insert("notes".into(), json!(v)); }
     if let Some(v) = payload.card_images { patch.insert("card_images".into(), v); }
+    if let Some(v) = payload.channel_key { patch.insert("channel_key".into(), json!(v)); }
     if let Some(v) = payload.source { patch.insert("source".into(), json!(v)); }
     if let Some(v) = payload.line_status { patch.insert("line_status".into(), json!(v)); }
     if let Some(v) = payload.is_primary { patch.insert("is_primary".into(), json!(v)); }

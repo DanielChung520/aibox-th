@@ -6,11 +6,11 @@
  * @version     1.0.0
  */
 
-import { useState, useEffect } from 'react';
-import { Card, Table, Form, Tabs, App, Typography, Input, Button, Space, theme } from 'antd';
-import { DatabaseOutlined, SettingOutlined } from '@ant-design/icons';
+import { useState, useEffect, useCallback } from 'react';
+import { Card, Table, Form, Tabs, App, Typography, Input, Button, Space, Switch, theme } from 'antd';
+import { DatabaseOutlined, SettingOutlined, StarOutlined } from '@ant-design/icons';
 import { dataAgentApi, TableInfo, FieldInfo } from '../../services/dataAgentApi';
-import { paramsApi } from '../../services/api';
+import { paramsApi, schemaReportsApi } from '../../services/api';
 
 import { TAB_LABELS, TAB_CATEGORIES } from './schemaConstants';
 import { getSchemaTableColumns } from './schemaTableColumns';
@@ -53,7 +53,57 @@ export default function SchemaPage() {
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [reportTableInfo, setReportTableInfo] = useState<TableInfo | null>(null);
   const [ragicAccount, setRagicAccount] = useState<string>('');
+  const [favorites, setFavorites] = useState<Set<string>>(new Set());
+  const [favoriteOnly, setFavoriteOnly] = useState(false);
+  const [usageCount, setUsageCount] = useState<Record<string, number>>({});
+  const [reportBadges, setReportBadges] = useState<Record<string, number>>({});
   const { dispatchEntity } = useEntityPerception({ defaultEntityType: 'table', defaultAction: 'list' });
+
+  // 從 localStorage 載入常用 + 使用次數
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('da_schema_favorites');
+      if (stored) setFavorites(new Set(JSON.parse(stored)));
+      const storedUsage = localStorage.getItem('da_schema_usage');
+      if (storedUsage) setUsageCount(JSON.parse(storedUsage));
+    } catch { /* ignore */ }
+  }, []);
+
+  // 記錄使用次數（每次 dispatchEntity 或點擊資料列）
+  const recordUsage = useCallback((tableId: string) => {
+    setUsageCount(prev => {
+      const next = { ...prev, [tableId]: (prev[tableId] || 0) + 1 };
+      try { localStorage.setItem('da_schema_usage', JSON.stringify(next)); } catch { /* ignore */ }
+      return next;
+    });
+  }, []);
+
+  const handleOpenReportWithBadge = useCallback((record: TableInfo) => {
+    // 標記該 table 的報表為已查看
+    const viewed = new Set<string>(JSON.parse(localStorage.getItem('da_report_viewed') || '[]'));
+    schemaReportsApi.list(record.table_id).then((res: any) => {
+      const reports: Array<{ _key: string; status: string }> = res.data.data || [];
+      for (const r of reports) {
+        if (r.status === 'completed' || r.status === 'completed_with_warnings') {
+          viewed.add(r._key);
+        }
+      }
+      localStorage.setItem('da_report_viewed', JSON.stringify([...viewed]));
+    }).catch(() => {});
+    setReportBadges(prev => ({ ...prev, [record.table_id]: 0 }));
+    dispatchEntity(record.table_id, 'create', { table_name: record.table_name, action_type: 'open_report' });
+    setReportTableInfo(record);
+    setReportModalOpen(true);
+  }, [dispatchEntity]);
+
+  const handleToggleFavorite = useCallback((tableId: string) => {
+    setFavorites(prev => {
+      const next = new Set(prev);
+      if (next.has(tableId)) next.delete(tableId); else next.add(tableId);
+      try { localStorage.setItem('da_schema_favorites', JSON.stringify([...next])); } catch { /* ignore */ }
+      return next;
+    });
+  }, []);
 
   const loadTables = async () => {
     setLoading(true);
@@ -70,6 +120,21 @@ export default function SchemaPage() {
   useEffect(() => {
     loadTables();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // 載入智慧報表 badges: 各 table 有幾筆完成但未查看的報告
+  useEffect(() => {
+    const viewed = new Set<string>(JSON.parse(localStorage.getItem('da_report_viewed') || '[]'));
+    schemaReportsApi.listAll().then((res: any) => {
+      const reports: Array<{ table_id: string; status: string; _key: string }> = res.data.data || [];
+      const counts: Record<string, number> = {};
+      for (const r of reports) {
+        if ((r.status === 'completed' || r.status === 'completed_with_warnings') && !viewed.has(r._key)) {
+          counts[r.table_id] = (counts[r.table_id] || 0) + 1;
+        }
+      }
+      setReportBadges(counts);
+    }).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -114,12 +179,14 @@ export default function SchemaPage() {
     setDataPreviewMode(record.preview_mode ?? 'paged');
     setDataModalVisible(true);
     dispatchEntity(record.table_id, 'view', { table_name: record.table_name, type: 'data_preview' });
+    recordUsage(record.table_id);
   };
 
   const openReportModal = (record: TableInfo) => {
     setReportTableInfo(record);
     setReportModalOpen(true);
     dispatchEntity(record.table_id, 'create', { table_name: record.table_name, action_type: 'open_report' });
+    recordUsage(record.table_id);
   };
 
   const handlePreviewModeChange = async (mode: 'paged' | 'all') => {
@@ -150,22 +217,32 @@ export default function SchemaPage() {
   };
 
   const knownTabs = TAB_CATEGORIES.flatMap(c => c.tabs);
-  const filteredTables = tables.filter(t => {
-    if (selectedCategory !== '全部') {
-      if (selectedCategory === '其他') {
-        if (knownTabs.includes(t.tab || '')) return false;
-      } else {
-        const category = TAB_CATEGORIES.find(c => c.label === selectedCategory);
-        if (category && !category.tabs.includes(t.tab || '')) return false;
+  const filteredTables = tables
+    .filter(t => {
+      if (selectedCategory !== '全部') {
+        if (selectedCategory === '其他') {
+          if (knownTabs.includes(t.tab || '')) return false;
+        } else {
+          const category = TAB_CATEGORIES.find(c => c.label === selectedCategory);
+          if (category && !category.tabs.includes(t.tab || '')) return false;
+        }
       }
-    }
-    if (selectedTab !== 'ALL' && t.tab !== selectedTab) return false;
-    if (searchText) {
-      const s = searchText.toLowerCase();
-      if (!t.table_name.toLowerCase().includes(s) && !t.table_id.toLowerCase().includes(s)) return false;
-    }
-    return true;
-  });
+      if (selectedTab !== 'ALL' && t.tab !== selectedTab) return false;
+      if (favoriteOnly && !favorites.has(t.table_id)) return false;
+      if (searchText) {
+        const s = searchText.toLowerCase();
+        if (!t.table_name.toLowerCase().includes(s) && !t.table_id.toLowerCase().includes(s)) return false;
+      }
+      return true;
+    })
+    .sort((a, b) => {
+      const aFav = favorites.has(a.table_id) ? 1 : 0;
+      const bFav = favorites.has(b.table_id) ? 1 : 0;
+      if (aFav !== bFav) return bFav - aFav;
+      const aUse = usageCount[a.table_id] || 0;
+      const bUse = usageCount[b.table_id] || 0;
+      return bUse - aUse;
+    });
 
   const enabledCount = tables.filter(t => t.status === 'enabled').length;
   const disabledCount = tables.filter(t => t.status !== 'enabled').length;
@@ -229,7 +306,7 @@ export default function SchemaPage() {
           onSelect={(val) => { setSelectedCategory(val); setSelectedTab('ALL'); }} 
         />
 
-        <div style={{ marginBottom: 8 }}>
+        <div style={{ marginBottom: 8, display: 'flex', alignItems: 'center', gap: 12 }}>
           <Input.Search
             placeholder="搜尋表名或 Table ID"
             allowClear
@@ -237,6 +314,16 @@ export default function SchemaPage() {
             onChange={(e) => { if (!e.target.value) setSearchText(''); }}
             style={{ width: 260 }}
           />
+          <Space size={4}>
+            <StarOutlined style={{ color: favoriteOnly ? '#faad14' : '#d9d9d9', fontSize: 14 }} />
+            <Switch
+              size="small"
+              checked={favoriteOnly}
+              onChange={setFavoriteOnly}
+              checkedChildren="常用"
+              unCheckedChildren="全部"
+            />
+          </Space>
         </div>
         
         {availableTabs.length > 0 && (
@@ -270,12 +357,16 @@ export default function SchemaPage() {
               onOpenColumnsModal: openColumnsModal,
               onOpenDataModal: openDataModal,
               onOpenReportModal: openReportModal,
+              onOpenReportModalWithViewed: handleOpenReportWithBadge,
               onEditTable: (record) => {
                 setEditingTable(record);
                 form.setFieldsValue(record);
                 setTableModalVisible(true);
               },
-              onDeleteTable: handleDeleteTable
+              onDeleteTable: handleDeleteTable,
+              favorites,
+              onToggleFavorite: handleToggleFavorite,
+              reportBadges,
             })} 
             dataSource={filteredTables} 
             rowKey="table_id"
@@ -283,8 +374,8 @@ export default function SchemaPage() {
             pagination={{ pageSize: 15 }} 
             size="small"
             onRow={(record) => ({ 
-              onClick: () => dispatchEntity(record.table_id, 'view', { table_name: record.table_name, tab: record.tab }),
-              onDoubleClick: () => openDataModal(record), 
+              onClick: () => { dispatchEntity(record.table_id, 'view', { table_name: record.table_name, tab: record.tab }); recordUsage(record.table_id); },
+              onDoubleClick: () => { openDataModal(record); recordUsage(record.table_id); },
               style: { cursor: 'pointer' } 
             })}
           />

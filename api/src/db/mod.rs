@@ -76,7 +76,7 @@ async fn ensure_collections(db: &Database<ReqwestClient>) -> Result<(), String> 
         .map(|c| c.name)
         .collect();
 
-    let docs = ["users", "roles", "system_params", "functions", "role_functions", "agents", "tools", "tool_logs", "model_providers", "theme_templates", "knowledge_roots", "knowledge_files", "ontologies", "job_logs", "knowledge_graphs", "knowledge_graph_edges", "chat_sessions", "chat_messages", "orch_intents", "intent_catalog", "leads", "da_tables", "da_expressions", "ragic_cache_meta", "user_profiles", "agent_demands", "todos", "todo_steps", "todo_logs", "esg_emission_factors", "esg_carbon_records", "esg_indicator_definitions"];
+    let docs = ["users", "roles", "system_params", "functions", "role_functions", "agents", "tools", "tool_logs", "model_providers", "theme_templates", "knowledge_roots", "knowledge_files", "ontologies", "job_logs", "knowledge_graphs", "knowledge_graph_edges", "chat_sessions", "chat_messages", "orch_intents", "intent_catalog", "leads", "da_tables", "da_expressions", "ragic_cache_meta", "user_profiles", "agent_demands", "todos", "todo_steps", "todo_logs", "esg_emission_factors", "esg_carbon_records", "esg_indicator_definitions", "crm_customers", "crm_customer_permissions", "crm_contacts", "agent_requirements", "demand_logs", "channels", "market_intel_reports", "market_intel_jobs", "message_schedules"];
     for name in docs {
         if !existing.contains(&name.to_string()) {
             db.create_collection(name)
@@ -107,6 +107,21 @@ async fn ensure_indexes(_db: &Database<ReqwestClient>) -> Result<(), String> {
         ("knowledge_graph_edges", &["file_id"]),
         ("agent_demands", &["agent_key", "status"]),
         ("agent_demands", &["agent_key", "version"]),
+        ("agent_requirements", &["demand_key", "status"]),
+        ("agent_requirements", &["status"]),
+        ("demand_logs", &["demand_key", "created_at"]),
+        ("channels", &["business_user_key"]),
+        ("channels", &["platform", "status"]),
+        ("crm_customers", &["source"]),
+        ("crm_customers", &["status"]),
+        ("crm_customers", &["city", "district"]),
+        ("crm_customer_permissions", &["customer_key"]),
+        ("crm_contacts", &["owner_key", "source"]),
+        ("crm_contacts", &["customer_key"]),
+        ("crm_contacts", &["line_uid"]),
+        ("crm_contacts", &["line_status"]),
+        ("message_schedules", &["business_user_key"]),
+        ("message_schedules", &["business_user_key", "message_type"]),
     ];
 
     let base_url = ARANGO_URL.get().ok_or("ARANGO_URL not set")?;
@@ -1102,4 +1117,22 @@ pub struct TodoLog {
     pub message: String,
     pub details: Option<serde_json::Value>,
     pub created_at: String,
+}
+
+// ─── Demand Log (Audit Trail) ────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DemandLog {
+    #[serde(rename = "_key", skip_serializing_if = "Option::is_none")]
+    pub _key: Option<String>,
+    pub demand_key: String,
+    pub version: String,
+    pub from_status: String,
+    pub to_status: String,
+    pub actor: String,
+    #[serde(default)]
+    pub reason: Option<String>,
+    pub created_at: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<serde_json::Value>,
 }

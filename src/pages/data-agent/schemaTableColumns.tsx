@@ -1,14 +1,6 @@
-/**
- * @file        Data Agent Schema 列表欄位設定
- * @description Schema 頁面的列表欄位
- * @lastUpdate  2026-04-11 18:13:37
- * @author      Daniel Chung
- * @version     1.0.0
- */
-
-import { Button, Space, Tag, Popconfirm } from 'antd';
-import { EditOutlined, DeleteOutlined, UnorderedListOutlined, TableOutlined, FileTextOutlined } from '@ant-design/icons';
-import { TableInfo } from '../../services/dataAgentApi';
+import { Button, Space, Tag, Badge, Popconfirm } from 'antd';
+import { EditOutlined, DeleteOutlined, UnorderedListOutlined, TableOutlined, FileTextOutlined, StarOutlined, StarFilled } from '@ant-design/icons';
+import type { TableInfo } from '../../services/dataAgentApi';
 import { TAB_LABELS } from './schemaConstants';
 
 interface SchemaTableColumnsProps {
@@ -17,6 +9,10 @@ interface SchemaTableColumnsProps {
   onEditTable: (record: TableInfo) => void;
   onDeleteTable: (tableId: string) => void;
   onOpenReportModal: (record: TableInfo) => void;
+  onOpenReportModalWithViewed?: (record: TableInfo) => void;
+  favorites: Set<string>;
+  onToggleFavorite: (tableId: string) => void;
+  reportBadges?: Record<string, number>;
 }
 
 export const getSchemaTableColumns = ({
@@ -25,7 +21,29 @@ export const getSchemaTableColumns = ({
   onEditTable,
   onDeleteTable,
   onOpenReportModal,
+  onOpenReportModalWithViewed,
+  favorites,
+  onToggleFavorite,
+  reportBadges,
 }: SchemaTableColumnsProps) => [
+  {
+    title: '常用',
+    key: 'favorite',
+    width: 50,
+    fixed: 'left' as const,
+    render: (_: unknown, record: TableInfo) => {
+      const isFav = favorites.has(record.table_id);
+      return (
+        <Button
+          type="link"
+          size="small"
+          icon={isFav ? <StarFilled style={{ color: '#faad14' }} /> : <StarOutlined style={{ color: '#d9d9d9' }} />}
+          onClick={(e) => { e.stopPropagation(); onToggleFavorite(record.table_id); }}
+          title={isFav ? '取消常用' : '設為常用'}
+        />
+      );
+    }
+  },
   { 
     title: '來源', dataIndex: 'data_source', key: 'data_source', width: 80,
     render: (ds: 'ragic' | undefined) => (
@@ -63,7 +81,9 @@ export const getSchemaTableColumns = ({
       <Space>
         <Button type="link" icon={<UnorderedListOutlined />} onClick={() => onOpenColumnsModal(record)} title="查看欄位" />
         <Button type="link" icon={<TableOutlined />} onClick={() => onOpenDataModal(record)} title="查看資料" />
-        <Button type="link" icon={<FileTextOutlined />} onClick={() => onOpenReportModal(record)} title="智慧報表" />
+        <Badge count={reportBadges?.[record.table_id] || 0} size="small" offset={[2, -2]}>
+          <Button type="link" icon={<FileTextOutlined />} onClick={() => { (onOpenReportModalWithViewed || onOpenReportModal)(record); }} title="智慧報表" />
+        </Badge>
         <Button type="link" icon={<EditOutlined />} onClick={() => onEditTable(record)} />
         <Popconfirm title="確定要刪除此資料表嗎？" onConfirm={() => onDeleteTable(record.table_id)}>
           <Button type="link" danger icon={<DeleteOutlined />} />

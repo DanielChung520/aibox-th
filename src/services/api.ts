@@ -19,8 +19,11 @@ function resolveApiBaseUrl(): string {
   const configured = import.meta.env.VITE_API_URL;
 
   if (!configured) {
-    return import.meta.env.DEV ? '' : 'http://localhost:3001';
+    return import.meta.env.DEV ? '' : '/';
   }
+
+  // In production build, same-origin proxy via Vite / nginx
+  return '/';
 
   if (!import.meta.env.DEV) {
     return configured;
@@ -38,8 +41,17 @@ function resolveApiBaseUrl(): string {
   return configured;
 }
 
+export const API_BASE_URL = resolveApiBaseUrl();
+
+export function buildApiUrl(path: string): string {
+  if (path.startsWith('http://') || path.startsWith('https://')) return path;
+  const base = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
+  const p = path.startsWith('/') ? path : `/${path}`;
+  return `${base}${p}`;
+}
+
 const api = axios.create({
-  baseURL: resolveApiBaseUrl(),
+  baseURL: API_BASE_URL,
   timeout: 30000,
 });
 
@@ -120,8 +132,8 @@ export interface LoginResponse {
     _key: string;
     username: string;
     name: string;
-    role_key: string;
-    role_name: string;
+    role_keys: string[];
+    role_names: string[];
     tier?: string;
   };
 }
@@ -153,6 +165,58 @@ export const paramsApi = {
   list: () => api.get<{ code: number; data: SystemParam[] }>('/api/v1/system-params'),
   get: (key: string) => api.get<{ code: number; data: SystemParam }>(`/api/v1/system-params/${key}`),
   update: (key: string, param_value: string) => api.put(`/api/v1/system-params/${key}`, { param_value }),
+};
+
+export interface Channel {
+  _key: string;
+  platform: string;
+  business_user_key: string;
+  business_user_name: string;
+  role: string;
+  status: string;
+  config: Record<string, string>;
+  webhook_path: string;
+  linked_agent_key?: string;
+  avatar?: string;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BusinessUser {
+  _key: string;
+  user_key: string;
+  name: string;
+  role: string;
+  region: string;
+  team: string;
+  status: string;
+  persona_config: {
+    greeting_style?: string;
+    expertise?: string[];
+    customer_segment?: string;
+    signature?: string;
+  };
+  created_at: string;
+  updated_at: string;
+}
+
+export const businessUsersApi = {
+  list: () => api.get<{ code: number; data: BusinessUser[] }>('/api/v1/business-users'),
+  get: (key: string) => api.get<{ code: number; data: BusinessUser }>(`/api/v1/business-users/${key}`),
+  create: (data: Record<string, unknown>) => api.post('/api/v1/business-users', data),
+  update: (key: string, data: Record<string, unknown>) => api.put(`/api/v1/business-users/${key}`, data),
+  delete: (key: string) => api.delete(`/api/v1/business-users/${key}`),
+  channels: (key: string) => api.get<{ code: number; data: Channel[] }>(`/api/v1/business-users/${key}/channels`),
+};
+
+export const channelsApi = {
+  list: (params?: { platform?: string; business_user_key?: string; role?: string }) =>
+    api.get<{ code: number; data: Channel[] }>('/api/v1/channels', { params }),
+  get: (key: string) => api.get<{ code: number; data: Channel }>(`/api/v1/channels/${key}`),
+  create: (data: Record<string, unknown>) => api.post('/api/v1/channels', data),
+  update: (key: string, data: Record<string, unknown>) => api.put(`/api/v1/channels/${key}`, data),
+  delete: (key: string) => api.delete(`/api/v1/channels/${key}`),
 };
 
 export interface FunctionRoleAuth {
@@ -192,7 +256,7 @@ export interface Agent {
   visibility_roles?: string[];
 }
 
-export type DemandStatus = 'draft' | 'submitted' | 'accepted' | 'in_development' | 'pending_acceptance' | 'online' | 'cancelled';
+export type DemandStatus = 'draft' | 'submitted' | 'qualified' | 'accepted' | 'in_development' | 'pending_acceptance' | 'online' | 'cancelled' | 'superseded';
 
 export interface UploadedFile {
   name: string;
@@ -296,6 +360,20 @@ export const demandApi = {
     api.post<{ code: number; data: { estimated_hours: number; range_min: number; range_max: number; confidence: string; reasoning: string } }>('/api/v1/demands/estimate-hours', data),
   reviewDemand: (data: Partial<Demand>) =>
     api.post<{ code: number; data: AIReview }>('/api/v1/demands/review', data),
+
+  // ─── DemandEngine v2.0 endpoints ────────────────────────────
+  submitDemand: (key: string) =>
+    api.post<{ code: number; data: Demand }>(`/api/v1/demands/${key}/submit`, {}),
+  qualifyDemand: (key: string, agentKey: string, actor?: string) =>
+    api.post<{ code: number; data: Demand }>(`/api/v1/demands/${key}/qualify`, { agent_key: agentKey, actor: actor || 'system' }),
+  withdrawDemand: (key: string, reason?: string, actor?: string) =>
+    api.post<{ code: number; data: Demand }>(`/api/v1/demands/${key}/withdraw`, { actor: actor || 'system', reason }),
+  changeDemand: (key: string, agentKey: string, changeReason: string, actor?: string) =>
+    api.post<{ code: number; data: Demand }>(`/api/v1/demands/${key}/change`, { agent_key: agentKey, change_reason: changeReason, actor: actor || 'system' }),
+  reactivateDemand: (key: string) =>
+    api.post<{ code: number; data: Demand }>(`/api/v1/demands/${key}/reactivate`, {}),
+  getDemandHistory: (key: string) =>
+    api.get<{ code: number; data: { current_key: string; supersedes: string | null; superseded_by: string | null; change_history: any[] } }>(`/api/v1/demands/${key}/history`),
 };
 
 export interface ActionScript {
@@ -841,6 +919,8 @@ export interface HealthServices {
   chat_api: boolean;
   arangodb: boolean;
   qdrant: boolean;
+  seaweedfs: boolean;
+  ollama: boolean;
 }
 
 export interface HealthResponse {
@@ -1001,6 +1081,8 @@ export interface SchemaReportRecord {
 export const schemaReportsApi = {
   list: (tableId: string) =>
     api.get<ApiResponse<SchemaReportRecord[]>>(`/api/v1/da/schema-reports?table_id=${encodeURIComponent(tableId)}`),
+  listAll: () =>
+    api.get<ApiResponse<SchemaReportRecord[]>>('/api/v1/da/schema-reports'),
   create: (data: Omit<SchemaReportRecord, '_key'>) =>
     api.post<ApiResponse<SchemaReportRecord>>('/api/v1/da/schema-reports', data),
   patch: (key: string, data: Record<string, unknown>) =>
@@ -1016,6 +1098,8 @@ export interface SchemaReportTemplate {
   goal: string;
   description: string;
   chart_type: string;
+  legend_show?: boolean;
+  legend_position?: string;
   notes: string;
   created_at: string;
 }
@@ -1033,7 +1117,8 @@ export const schemaReportTemplatesApi = {
 
 export const downloadFile = async (fileId: string): Promise<Blob> => {
   const token = localStorage.getItem('token');
-  const resp = await fetch(`/api/v1/knowledge/files/${encodeURIComponent(fileId)}/download`, {
+  const url = buildApiUrl(`/api/v1/knowledge/files/${encodeURIComponent(fileId)}/download`);
+  const resp = await fetch(url, {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
   if (!resp.ok) {
@@ -1268,6 +1353,370 @@ export const linePlatformApi = {
       `/api/v1/platforms/line/channels/${channelKey}/publish`,
     ),
 };
+
+// CRM API
+export interface CRMCustomer {
+  _key: string;
+  source: 'mohw' | 'business_kindom' | 'ragic';
+  status: 'potential' | 'lead' | 'customer' | 'merged';
+  name: string;
+  name_short?: string;
+  name_raw?: string;
+  mohw_id?: string;
+  business_kindom_id?: string;
+  phone?: string;
+  email?: string;
+  contact_person?: string;
+  address?: string;
+  city?: string;
+  district?: string;
+  lat?: number;
+  lng?: number;
+  abc_grade?: string;
+  category?: string[];
+  org_tags?: string[];
+  sales_rep?: string;
+  tags?: string[];
+  last_contact_at?: string;
+  last_contact_note?: string;
+  merge_status?: string;
+  merged_into?: string;
+  created_at: string;
+  updated_at: string;
+  synced_at?: string;
+  import_batch?: string;
+  _perm_assigned?: boolean;
+  _perm_authorized?: boolean;
+}
+
+export interface CRMListResponse {
+  data: CRMCustomer[];
+  pagination: {
+    page: number;
+    page_size: number;
+    total: number;
+    total_pages: number;
+  };
+  summary: {
+    total: number;
+    by_source: Record<string, number>;
+    by_status: Record<string, number>;
+  };
+}
+
+export interface CRMMapMarker {
+  id: string;
+  source: string;
+  status: string;
+  name: string;
+  lat: number;
+  lng: number;
+  abc_grade?: string;
+  phone?: string;
+  address?: string;
+  city?: string;
+  district?: string;
+  sales_rep?: string;
+  category?: string[];
+  org_tags?: string[];
+}
+
+export interface CRMMapResponse {
+  markers: CRMMapMarker[];
+  summary: {
+    total: number;
+    in_viewport: number;
+    by_source: Record<string, number>;
+  };
+}
+
+export interface CRMImportResult {
+  imported: number;
+  updated: number;
+  skipped: number;
+  errors: string[];
+  batch_id: string;
+}
+
+// ===== Contact types =====
+
+export interface ContactTitle {
+  title: string;
+  department?: string;
+  is_primary?: boolean;
+}
+
+export interface ContactPhone {
+  number: string;
+  code?: string;
+  type?: 'mobile' | 'office' | 'fax' | 'other';
+  is_primary?: boolean;
+}
+
+export interface ContactEmail {
+  address: string;
+  type?: 'work' | 'personal' | 'other';
+  is_primary?: boolean;
+}
+
+export interface ContactSocialAccount {
+  platform: 'line' | 'whatsapp' | 'wechat' | 'facebook' | 'telegram' | 'slack' | 'messenger' | 'other';
+  account: string;
+  label?: string;
+  is_primary?: boolean;
+}
+
+export interface ContactOrganization {
+  name: string;
+  title?: string;
+  is_primary?: boolean;
+}
+
+export interface ContactCardImage {
+  url: string;
+  side: 'front' | 'back';
+}
+
+export interface CRMContact {
+  _key: string;
+  customer_key?: string;
+  customer_name?: string;
+  name_cn?: string;
+  name_en?: string;
+  titles?: ContactTitle[];
+  phones?: ContactPhone[];
+  emails?: ContactEmail[];
+  social_accounts?: ContactSocialAccount[];
+  organizations?: ContactOrganization[];
+  notes?: string;
+  card_images?: ContactCardImage[];
+  avatar_url?: string;
+  source: 'manual' | 'line_card' | 'line_photo' | 'assignment' | 'import';
+  line_uid?: string;
+  line_status?: 'connected' | 'disconnected' | 'expired' | 'none';
+  line_display_name?: string;
+  line_picture_url?: string;
+  line_card_image_url?: string;
+  line_connected_at?: string;
+  channel_key?: string;
+  is_primary?: boolean;
+  owner_key: string;
+  assigned_by?: string;
+  assigned_at?: string;
+  created_at: string;
+  updated_at: string;
+  created_by?: string;
+}
+
+export interface CRMContactListResponse {
+  code: number;
+  data: CRMContact[];
+  pagination: {
+    page: number;
+    page_size: number;
+    total: number;
+    total_pages: number;
+  };
+}
+
+export interface CRMContactListParams {
+  q?: string;
+  source?: string;
+  line_status?: string;
+  customer_key?: string;
+  owner_key?: string;
+  is_primary?: boolean;
+  page?: number;
+  page_size?: number;
+}
+
+export interface CreateContactPayload {
+  name_cn?: string;
+  name_en?: string;
+  customer_key?: string;
+  titles?: ContactTitle[];
+  phones?: ContactPhone[];
+  emails?: ContactEmail[];
+  social_accounts?: ContactSocialAccount[];
+  organizations?: ContactOrganization[];
+  notes?: string;
+  card_images?: ContactCardImage[];
+  source?: string;
+  line_status?: string;
+  is_primary?: boolean;
+  owner_key?: string;
+  channel_key?: string;
+}
+
+export interface UpdateContactPayload {
+  name_cn?: string;
+  name_en?: string;
+  customer_key?: string;
+  titles?: ContactTitle[];
+  phones?: ContactPhone[];
+  emails?: ContactEmail[];
+  social_accounts?: ContactSocialAccount[];
+  organizations?: ContactOrganization[];
+  notes?: string;
+  card_images?: ContactCardImage[];
+  source?: string;
+  line_status?: string;
+  is_primary?: boolean;
+  owner_key?: string;
+  channel_key?: string;
+}
+
+export const crmApi = {
+  list: (params?: {
+    q?: string;
+    source?: string;
+    status?: string;
+    city?: string;
+    district?: string;
+    abc_grade?: string;
+    page?: number;
+    page_size?: number;
+  }) => api.get<CRMListResponse>('/api/v1/crm/customers', { params }),
+
+  map: (params?: {
+    bbox?: string;
+    source?: string;
+    status?: string;
+    abc_grade?: string;
+    city?: string;
+  }) => api.get<CRMMapResponse>('/api/v1/crm/customers/map', { params }),
+
+  update: (key: string, data: Partial<CRMCustomer>) =>
+    api.patch(`/api/v1/crm/customers/${key}`, data),
+
+  merge: (primaryKey: string, mergeKeys: string[], reason?: string) =>
+    api.post('/api/v1/crm/customers/merge', {
+      primary_key: primaryKey,
+      merge_keys: mergeKeys,
+      reason,
+    }),
+
+  importBusinessKindom: (records: Record<string, unknown>[]) =>
+    api.post<CRMImportResult>('/api/v1/crm/customers/import/business-kindom', { records }),
+
+  importMohw: () =>
+    api.post('/api/v1/crm/customers/import/mohw'),
+
+  getPermission: (customerKey: string) =>
+    api.get<{ code: number; data: CustomerPermission | null }>(`/api/v1/crm/permissions/${customerKey}`),
+
+  setPermission: (customerKey: string, data: { assigned_users: string[]; assigned_roles: string[] }) =>
+    api.put(`/api/v1/crm/permissions/${customerKey}`, data),
+
+  removePermission: (customerKey: string) =>
+    api.delete(`/api/v1/crm/permissions/${customerKey}`),
+
+  getUsersAndRoles: () =>
+    api.get<{ code: number; data: { users: UserRoleItem[]; roles: UserRoleItem[] } }>('/api/v1/crm/users-and-roles'),
+
+  // --- Contact API ---
+  listContacts: (params?: CRMContactListParams) =>
+    api.get<CRMContactListResponse>('/api/v1/crm/contacts', { params }),
+
+  createContact: (data: CreateContactPayload) =>
+    api.post<{ code: number; message: string; data: CRMContact }>('/api/v1/crm/contacts', data),
+
+  getContact: (key: string) =>
+    api.get<{ code: number; data: CRMContact }>(`/api/v1/crm/contacts/${key}`),
+
+  updateContact: (key: string, data: UpdateContactPayload) =>
+    api.patch<{ code: number; message: string; data: CRMContact }>(`/api/v1/crm/contacts/${key}`, data),
+
+  deleteContact: (key: string) =>
+    api.delete<{ code: number; message: string }>(`/api/v1/crm/contacts/${key}`),
+
+  listContactsByCustomer: (customerKey: string) =>
+    api.get<{ code: number; data: CRMContact[] }>(`/api/v1/crm/contacts/by-customer/${customerKey}`),
+
+  assignContact: (key: string, ownerKey: string) =>
+    api.post<{ code: number; message: string }>('/api/v1/crm/contacts/assign', { key, owner_key: ownerKey }),
+
+  setPrimaryContact: (key: string) =>
+    api.post<{ code: number; message: string }>(`/api/v1/crm/contacts/${key}/set-primary`),
+
+  // --- Schedule API (信息發送排程) ---
+  listSchedules: (params?: { business_user_key?: string; message_type?: string; is_active?: boolean }) =>
+    api.get<{ code: number; data: MessageSchedule[] }>('/api/v1/crm/schedules', { params }),
+
+  createSchedule: (data: CreateSchedulePayload) =>
+    api.post<{ code: number; message: string; data: MessageSchedule }>('/api/v1/crm/schedules', data),
+
+  updateSchedule: (key: string, data: UpdateSchedulePayload) =>
+    api.patch<{ code: number; message: string }>(`/api/v1/crm/schedules/${key}`, data),
+
+  deleteSchedule: (key: string) =>
+    api.delete<{ code: number; message: string }>(`/api/v1/crm/schedules/${key}`),
+};
+
+export interface MessageSchedule {
+  _key: string;
+  business_user_key: string;
+  name?: string;
+  message_type: 'greeting' | 'promotion' | 'announcement';
+  template_text?: string;
+  schedule_time?: string;
+  schedule_type: 'recurring' | 'one_time';
+  target_type: 'all' | 'vip' | 'region' | 'select';
+  target_config?: Record<string, unknown>;
+  content_mode?: 'template' | 'ai';
+  ai_prompt?: string;
+  is_active: boolean;
+  sent_count: number;
+  last_sent_at?: string;
+  created_at: string;
+  updated_at: string;
+  created_by?: string;
+}
+
+export interface CreateSchedulePayload {
+  business_user_key: string;
+  name?: string;
+  message_type?: string;
+  template_text?: string;
+  schedule_time?: string;
+  schedule_type?: string;
+  target_type?: string;
+  target_config?: Record<string, unknown>;
+  content_mode?: string;
+  ai_prompt?: string;
+  is_active?: boolean;
+}
+
+export interface UpdateSchedulePayload {
+  name?: string;
+  message_type?: string;
+  template_text?: string;
+  schedule_time?: string;
+  schedule_type?: string;
+  target_type?: string;
+  target_config?: Record<string, unknown>;
+  content_mode?: string;
+  ai_prompt?: string;
+  is_active?: boolean;
+}
+
+export interface CustomerPermission {
+  _key?: string;
+  customer_key: string;
+  assigned_users: string[];
+  assigned_roles: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface UserRoleItem {
+  _key: string;
+  name: string;
+  username?: string;
+  role_keys?: string[];
+}
+
+export const crmPermissionApi = crmApi;
 
 export const skillsRagApi = {
   upload: (file: File) => {

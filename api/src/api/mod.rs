@@ -19,13 +19,13 @@ use crate::services::DemandEngine;
 use axum::{
     body::Bytes,
     extract::{Path, Query},
-    http::{header::AUTHORIZATION, HeaderMap, Method, StatusCode, Uri},
+    http::{header::AUTHORIZATION, HeaderMap, HeaderValue, Method, StatusCode, Uri},
     response::IntoResponse,
     routing::{any, get, post, put, patch, delete},
     Json, Router,
     middleware,
 };
-use tower_http::cors::{Any, CorsLayer};
+use tower_http::cors::{AllowOrigin, Any, CorsLayer};
 use tower_http::services::ServeDir;
 
 pub mod sse;
@@ -71,6 +71,8 @@ pub mod skills;
 pub mod todos;
 pub mod crm;
 pub mod channels;
+pub mod business_users;
+pub mod schedules;
 
 async fn sync_tool_intents(
     Path(key): Path<String>,
@@ -125,6 +127,232 @@ async fn serve_channel_spa() -> impl IntoResponse {
 }
 
 /// Proxy: /api/v1/market-intel/* → unified_agents:8011/market-intel/*
+async fn list_bot_contacts(headers: HeaderMap) -> Result<impl IntoResponse, StatusCode> {
+    use serde_json::{json, Value};
+    let user_key = headers
+        .get(AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.strip_prefix("Bearer "))
+        .and_then(|t| verify_jwt(t).ok())
+        .map(|t| t.claims.username)
+        .unwrap_or_default();
+
+    let db = get_db();
+    let bind = vec![("user_key", json!(user_key))].into_iter().collect();
+    let results: Vec<Value> = db.aql_bind_vars(
+        r#"
+        LET my_channels = (
+            FOR c IN channels FILTER c.business_user_key == @user_key RETURN c._key
+        )
+        FOR m IN bot_chat_sessions
+            LET channel_key = SPLIT(m.session_id, ":")[1]
+            FILTER channel_key IN my_channels
+            COLLECT user_id = SPLIT(m.session_id, ":")[2] INTO groups
+            LET sorted = (FOR g IN groups SORT g.m.created_at DESC RETURN g.m)
+            LET record_with_name = (
+                FOR g IN groups
+                    FILTER g.m.metadata != null && g.m.metadata.user_name != null
+                    LIMIT 1
+                    RETURN g.m.metadata.user_name
+            )
+            LET last = FIRST(sorted)
+            RETURN {
+                user_id,
+                display_name: FIRST(record_with_name) || last.metadata.user_name,
+                message_count: LENGTH(groups),
+                last_message: SUBSTRING(last.message, 0, 80),
+                last_role: last.role,
+                last_msg: last.created_at
+            }
+        "#,
+        bind,
+    )
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(Json(json!({"code": 200, "data": results})))
+}
+
+async fn list_bot_messages(headers: HeaderMap, Path(user_id): Path<String>) -> Result<impl IntoResponse, StatusCode> {
+    use serde_json::{json, Value};
+    let user_key = headers
+        .get(AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.strip_prefix("Bearer "))
+        .and_then(|t| verify_jwt(t).ok())
+        .map(|t| t.claims.username)
+        .unwrap_or_default();
+
+    let db = get_db();
+    let pattern = format!("%:{}", user_id);
+    let bind = vec![("user_key", json!(user_key)), ("pattern", json!(pattern))].into_iter().collect();
+    let results: Vec<Value> = db.aql_bind_vars(
+        r#"
+        LET my_channels = (
+            FOR c IN channels FILTER c.business_user_key == @user_key RETURN c._key
+        )
+        FOR m IN bot_chat_sessions
+            FILTER m.session_id LIKE @pattern
+            LET channel_key = SPLIT(m.session_id, ":")[1]
+            FILTER channel_key IN my_channels
+            SORT m.created_at ASC
+            RETURN {
+                role: m.role,
+                message: SUBSTRING(m.message, 0, 500),
+                created_at: m.created_at
+            }
+        "#, bind,
+    )
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(Json(json!({"code": 200, "data": results})))
+}
+
+async fn storage_stats() -> Result<impl IntoResponse, StatusCode> {
+    use serde_json::{json, Value};
+    use tokio::process::Command;
+
+    let vol_count = Command::new("sh")
+        .arg("-c")
+        .arg("docker exec seaweedfs-volume ls /data/ 2>/dev/null | grep -c '.dat' || echo 0")
+        .output().await.map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string()).unwrap_or_else(|_| "0".into());
+
+    let size_str = Command::new("sh")
+        .arg("-c")
+        .arg("docker exec seaweedfs-volume du -sh /data/ 2>/dev/null | awk '{print $1}' || echo '0'")
+        .output().await.map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string()).unwrap_or_else(|_| "0".into());
+
+    // Get HOST disk info (the volume backing the Docker volume)
+    let host_df = Command::new("sh")
+        .arg("-c")
+        .arg(r#"df -h /var/lib/docker/volumes/aibox_seaweed-aibox-volume-data/_data 2>/dev/null | tail -1 | awk '{print $2","$3","$4}'"#)
+        .output().await.map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string()).unwrap_or_else(|_| "".into());
+
+    let (total, used, avail) = if host_df.contains(',') && !host_df.starts_with(',') {
+        let parts: Vec<&str> = host_df.split(',').collect();
+        (parts[0].to_string(), parts[1].to_string(), parts[2].to_string())
+    } else {
+        // fallback: host's root disk
+        let root_df = Command::new("sh")
+            .arg("-c")
+            .arg("df -h / | tail -1 | awk '{print $2\",\"$3\",\"$4}'")
+            .output().await.map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string()).unwrap_or_else(|_| "0,0,0".into());
+        let parts: Vec<&str> = root_df.split(',').collect();
+        (parts.get(0).unwrap_or(&"0").to_string(), parts.get(1).unwrap_or(&"0").to_string(), parts.get(2).unwrap_or(&"0").to_string())
+    };
+
+    let pct = Command::new("sh")
+        .arg("-c")
+        .arg(r#"df -h / | tail -1 | awk '{print $5}' | tr -d '%'"#)
+        .output().await.map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string()).unwrap_or_else(|_| "0".into());
+
+    let seaweed_size = Command::new("sh")
+        .arg("-c")
+        .arg(r#"docker exec seaweedfs-volume du -sb /data/ 2>/dev/null | awk '{print $1}' || echo 0"#)
+        .output().await.map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string()).unwrap_or_else(|_| "0".into());
+    let arango_size = Command::new("sh")
+        .arg("-c")
+        .arg(r#"docker exec $(docker ps -q --filter name=arango 2>/dev/null | head -1) du -sb /var/lib/arangodb3/ 2>/dev/null | awk '{print $1}' || echo 0"#)
+        .output().await.map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string()).unwrap_or_else(|_| "0".into());
+    let qdrant_size = Command::new("sh")
+        .arg("-c")
+        .arg(r#"docker exec $(docker ps -q --filter name=qdrant 2>/dev/null | head -1) du -sb /qdrant/storage/ 2>/dev/null | awk '{print $1}' || echo 0"#)
+        .output().await.map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string()).unwrap_or_else(|_| "0".into());
+
+    let to_gb = |s: &str| -> f64 { s.parse::<f64>().unwrap_or(0.0) / 1073741824.0 };
+
+    Ok(Json(json!({
+        "code": 200,
+        "data": {
+            "volumes": vol_count.parse::<i32>().unwrap_or(0),
+            "size": size_str,
+            "total": total,
+            "used": used,
+            "avail": avail,
+            "usage_pct": pct.parse::<i32>().unwrap_or(0),
+            "breakdown": {
+                "seaweedfs_gb": format!("{:.1}", to_gb(&seaweed_size)),
+                "arangodb_gb": format!("{:.1}", to_gb(&arango_size)),
+                "qdrant_gb": format!("{:.1}", to_gb(&qdrant_size)),
+            }
+        }
+    })))
+}
+
+async fn filer_list_root() -> Result<impl IntoResponse, StatusCode> {
+    filer_list_handler("").await
+}
+
+async fn filer_list(Path(path): Path<String>) -> Result<impl IntoResponse, StatusCode> {
+    filer_list_handler(&path).await
+}
+
+async fn filer_list_handler(path: &str) -> Result<impl IntoResponse, StatusCode> {
+    use serde_json::{json, Value};
+    let url = if path.is_empty() {
+        "http://localhost:8888/".to_string()
+    } else {
+        format!("http://localhost:8888/{}/", path)
+    };
+    let client = reqwest::Client::new();
+    let resp = client.get(&url)
+        .header("Accept", "application/json")
+        .send().await
+        .map_err(|_| StatusCode::BAD_GATEWAY)?;
+    let status = resp.status();
+    let body: Value = resp.json().await.unwrap_or(json!({"error": "parse failed"}));
+    Ok(Json(json!({"code": status.as_u16(), "data": body})))
+}
+
+async fn filer_proxy(
+    method: Method,
+    Path(path): Path<String>,
+    body: Bytes,
+) -> Result<impl IntoResponse, StatusCode> {
+    let url = format!("http://localhost:8888/{}", &path);
+    let client = reqwest::Client::new();
+    let reqwest_method = method.to_string().parse::<reqwest::Method>().unwrap_or(reqwest::Method::GET);
+    let mut req = client.request(reqwest_method, &url);
+    if method != Method::GET {
+        req = req.header("Content-Type", "application/octet-stream");
+        if !body.is_empty() {
+            req = req.body(body.to_vec());
+        }
+    }
+    let resp = req.send().await.map_err(|_| StatusCode::BAD_GATEWAY)?;
+    let status_code = StatusCode::from_u16(resp.status().as_u16()).unwrap_or(StatusCode::BAD_GATEWAY);
+    let resp_body = resp.bytes().await.map_err(|_| StatusCode::BAD_GATEWAY)?;
+    Ok((status_code, [("content-type", "application/json")], resp_body))
+}
+
+async fn webhook_proxy(
+    method: Method,
+    Path(path): Path<String>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Result<impl IntoResponse, StatusCode> {
+    let backend_url = format!("http://localhost:8011/webhook/{}", &path);
+    let client = reqwest::Client::new();
+    let reqwest_method = method.to_string().parse::<reqwest::Method>().unwrap_or(reqwest::Method::GET);
+    let mut req = client.request(reqwest_method, &backend_url);
+    if let Some(content_type) = headers.get("content-type") {
+        if let Ok(val) = content_type.to_str() {
+            req = req.header("content-type", val);
+        }
+    }
+    if let Some(sig) = headers.get("x-line-signature") {
+        if let Ok(val) = sig.to_str() {
+            req = req.header("x-line-signature", val);
+        }
+    }
+    if !body.is_empty() {
+        req = req.body(body.to_vec());
+    }
+    let resp = req.send().await.map_err(|_| StatusCode::BAD_GATEWAY)?;
+    let status_code = StatusCode::from_u16(resp.status().as_u16()).unwrap_or(StatusCode::BAD_GATEWAY);
+    let resp_body = resp.bytes().await.map_err(|_| StatusCode::BAD_GATEWAY)?;
+    Ok((status_code, [("content-type", "application/json")], resp_body))
+}
+
 async fn market_intel_proxy(
     method: Method,
     Path(path): Path<String>,
@@ -155,7 +383,10 @@ async fn market_intel_proxy(
 
 pub fn create_router() -> Router {
     let cors = CorsLayer::new()
-        .allow_origin(Any)
+        .allow_origin(AllowOrigin::list([
+            "https://eea.ent4i.com".parse::<HeaderValue>().unwrap(),
+            "http://localhost:1420".parse::<HeaderValue>().unwrap(),
+        ]))
         .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE, Method::PATCH])
         .allow_headers(Any);
 
@@ -277,7 +508,16 @@ pub fn create_router() -> Router {
         .merge(mcp::create_mcp_router())
         .merge(order_secretary::create_order_secretary_router())
         .merge(crm::create_crm_router().route_layer(middleware::from_fn(jwt_auth_middleware)))
+        .merge(schedules::create_schedules_router().route_layer(middleware::from_fn(jwt_auth_middleware)))
         .merge(channels::create_channel_router().route_layer(middleware::from_fn(jwt_auth_middleware)))
+        .merge(business_users::create_business_users_router().route_layer(middleware::from_fn(jwt_auth_middleware)))
+        .route("/api/v1/bot-contacts", get(list_bot_contacts))
+        .route("/api/v1/bot-messages/{user_id}", get(list_bot_messages))
+        .route("/api/v1/storage/stats", get(storage_stats))
+        .route("/api/v1/filer/list", get(filer_list_root))
+        .route("/api/v1/filer/list/{*path}", get(filer_list))
+        .route("/api/v1/filer/{*path}", any(filer_proxy))
+        .route("/webhook/{*path}", any(webhook_proxy))
         .route("/api/v1/market-intel/{*path}", any(market_intel_proxy))
         .route("/api/v1/events", post(post_events))
         .nest_service("/assets", ServeDir::new("../dist/assets"))

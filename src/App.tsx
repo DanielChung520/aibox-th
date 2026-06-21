@@ -19,8 +19,9 @@ import Home from './pages/Home';
 import UserManagement from './pages/UserManagement';
 import RoleManagement from './pages/RoleManagement';
 import SystemParams from './pages/SystemParams';
+import SystemDataManagement from './pages/SystemDataManagement';
 import FunctionManagement from './pages/FunctionManagement';
-import BrowseAgent from './pages/BrowseAgent';
+import AgentCenter from './pages/AgentCenter';
 import BrowseTools from './pages/BrowseTools';
 import TaskSessionChat from './pages/TaskSessionChat';
 import TaskSessionHistory from './pages/TaskSessionHistory';
@@ -46,6 +47,7 @@ import TodoBoard from './pages/TodoBoard';
 import ESGStandards from './pages/esg/ESGStandards';
 import ESGRecords from './pages/esg/ESGRecords';
 import ESGDashboard from './pages/esg/ESGDashboard';
+import SCMDashboard from './pages/scm/SCMDashboard';
 import CrmDashboard from './pages/eea-crm/DashboardPage';
 import CrmCustomerMap from './pages/eea-crm/CustomerMapPage';
 import CrmSalesDashboard from './pages/eea-crm/SalesDashboardPage';
@@ -54,6 +56,9 @@ import CrmContacts from './pages/eea-crm/ContactListPage';
 import CrmTimeline from './pages/eea-crm/TimelinePage';
 import CrmTags from './pages/eea-crm/TagsPage';
 import CrmParams from './pages/eea-crm/ParamsPage';
+import ChannelAdminPage from './pages/eea-crm/ChannelAdminPage';
+import LineAssistantPage from './pages/eea-crm/LineAssistantPage';
+import MarketIntelPage from './pages/eea-crm/MarketIntelPage';
 import EeaCrmLayout from './pages/eea-crm/EeaCrmLayout';
 
 import { authStore } from './stores/auth';
@@ -227,9 +232,11 @@ function AppContent() {
               <Route path="users" element={<UserManagement />} />
               <Route path="roles" element={<RoleManagement />} />
             <Route path="params" element={<SystemParams />} />
+            <Route path="data-management" element={<SystemDataManagement />} />
             <Route path="functions" element={<FunctionManagement />} />
             <Route path="lead-management" element={<LeadManagement />} />
-              <Route path="browse-agent" element={<BrowseAgent />} />
+              <Route path="agent-center" element={<AgentCenter />} />
+              <Route path="browse-agent" element={<AgentCenter />} />
               <Route path="browse-tools" element={<BrowseTools />} />
               <Route path="platforms/line" element={<PlatformLINE />} />
               <Route path="platforms/:platform" element={<PlatformBotPage />} />
@@ -256,6 +263,7 @@ function AppContent() {
               <Route path="esg/dashboard" element={<ESGDashboard />} />
               <Route path="esg/standards" element={<ESGStandards />} />
               <Route path="esg/records" element={<ESGRecords />} />
+              <Route path="scm/dashboard" element={<SCMDashboard />} />
               <Route path="eea-crm/dashboard" element={<EeaCrmLayout context="dashboard"><CrmDashboard /></EeaCrmLayout>} />
               <Route path="eea-crm/customer-map" element={<EeaCrmLayout context="dashboard"><CrmCustomerMap /></EeaCrmLayout>} />
               <Route path="eea-crm/sales-performance" element={<EeaCrmLayout context="dashboard"><CrmSalesDashboard /></EeaCrmLayout>} />
@@ -264,6 +272,9 @@ function AppContent() {
               <Route path="eea-crm/timeline" element={<EeaCrmLayout context="timeline"><CrmTimeline /></EeaCrmLayout>} />
               <Route path="eea-crm/tags" element={<EeaCrmLayout context="tags"><CrmTags /></EeaCrmLayout>} />
               <Route path="eea-crm/params" element={<EeaCrmLayout context="params"><CrmParams /></EeaCrmLayout>} />
+              <Route path="eea-crm/line-assistant" element={<EeaCrmLayout context="line-assistant"><LineAssistantPage /></EeaCrmLayout>} />
+              <Route path="eea-crm/channels" element={<EeaCrmLayout context="params"><ChannelAdminPage /></EeaCrmLayout>} />
+              <Route path="eea-crm/market-intel" element={<EeaCrmLayout context="params"><MarketIntelPage /></EeaCrmLayout>} />
             </Route>
             </Routes>
           </AIAssistantDrawerProvider>

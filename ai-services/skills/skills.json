@@ -1,0 +1,553 @@
+{
+  "meta": {
+    "version": "1.2.0",
+    "lastUpdate": "2026-06-20",
+    "description": "Skills 統一登記與發現目錄"
+  },
+  "skills": [
+    {
+      "name": "ragic_timeline_poller",
+      "description": "輪巡 Ragic 表單，比對客戶名稱，將活動摘要寫入 customer_timelines",
+      "version": "1.0.0",
+      "source": "skills/ragic_timeline_poller/skill.py",
+      "intent_hints": {
+        "triggers": [
+          "ragic_poll",
+          "timeline_sync",
+          "erp_sync"
+        ],
+        "keywords": [
+          "輪巡",
+          "同步",
+          "Ragic",
+          "ERP",
+          "活動記錄",
+          "報價",
+          "訂單",
+          "銷貨",
+          "退貨",
+          "折讓",
+          "timeline"
+        ],
+        "example_phrases": [
+          "同步客戶的 ERP 活動記錄",
+          "輪巡報價單和訂單",
+          "更新客戶 timeline",
+          "查詢最近的出貨記錄"
+        ]
+      },
+      "input": {
+        "table_configs": "array: 輪巡表單設定 [{tab_path, sheet_index, event_type, date_field, customer_field, summary_template}]",
+        "interval_minutes": "number: 輪巡間隔（預設 15）",
+        "mode": "enum: poll_all | poll_table | manual_sync"
+      },
+      "output": {
+        "synced_count": "number: 本次寫入筆數",
+        "errors": "array: 錯誤記錄"
+      },
+      "dependencies": [
+        "data_agent.ragic.client",
+        "shared.multimedia"
+      ],
+      "label": "Ragic 活動同步"
+    },
+    {
+      "name": "customer_intent_recorder",
+      "description": "客戶意圖記錄：分析未匹配意圖的客戶訊息，推測意圖與業務關鍵詞，記錄到 customer_timelines 並決定是否通知業務",
+      "version": "1.0.0",
+      "source": "skills/customer_intent_recorder/skill.py",
+      "intent_hints": {
+        "triggers": [
+          "intent_record",
+          "customer_analysis"
+        ],
+        "keywords": [
+          "記錄",
+          "分析",
+          "轉達",
+          "意圖"
+        ],
+        "example_phrases": [
+          "我想問一下產品保固多久",
+          "可以幫我查詢訂單進度嗎",
+          "我對你們的服務有意見"
+        ]
+      },
+      "input": {
+        "message": "string: 客戶原始訊息",
+        "business_user_key": "string: 綁定業務 ID",
+        "channel_key": "string: 管道識別碼",
+        "customer_name": "string: 客戶名稱",
+        "session_id": "string: 對話 ID"
+      },
+      "output": {
+        "reply": "string: 回覆客戶文字",
+        "should_notify": "boolean: 是否通知業務",
+        "analysis": "object: {inferred_intent, business_keywords, urgency}",
+        "recorded": "boolean: 是否已記錄"
+      },
+      "dependencies": [
+        "shared.llm_resolver",
+        "arangodb: customer_timelines"
+      ],
+      "label": "客戶意圖記錄轉達"
+    },
+    {
+      "name": "confidential_handler",
+      "description": "機密資訊查詢分流：依提問者身分處理 — 業務本人調用 subagent，其他聯繫人婉拒+記錄+通知業務",
+      "version": "1.0.0",
+      "source": "skills/confidential_handler/skill.py",
+      "intent_hints": {
+        "triggers": [
+          "confidential_query",
+          "sensitive_info"
+        ],
+        "keywords": [
+          "報價",
+          "金額",
+          "合約",
+          "價格",
+          "成本",
+          "折扣",
+          "機密"
+        ],
+        "example_phrases": [
+          "這個多少錢？",
+          "可以給我報價嗎？",
+          "合約什麼時候到期？"
+        ]
+      },
+      "input": {
+        "message": "string: 原始查詢內容",
+        "business_user_key": "string: 管道綁定業務 ID",
+        "role": "string: 提問者角色（業務員/客戶）",
+        "channel_key": "string: 管道識別碼",
+        "session_id": "string: 對話 ID",
+        "customer_name": "string: 提問者名稱"
+      },
+      "output": {
+        "action": "string: route_to_subagent | polite_refuse",
+        "reply": "string: 回覆文字",
+        "should_notify": "boolean: 是否需通知業務",
+        "should_record": "boolean: 是否已記錄查詢",
+        "query_type": "string: 查詢類型"
+      },
+      "dependencies": [
+        "arangodb: customer_timelines"
+      ],
+      "label": "機密資訊分流"
+    },
+    {
+      "name": "image_processor",
+      "description": "圖片分類與處理：問候回覆生成、名片 OCR 結構化、其他圖片摘要",
+      "version": "1.0.0",
+      "source": "skills/image_processor/skill.py",
+      "intent_hints": {
+        "triggers": [
+          "image_analyze",
+          "ocr",
+          "business_card"
+        ],
+        "keywords": [
+          "圖片",
+          "名片",
+          "OCR",
+          "掃描",
+          "問候圖片",
+          "照片",
+          "影像"
+        ],
+        "example_phrases": [
+          "幫我看這張名片",
+          "掃描名片",
+          "收到一張問候圖片",
+          "這是什麼圖片",
+          "圖片內容是什麼"
+        ]
+      },
+      "input": {
+        "image_base64": "string: base64 編碼的圖片資料",
+        "mode": "enum: auto | greeting | business_card | other"
+      },
+      "output": {
+        "classification": "string: greeting | business_card | other",
+        "description": "string: 圖片描述或摘要",
+        "structured_data": "object|null: 名片 OCR 結果 {name, company, title, phone, email, address}",
+        "reply_text": "string|null: 問候回覆或處理結果"
+      },
+      "dependencies": [
+        "shared.multimedia.analyze_image"
+      ],
+      "label": "圖片處理（OCR/問候分類）"
+    },
+    {
+      "name": "timeline_engine",
+      "description": "客戶 Timeline 讀寫：查詢互動歷史、寫入新事件、摘要生成",
+      "version": "1.0.0",
+      "source": "skills/timeline_engine/skill.py",
+      "intent_hints": {
+        "triggers": [
+          "timeline_query",
+          "timeline_write",
+          "customer_history"
+        ],
+        "keywords": [
+          "timeline",
+          "歷史",
+          "活動",
+          "互動記錄",
+          "歷程",
+          "客戶活動"
+        ],
+        "example_phrases": [
+          "查詢客戶的互動歷史",
+          "顯示陳先生的近期活動",
+          "記錄客戶的來電",
+          "刪除一筆活動記錄"
+        ]
+      },
+      "input": {
+        "action": "enum: query | write | delete",
+        "customer_id": "string: CRM 客戶 ID",
+        "level": "enum: summary | full（僅 query 有效）",
+        "event": "object|null（write 時必填）: {event_type, summary, timestamp, source, ref_key, metadata}"
+      },
+      "output": {
+        "events": "array: 事件列表（query 時）",
+        "written": "boolean: 寫入成功（write 時）"
+      },
+      "dependencies": [
+        "arangodb: customer_timelines"
+      ],
+      "label": "客戶 Timeline 讀寫"
+    },
+    {
+      "name": "push_engine",
+      "description": "排程推播引擎：以 LINE Push 逐筆發送取代 Broadcast，含個人化模板、Rate Limiter、送達追蹤",
+      "version": "1.0.0",
+      "source": "skills/push_engine/skill.py",
+      "intent_hints": {
+        "triggers": [
+          "push_send",
+          "broadcast",
+          "batch_message"
+        ],
+        "keywords": [
+          "推播",
+          "群發",
+          "發送",
+          "通知",
+          "公告",
+          "宣傳",
+          "broadcast",
+          "push"
+        ],
+        "example_phrases": [
+          "群發訊息給所有客戶",
+          "發送促銷活動通知",
+          "排程早安問候",
+          "預覽推播內容"
+        ]
+      },
+      "input": {
+        "action": "enum: create_task | preview | execute_task | cancel_task",
+        "task": "object: broadcast_tasks 定義"
+      },
+      "output": {
+        "task_key": "string",
+        "preview_samples": "array（preview 時）",
+        "progress": "object（execute 時）"
+      },
+      "dependencies": [
+        "LINE Messaging API",
+        "crm_contacts"
+      ],
+      "label": "LINE 推播發送"
+    },
+    {
+      "name": "greeting_engine",
+      "description": "個人化問候生成：查詢 CRM 客戶職稱 → 決定尊稱 → LLM 生成問候/賀詞 → 寫入客戶 Timeline",
+      "version": "1.1.0",
+      "source": "skills/greeting_engine/skill.py",
+      "intent_hints": {
+        "triggers": [
+          "greeting",
+          "personalized_greeting",
+          "customer_greeting"
+        ],
+        "keywords": [
+          "問候",
+          "早安",
+          "節日",
+          "祝福",
+          "生日",
+          "祝賀",
+          "greeting"
+        ],
+        "example_phrases": [
+          "發送早安問候給陳先生",
+          "生成客戶生日祝福",
+          "問候董事長",
+          "發送節日祝賀"
+        ]
+      },
+      "input": {
+        "customer_id": "string: CRM 客戶 ID",
+        "customer_name": "string: 客戶名稱",
+        "greeting_type": "enum: morning | holiday | birthday | event",
+        "extra_context": "string|null: 額外背景"
+      },
+      "output": {
+        "greeting_text": "string: 生成的問候文字",
+        "honorific": "string: 使用的尊稱",
+        "tone": "string: 語氣描述"
+      },
+      "dependencies": [
+        "crm_contacts",
+        "shared.llm_resolver",
+        "skills.timeline_engine"
+      ],
+      "label": "個人化問候生成"
+    },
+    {
+      "name": "customer_safe_reply",
+      "description": "客戶安全回覆：針對不明意圖的客戶訊息，以 LLM 生成安全回應（system prompt 嵌入 L0-L4 規則，避免 jailbreak）",
+      "version": "1.0.0",
+      "source": "skills/customer_safe_reply/skill.py",
+      "intent_hints": {
+        "triggers": [
+          "safe_reply",
+          "customer_fallback"
+        ],
+        "keywords": [
+          "其他",
+          "不明",
+          "不知道",
+          "unclear",
+          "safe"
+        ],
+        "example_phrases": [
+          "幫我處理這個訂單",
+          "我想知道價格",
+          "幫我取消訂單"
+        ]
+      },
+      "input": {
+        "message": "string: 客戶原始訊息",
+        "customer_name": "string: 客戶名稱",
+        "session_history": "array: 對話歷史（選填）"
+      },
+      "output": {
+        "reply_text": "string: 安全回覆內容",
+        "blocked": "boolean: 是否觸發 L3/L4 攔截"
+      },
+      "dependencies": [
+        "shared.llm_resolver"
+      ],
+      "label": "客戶安全回覆"
+    },
+    {
+      "name": "business_notification",
+      "description": "業務通知：當客戶觸發機密拒答（L3/L4）時，非同步 LINE 通知對應業務人員跟進",
+      "version": "1.0.0",
+      "source": "skills/business_notification/skill.py",
+      "intent_hints": {
+        "triggers": [
+          "notify_business",
+          "confidential_alert"
+        ],
+        "keywords": [
+          "通知業務",
+          "轉達",
+          "機密詢問",
+          "拒答"
+        ],
+        "example_phrases": [
+          "客戶詢問了報價金額",
+          "客戶要求查閱合約"
+        ]
+      },
+      "input": {
+        "customer_id": "string: 客戶 ID",
+        "customer_name": "string: 客戶名稱",
+        "query_type": "string: 被攔截的查詢類型（L3/L4）",
+        "business_line_id": "string: 業務人員的 LINE ID"
+      },
+      "output": {
+        "sent": "boolean: 是否成功發送通知",
+        "notification_text": "string: 發送的內容"
+      },
+      "dependencies": [
+        "skills.push_engine",
+        "crm_contacts"
+      ],
+      "label": "業務通知"
+    },
+    {
+      "name": "crm_query",
+      "description": "CRM 查詢：查詢客戶詳情、聯絡人資訊、客戶基本資料",
+      "version": "1.0.0",
+      "source": "skills/crm_query/skill.py",
+      "intent_hints": {
+        "triggers": [
+          "crm_lookup",
+          "customer_info"
+        ],
+        "keywords": [
+          "客戶",
+          "聯絡人",
+          "電話",
+          "地址",
+          "CRM",
+          "客戶資料",
+          "公司"
+        ],
+        "example_phrases": [
+          "查詢陳董的電話",
+          "顯示客戶詳情",
+          "找王小姐的地址"
+        ]
+      },
+      "input": {
+        "query": "string: 查詢內容",
+        "customer_id": "string: 客戶 ID（選填）",
+        "filters": "object: 過濾條件（選填）"
+      },
+      "output": {
+        "results": "array: 查詢結果列表",
+        "total": "number: 符合筆數"
+      },
+      "dependencies": [
+        "arangodb: crm_customers",
+        "arangodb: crm_contacts"
+      ],
+      "label": "CRM 查詢"
+    },
+    {
+      "name": "visit_plan",
+      "description": "行程安排：記錄拜訪日期/地點/客戶 → 地圖估程 → 提醒設定",
+      "version": "1.0.0",
+      "source": "skills/visit_plan/skill.py",
+      "intent_hints": {
+        "triggers": [
+          "schedule_visit",
+          "plan_visit"
+        ],
+        "keywords": [
+          "行程",
+          "拜訪",
+          "預約",
+          "安排",
+          "估程",
+          "拜訪計劃"
+        ],
+        "example_phrases": [
+          "下週三下午拜訪台北客戶陳先生",
+          "安排明天去新竹拜訪",
+          "記錄拜訪行程"
+        ]
+      },
+      "input": {
+        "customer_id": "string: 客戶 ID",
+        "customer_name": "string: 客戶名稱",
+        "visit_date": "string: 拜訪日期",
+        "visit_time": "string: 拜訪時間（選填）",
+        "location": "string: 地點",
+        "notes": "string: 備註（選填）"
+      },
+      "output": {
+        "visit_id": "string: 行程 ID",
+        "estimated_travel_min": "number: 預估路程分鐘",
+        "status": "string: planned | done | cancelled"
+      },
+      "dependencies": [
+        "arangodb: visit_plans",
+        "Google Maps API"
+      ],
+      "label": "行程安排"
+    },
+    {
+      "name": "knowledge_agent",
+      "description": "知識庫 FAQ 檢索：透過 Knowledge Agent 向量檢索 FAQ，回覆客戶產品/服務問題",
+      "version": "1.0.0",
+      "source": "skills/knowledge_agent/skill.py",
+      "intent_hints": {
+        "triggers": [
+          "faq_query",
+          "knowledge_search"
+        ],
+        "keywords": [
+          "FAQ",
+          "問題",
+          "產品",
+          "服務",
+          "說明",
+          "知識庫",
+          "怎麼使用"
+        ],
+        "example_phrases": [
+          "電動輪椅有哪些型號？",
+          "保固多久？",
+          "如何申請補助？"
+        ]
+      },
+      "input": {
+        "query": "string: 客戶提問",
+        "top_k": "number: 回傳筆數（預設 3）"
+      },
+      "output": {
+        "answers": "array: 檢索結果 [{content, source, score}]",
+        "total": "number: 符合筆數"
+      },
+      "dependencies": [
+        "knowledge_agent API"
+      ],
+      "label": "知識庫 FAQ"
+    },
+    {
+      "name": "greeting_settings",
+      "description": "問候設定管理：接受業務自然語言指令，管理問候排程與模板。可設定發送時間、模板文字、啟用/停用，支援查看、排程、立即發送。",
+      "version": "1.0.0",
+      "source": "skills/greeting_settings/skill.py",
+      "intent_hints": {
+        "triggers": [
+          "greeting_config",
+          "greeting_schedule",
+          "greeting_settings"
+        ],
+        "keywords": [
+          "問候設定",
+          "排程",
+          "早安設定",
+          "模板",
+          "發送設定",
+          "問候管理"
+        ],
+        "example_phrases": [
+          "每天早上8點發早安問候給所有客戶",
+          "幫我設定中秋問候模板",
+          "看一下目前的問候設定",
+          "發送中秋祝福給所有客戶",
+          "停用早安問候"
+        ]
+      },
+      "input": {
+        "business_user_key": "string: 業務人員 ID",
+        "instruction": "string: 自然語言指令",
+        "action": "enum: get_status | set_schedule | set_template | send_now | toggle",
+        "greeting_type": "enum: morning | holiday | birthday | event",
+        "settings": "object: 結構化設定（跳過 LLM 解析）"
+      },
+      "output": {
+        "success": "boolean: 操作是否成功",
+        "message": "string: 確認訊息",
+        "settings": "object: 更新後的設定內容"
+      },
+      "dependencies": [
+        "shared.llm_resolver",
+        "arangodb: greeting_templates"
+      ],
+      "label": "問候/訊息排程管理"
+    }
+  ]
+}
