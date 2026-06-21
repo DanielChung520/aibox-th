@@ -367,7 +367,7 @@ export default function ChannelAdminPage() {
     <div style={{ padding: 24, background: contentTokens.contentBg, minHeight: '100%' }}>
       <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <span style={{ color: '#666', fontSize: 13 }}>
-          {channels.length > 0 ? `共 ${channels.length} 個頻道` : ''}
+          {channels.length > 0 ? `共有 ${channels.length} 個業務員頻道` : ''}
         </span>
         <Button type="primary" icon={<PlusOutlined />} onClick={() => { form.resetFields(); setCreateModalOpen(true); }}>
           新增業務員/頻道
