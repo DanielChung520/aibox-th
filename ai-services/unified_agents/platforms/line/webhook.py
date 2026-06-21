@@ -567,6 +567,8 @@ async def handle_line_webhook(
                         prompt = f"名片內容：\n{ocr_text}\n\n請根據以上名片內容，用溫暖且不刻板的語氣回覆對方，感謝對方分享名片，表達榮幸認識。若名片有職稱可用稱謂（如王總經理、李醫師），否則用先生/女士。不要描述名片內容，只要感謝與認識的用語即可。"
                         sys_p = "你是商務場合中非常有禮貌的助理，說話溫暖真誠、不失莊重。"
                         reply_text = await _llm_reply(sys_p, prompt)
+                        if not reply_text:
+                            reply_text = "您好！感謝您分享的名片。"
 
                     elif is_greeting:
                         today_str = datetime.now().strftime("%Y-%m-%d")
