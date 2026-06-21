@@ -9,7 +9,7 @@ import os
 from dotenv import load_dotenv
 load_dotenv()
 
-OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434")
+OLLAMA_BASE_URL = os.getenv("MLX_BASE_URL", os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11400"))
 KNOWLEDGE_AGENT_URL = os.getenv("KNOWLEDGE_AGENT_URL", "http://127.0.0.1:8011/ka")
 MULTIMEDIA_ANALYZER_URL = os.getenv("MULTIMEDIA_ANALYZER_URL", "http://127.0.0.1:8011/mcp/multimedia-analyzer")
 ORDER_MODEL = os.getenv("ORDER_SECRETARY_MODEL", "qwen3-next:latest")

@@ -57,7 +57,7 @@ export default function KBSettingsModal({ open, onCancel }: KBSettingsModalProps
       .catch(() => message.error('載入參數失敗'))
       .finally(() => setLoading(false));
 
-    fetch('http://localhost:11434/api/tags')
+    fetch('http://127.0.0.1:11400/v1/models')
       .then(res => res.ok ? res.json() : null)
       .then((data: { models: OllamaModel[] } | null) => {
         if (!data) return;

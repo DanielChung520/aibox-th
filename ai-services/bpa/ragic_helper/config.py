@@ -1,6 +1,6 @@
 import os
 
-OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+OLLAMA_BASE_URL = os.getenv("MLX_BASE_URL", os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11400"))
 DEFAULT_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2:latest")
 
 INTENT_RAG_URL = os.getenv("INTENT_RAG_URL", "http://localhost:8011/da/intent-rag")

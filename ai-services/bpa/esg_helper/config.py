@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434")
+OLLAMA_BASE_URL = os.getenv("MLX_BASE_URL", os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11400"))
 FALLBACK_MODEL = os.getenv("ESG_HELPER_MODEL", "gemini-2.5-flash")
 MAX_HISTORY = int(os.getenv("ESG_MAX_HISTORY", "20"))
 

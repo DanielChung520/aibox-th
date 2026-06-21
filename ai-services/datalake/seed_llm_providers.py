@@ -22,8 +22,13 @@ NOW = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 # 各工具執行時根據 provider name 查找 base_url / api_key
 LLM_PROVIDERS = json.dumps(
     {
+        "mlx": {
+            "label": "MLX (Local)",
+            "base_url": "http://127.0.0.1:11400/v1",
+            "api_key_param": None,
+        },
         "ollama": {
-            "label": "Ollama",
+            "label": "Ollama (Legacy)",
             "base_url": "http://localhost:11434",
             "api_key_param": None,
         },
@@ -41,10 +46,9 @@ LLM_PROVIDERS = json.dumps(
 LLM_ACTIVATED_MODELS = json.dumps(
     [
         {"provider": "deepseek", "model": "deepseek-v4-flash", "label": "DeepSeek V4 Flash"},
-        {"provider": "ollama", "model": "gemma4:31b", "label": "Gemma 4 31B"},
-        {"provider": "ollama", "model": "qwen3-coder:30b", "label": "Qwen3 Coder 30B"},
-        {"provider": "ollama", "model": "llama3.2:latest", "label": "Llama 3.2"},
-        {"provider": "ollama", "model": "qwen3.5:0.8b", "label": "Qwen3.5 0.8B"},
+        {"provider": "mlx", "model": "Qwen3-VL-8B", "label": "Qwen3-VL-8B (Vision+OCR)"},
+        {"provider": "mlx", "model": "Qwen3-Coder-30B", "label": "Qwen3-Coder-30B"},
+        {"provider": "ollama", "model": "qwen3-coder:30b", "label": "Qwen3 Coder 30B (Legacy)"},
     ],
     ensure_ascii=False,
 )
