@@ -37,7 +37,7 @@ from data_agent.query.nl2sql.structured_orchestrator import run_structured_pipel
 
 router = APIRouter(dependencies=[Depends(verify_internal_token)])
 
-OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+OLLAMA_BASE_URL = os.getenv("MLX_BASE_URL", os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11400"))
 DEFAULT_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5-coder:7b")
 ARANGO_URL = os.getenv("ARANGO_URL", "http://localhost:8529")
 ARANGO_DB = os.getenv("ARANGO_DATABASE", "abc_desktop")
@@ -89,7 +89,7 @@ async def generate_aql(natural_language: str) -> str:
     """Generate AQL from natural language via Ollama."""
     async with httpx.AsyncClient(timeout=60.0) as client:
         response = await client.post(
-            f"{OLLAMA_BASE_URL}/api/chat",
+            f"{OLLAMA_BASE_URL}/v1/chat/completions",
             json={
                 "model": DEFAULT_MODEL,
                 "messages": [
@@ -102,7 +102,7 @@ async def generate_aql(natural_language: str) -> str:
         )
         response.raise_for_status()
         data = response.json()
-        content: str = data.get("message", {}).get("content", "").strip()
+        content: str = data[0].get("message",{}).get("content","").strip()
         return content
 
 

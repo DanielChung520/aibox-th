@@ -49,7 +49,7 @@ async def _build_config() -> PipelineConfig:
         match_threshold = 0.45
 
     return PipelineConfig(
-        ollama_base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
+        ollama_base_url=os.getenv("MLX_BASE_URL", os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11400")),
         small_model=await get_param("da.small_llm_model"),
         large_model=await get_param("da.large_llm_model"),
         embedding_model=await get_param("da.embedding_model"),

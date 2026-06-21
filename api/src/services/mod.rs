@@ -10,6 +10,7 @@
 pub mod ai_proxy;
 pub mod billing;
 pub mod chat;
+pub mod demand_engine;
 pub mod heartbeat;
 pub mod pdca;
 pub mod service_ctl;
@@ -19,6 +20,8 @@ pub mod todos;
 pub use ai_proxy::AiProxy;
 #[allow(unused_imports)]
 pub use billing::BillingService;
+#[allow(unused_imports)]
+pub use demand_engine::DemandEngine;
 #[allow(unused_imports)]
 pub use heartbeat::HeartbeatService;
 #[allow(unused_imports)]

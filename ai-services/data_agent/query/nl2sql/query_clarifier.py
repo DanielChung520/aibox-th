@@ -104,7 +104,7 @@ async def check_query_clarity(
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.post(
-                f"{config.ollama_base_url}/api/chat",
+                f"{config.ollama_base_url}/v1/chat/completions",
                 json={
                     "model": config.small_model,
                     "messages": [
@@ -116,7 +116,7 @@ async def check_query_clarity(
                 },
             )
             resp.raise_for_status()
-            content = str(resp.json().get("message", {}).get("content", ""))
+            content = str(resp.json()[0].get("message",{}).get("content",""))
 
         return _parse_clarification(content)
 

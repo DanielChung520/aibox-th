@@ -26,7 +26,7 @@ from data_agent.ragic.models import (
 
 logger = logging.getLogger(__name__)
 
-OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+OLLAMA_BASE_URL = os.getenv("MLX_BASE_URL", os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11400"))
 ARANGO_URL = os.getenv("ARANGO_URL", "http://localhost:8529")
 ARANGO_DB = os.getenv("ARANGO_DATABASE", "abc_desktop")
 ARANGO_USER = os.getenv("ARANGO_USER", "root")
@@ -69,7 +69,7 @@ async def translate_via_llm(
         model = await _get_small_model()
         async with httpx.AsyncClient(timeout=60.0) as client:
             resp = await client.post(
-                f"{OLLAMA_BASE_URL}/api/generate",
+                f"{OLLAMA_BASE_URL}/v1/chat/completions",
                 json={
                     "model": model,
                     "prompt": prompt,
@@ -78,7 +78,7 @@ async def translate_via_llm(
                 },
             )
             resp.raise_for_status()
-            llm_response = resp.json().get("response", "")
+            llm_response = resp.json().get("choices",[{}])[0].get("message",{}).get("content","")
             valid_fids = extract_field_ids(schema_context)
             return parse_llm_response(llm_response, opts, valid_fids)
     except Exception as exc:

@@ -22,7 +22,7 @@ from data_agent.query.nl2sql.models import StructuredQueryRequest
 
 logger = logging.getLogger(__name__)
 
-_OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+_OLLAMA_BASE_URL = os.getenv("MLX_BASE_URL", os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11400"))
 _LM_STUDIO_URL = os.getenv("LM_STUDIO_URL", "http://localhost:1234")
 
 
@@ -83,7 +83,7 @@ _SYSTEM_PROMPT = (
 def _provider_url(provider: str) -> str:
     if provider == "lm_studio":
         return f"{_LM_STUDIO_URL}/v1/chat/completions"
-    return f"{_OLLAMA_BASE_URL}/api/chat"
+    return f"{_OLLAMA_BASE_URL}/v1/chat/completions"
 
 
 def _is_openai_compatible(provider: str) -> bool:
@@ -133,7 +133,7 @@ async def _call_model(
             .get("content", "")
         )
     else:
-        content = str(data.get("message", {}).get("content", ""))
+        content = str(data[0].get("message",{}).get("content",""))
 
     return _extract_sql(content)
 

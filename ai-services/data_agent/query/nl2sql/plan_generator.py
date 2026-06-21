@@ -121,7 +121,7 @@ async def _generate_plan_with_llm(
     try:
         async with httpx.AsyncClient(timeout=120.0) as client:
             response = await client.post(
-                f"{config.ollama_base_url}/api/chat",
+                f"{config.ollama_base_url}/v1/chat/completions",
                 json={
                     "model": model,
                     "messages": [
@@ -135,7 +135,7 @@ async def _generate_plan_with_llm(
             )
             response.raise_for_status()
             data = response.json()
-            content = str(data.get("message", {}).get("content", ""))
+            content = str(data[0].get("message",{}).get("content",""))
 
         return _parse_plan_json(content)
 

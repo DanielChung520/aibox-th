@@ -62,7 +62,7 @@ async def rerank_candidates(
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.post(
-                f"{config.ollama_base_url}/api/generate",
+                f"{config.ollama_base_url}/v1/chat/completions",
                 json={
                     "model": config.small_model,
                     "prompt": prompt,
@@ -71,7 +71,7 @@ async def rerank_candidates(
                 },
             )
             resp.raise_for_status()
-            raw = resp.json().get("response", "")
+            raw = resp.json().get("choices",[{}])[0].get("message",{}).get("content","")
 
         match = re.search(r'"best_intent_id"\s*:\s*"([^"]+)"', raw)
         if match:

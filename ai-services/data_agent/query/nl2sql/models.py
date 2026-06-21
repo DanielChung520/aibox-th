@@ -27,7 +27,7 @@ class GenerationStrategy(str, Enum):
 class PipelineConfig(BaseModel):
     """Configuration for the NL→SQL pipeline."""
 
-    ollama_base_url: str = Field(default="http://localhost:11434")
+    ollama_base_url: str = Field(default="http://127.0.0.1:11400")
     small_model: str = Field(default="mistral-nemo:12b")
     large_model: str = Field(default="qwen3-coder:30b")
     embedding_model: str = Field(default="bge-m3:latest")

@@ -24,7 +24,7 @@ from data_agent.ragic.models import (
 
 logger = logging.getLogger(__name__)
 
-OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+OLLAMA_BASE_URL = os.getenv("MLX_BASE_URL", os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11400"))
 
 _VALID_OPERATORS = {"eq", "like", "gt", "gte", "lt", "lte"}
 
@@ -175,7 +175,7 @@ async def tool_calling_generate(
     try:
         async with httpx.AsyncClient(timeout=60.0) as client:
             resp = await client.post(
-                f"{OLLAMA_BASE_URL}/api/generate",
+                f"{OLLAMA_BASE_URL}/v1/chat/completions",
                 json={
                     "model": llm_model,
                     "prompt": prompt,
@@ -203,7 +203,7 @@ async def tool_calling_generate(
             model_used=llm_model,
         )
 
-    raw_text = resp.json().get("response", "")
+    raw_text = resp.json().get("choices",[{}])[0].get("message",{}).get("content","")
     elapsed = (time.monotonic() - start) * 1000
 
     try:

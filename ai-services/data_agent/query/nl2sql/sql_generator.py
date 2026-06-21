@@ -218,7 +218,7 @@ async def _generate_sql_with_llm(
         async with httpx.AsyncClient(timeout=config.generate_timeout + 5.0) as client:
             response = await asyncio.wait_for(
                 client.post(
-                    f"{config.ollama_base_url}/api/chat",
+                    f"{config.ollama_base_url}/v1/chat/completions",
                     json={
                         "model": model,
                         "messages": [
@@ -233,7 +233,7 @@ async def _generate_sql_with_llm(
             )
             response.raise_for_status()
             data = response.json()
-            content = str(data.get("message", {}).get("content", ""))
+            content = str(data[0].get("message",{}).get("content",""))
 
         return _extract_sql(content)
 
