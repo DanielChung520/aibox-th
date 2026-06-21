@@ -8,6 +8,29 @@ from typing import Optional
 
 logger = logging.getLogger("unified_agents.line_webhook")
 
+MLX_API = os.getenv("MLX_BASE_URL", "http://127.0.0.1:11400/v1")
+CARD_MODEL = "Qwen3-Coder-30B"
+
+
+async def _llm_reply(system_prompt: str, user_msg: str) -> str:
+    """呼叫 MLX LLM 生成回覆文字"""
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as c:
+            resp = await c.post(f"{MLX_API}/chat/completions", json={
+                "model": CARD_MODEL,
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_msg},
+                ],
+                "max_tokens": 300,
+                "temperature": 0.7,
+            })
+            if resp.status_code == 200:
+                return resp.json().get("choices", [{}])[0].get("message", {}).get("content", "")
+    except Exception as e:
+        logger.warning(f"[LLM Reply] failed: {e}")
+    return ""
+
 from unified_agents.platforms.line.services import db
 from shared.conversation import ConversationStorage, QueryEngine
 from unified_agents.platforms.line.services.line_api import (
@@ -535,37 +558,38 @@ async def handle_line_webhook(
                         context_msg = f"[系統提示] {user_display_name}剛才傳送了一張{msg_type}，以下是該{msg_type}的 AI 分析結果，請根據此描述回答使用者後續關於該{msg_type}的問題：\n\n{mm.get('description', '')}\n\n備份位置：{mm.get('seaweed_url', '')}"
                         await storage.save_message(session_id=session_id, platform="line", role="assistant", message=context_msg)
 
-                    # 決定回覆文字
+                    # 決定回覆文字（由 LLM 生成）
                     reply_text = ""
-
+                    scene_desc = (mm.get("description") or "") if mm else ""
                     ocr_text = ocr_result.get("text", "") if ocr_result else ""
+
                     if ocr_text:
-                        if source_type == "group":
-                            reply_text = f"{user_display_name}您好，感謝您分享名片！\n\n{ocr_text}\n\n我已將資料記錄下來，將轉交業務同仁確認後建檔。"
-                        else:
-                            reply_text = f"感謝您分享名片！\n\n{ocr_text}\n\n我已將您的資料建檔，將轉交業務同仁處理。謝謝您！"
-                    elif source_type == "group":
+                        prompt = f"名片內容：\n{ocr_text}\n\n請根據以上名片內容，用溫暖且不刻板的語氣回覆對方，感謝對方分享名片，表達榮幸認識。若名片有職稱可用稱謂（如王總經理、李醫師），否則用先生/女士。不要描述名片內容，只要感謝與認識的用語即可。"
+                        sys_p = "你是商務場合中非常有禮貌的助理，說話溫暖真誠、不失莊重。"
+                        reply_text = await _llm_reply(sys_p, prompt)
+
+                    elif is_greeting:
                         today_str = datetime.now().strftime("%Y-%m-%d")
+                        greeted = await storage.get_greeting_responded_at(session_id)
+                        if greeted != today_str:
+                            prompt = f"對方傳了一張節慶/問候圖片。圖片描述：{scene_desc}\n\n請根據圖片內容及時節，用優雅且有文學涵養的文字回覆對方的祝福或問候。要溫暖真誠，可以引用詩詞或應景用語，但不要過於制式。"
+                            sys_p = "你是個有文學素養且溫暖的助理，擅長用優美的中文回應節慶祝福與日常問候。"
+                            reply_text = await _llm_reply(sys_p, prompt)
+                            if reply_text:
+                                await storage.set_greeting_responded_at(session_id, today_str)
+
+                    elif source_type == "group":
                         if order_result and order_result.get("status") == "success":
                             reply_text = f"{user_display_name}您好，很抱歉讓您久等。\n\n{order_result.get('message', '')}"
-                        elif is_greeting:
-                            greeted = await storage.get_greeting_responded_at(session_id)
-                            if greeted != today_str:
-                                greeting_reply = f"{user_display_name}您好！感謝您的祝福，祝您一切順利！😊"
-                                reply_text = greeting_reply
-                                await storage.set_greeting_responded_at(session_id, today_str)
                         elif is_first_in_session:
                             reply_text = f"{user_display_name}您好，很抱歉讓您久等。\n\n收到您的{msg_type}，已備份完成。若需要建立預購單，請提供品名、數量和單位等訂購資訊。"
-                    else:
-                        if order_result and order_result.get("status") == "success":
-                            reply_text = order_result.get("message", "")
-                        else:
-                            # 一般圖片：用 Qwen2.5-VL-7B 的描述來回覆
-                            scene_desc = mm.get("description", "") if mm else ""
-                            if scene_desc and not scene_desc.startswith("收到一張"):
-                                reply_text = f"感謝您的分享！這是一張{scene_desc[:80]}。已為您備份完成。"
-                            else:
-                                reply_text = f"收到您的{msg_type}，已備份完成。"
+
+                    if not reply_text:
+                        if scene_desc and not scene_desc.startswith("收到一張"):
+                            prompt = f"對方傳了一張圖片。圖片描述：{scene_desc}\n\n請用自然的語氣感謝對方分享，簡單提及圖片內容，語氣溫暖不刻板。"
+                            reply_text = await _llm_reply("你是親切的客服助理，語氣溫暖自然。", prompt)
+                        if not reply_text:
+                            reply_text = f"收到您的{msg_type}，已備份完成。"
 
                 except Exception as e:
                     logger.error(f"[MEDIA] Processing failed: {type(e).__name__}: {e}", exc_info=True)
