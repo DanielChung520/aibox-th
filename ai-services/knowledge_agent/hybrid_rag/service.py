@@ -221,7 +221,7 @@ class HybridRAGService:
         """
         async with httpx.AsyncClient(timeout=60.0) as client:
             response = await client.post(
-                f"{self._ollama_url}/api/embed",
+                f"{self._ollama_url}/v1/embeddings",
                 json={"model": self._embedding_model, "input": text},
             )
             response.raise_for_status()

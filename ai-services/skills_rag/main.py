@@ -48,7 +48,7 @@ async def _ensure_qdrant_collection():
 
 async def _embed(text: str) -> list[float]:
     async with httpx.AsyncClient(timeout=30.0) as c:
-        resp = await c.post(f"{OLLAMA_URL}/api/embed", json={
+        resp = await c.post(f"{OLLAMA_URL}/v1/embeddings", json={
             "model": EMBED_MODEL, "input": text,
         })
         resp.raise_for_status()

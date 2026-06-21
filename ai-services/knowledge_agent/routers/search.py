@@ -44,7 +44,7 @@ class KnowledgeResponse(BaseModel):
 async def get_embedding(text: str) -> list[float]:
     async with httpx.AsyncClient(timeout=30.0) as client:
         response = await client.post(
-            f"{OLLAMA_BASE_URL}/api/embed",
+            f"{OLLAMA_BASE_URL}/v1/embeddings",
             json={"model": "bge-m3:latest", "input": text},
         )
         response.raise_for_status()

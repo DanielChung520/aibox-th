@@ -113,7 +113,7 @@ async def get_embedding(text: str, embedding_model: str = "bge-m3:latest") -> li
     """
     async with httpx.AsyncClient(timeout=60.0) as client:
         response = await client.post(
-            f"{OLLAMA_BASE_URL}/api/embed",
+            f"{OLLAMA_BASE_URL}/v1/embeddings",
             json={"model": embedding_model, "input": text},
         )
         response.raise_for_status()
@@ -163,7 +163,7 @@ async def embed_sync() -> dict:
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.post(
-                f"{OLLAMA_BASE_URL}/api/embed",
+                f"{OLLAMA_BASE_URL}/v1/embeddings",
                 json={"model": embedding_model, "input": "test"},
             )
             if resp.status_code == 200:

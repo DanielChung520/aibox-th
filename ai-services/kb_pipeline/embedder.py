@@ -34,7 +34,7 @@ class Embedder:
     def embed(self, text: str) -> list[float]:
         with httpx.Client(timeout=self.timeout) as client:
             response = client.post(
-                f"{self.base_url}/api/embed",
+                f"{self.base_url}/v1/embeddings",
                 json={"model": self.model, "input": text},
             )
             response.raise_for_status()
@@ -46,7 +46,7 @@ class Embedder:
     def embed_batch(self, texts: list[str]) -> list[list[float]]:
         with httpx.Client(timeout=self.timeout * len(texts)) as client:
             response = client.post(
-                f"{self.base_url}/api/embed",
+                f"{self.base_url}/v1/embeddings",
                 json={"model": self.model, "input": texts},
             )
             response.raise_for_status()

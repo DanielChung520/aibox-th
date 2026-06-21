@@ -22,7 +22,7 @@ def _get_embedding_dim() -> int:
     try:
         with httpx.Client(timeout=10.0) as client:
             resp = client.post(
-                f"{os.getenv('OLLAMA_BASE_URL', 'http://localhost:11434')}/api/embed",
+                f"{os.getenv('OLLAMA_BASE_URL', 'http://localhost:11434')}/v1/embeddings",
                 json={"model": model, "input": "dim"},
             )
             resp.raise_for_status()

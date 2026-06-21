@@ -89,7 +89,7 @@ async def _get_embedding(
     """Get embedding vector from Ollama."""
     async with httpx.AsyncClient(timeout=60.0) as client:
         response = await client.post(
-            f"{ollama_base_url.rstrip('/')}/api/embed",
+            f"{ollama_base_url.rstrip('/')}/v1/embeddings",
             json={"model": embedding_model, "input": text},
         )
         response.raise_for_status()

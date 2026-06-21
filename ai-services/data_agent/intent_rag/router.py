@@ -90,7 +90,7 @@ async def get_embedding(text: str) -> list[float]:
     embedding_model = await get_param("da.embedding_model")
     async with httpx.AsyncClient(timeout=60.0) as client:
         response = await client.post(
-            f"{OLLAMA_BASE_URL}/api/embed",
+            f"{OLLAMA_BASE_URL}/v1/embeddings",
             json={"model": embedding_model, "input": text},
         )
         response.raise_for_status()
