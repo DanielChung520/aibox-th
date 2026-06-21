@@ -75,7 +75,7 @@ async def get_official_account(key: str) -> dict[str, Any] | None:
 
 
 async def create_official_account(data: dict[str, Any]) -> dict[str, Any]:
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(timezone(timedelta(hours=8))).isoformat()
     doc = {
         **data,
         "created_at": now,
@@ -91,7 +91,7 @@ async def create_official_account(data: dict[str, Any]) -> dict[str, Any]:
 
 
 async def update_official_account(key: str, data: dict[str, Any]) -> dict[str, Any] | None:
-    patch = {**data, "updated_at": datetime.utcnow().isoformat()}
+    patch = {**data, "updated_at": datetime.now(timezone(timedelta(hours=8))).isoformat()}
     async with httpx.AsyncClient() as client:
         url = f"{ARANGO_URL}/_db/{ARANGO_DB}/_api/document/platforms_line_official_accounts/{key}"
         resp = await client.patch(url, headers=await _arango_headers(), json=patch)
@@ -153,7 +153,7 @@ async def get_channel(key: str) -> dict[str, Any] | None:
 async def create_channel(data: dict[str, Any]) -> dict[str, Any]:
     doc = {
         **data,
-        "created_at": datetime.utcnow().isoformat(),
+        "created_at": datetime.now(timezone(timedelta(hours=8))).isoformat(),
         "webhook_url": f"{PUBLIC_BASE_URL}/api/v1/webhook/line/{data.get('_key', 'unknown')}",
         "webhook_enabled": False,
         "publication_status": "unpublished",

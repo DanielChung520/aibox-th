@@ -9,7 +9,7 @@
 import logging
 import time
 import asyncio
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter
 
 from bpa.welfare_secretary.router import ChatRequest, ChatResponse, call_llm, _conversations, _MAX_TURNS
@@ -297,7 +297,7 @@ async def _save_crm_contact(business_user_key: str, channel_key: str, session_id
         "Content-Type": "application/json",
         "Authorization": f"Basic {base64.b64encode(auth_cred.encode()).decode()}",
     }
-    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    now = datetime.now(timezone(timedelta(hours=8))).strftime("%Y-%m-%dT%H:%M:%SZ")
     doc = {
         "_key": str(uuid.uuid4()),
         "name_cn": ocr_data.get("name"),

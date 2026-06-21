@@ -13,7 +13,7 @@ import os
 import base64
 import httpx
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Optional, Literal
 
 from fastapi import FastAPI, HTTPException
@@ -71,7 +71,7 @@ class AnalyzeResponse(BaseModel):
 async def upload_to_seaweedfs(content: bytes, filename: str, platform: str, user_id: str) -> str:
     safe_platform = platform.lower().replace("_", "-")
     safe_user = user_id.lower().replace("_", "-")
-    ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    ts = datetime.now(timezone(timedelta(hours=8))).strftime("%Y%m%d_%H%M%S")
     uid = str(uuid.uuid4())
     ext = filename.split(".")[-1] if "." in filename else ""
     safe_filename = "".join(c if c.isalnum() or c in "-_." else "_" for c in filename)

@@ -33,7 +33,7 @@ async def list_official_accounts():
 async def create_official_account(req: CreateOfficialAccountRequest):
     await db.ensure_collections()
     data = {
-        "_key": f"oa_{datetime.utcnow().timestamp()}",
+        "_key": f"oa_{datetime.now(timezone(timedelta(hours=8))).timestamp()}",
         "provider_name": req.provider_name,
         "name": req.name,
     }
@@ -77,7 +77,7 @@ async def create_channel(key: str, req: CreateChannelRequest):
     if not account:
         raise HTTPException(status_code=404, detail="官方帳號不存在")
     data = {
-        "_key": f"ch_{datetime.utcnow().timestamp()}",
+        "_key": f"ch_{datetime.now(timezone(timedelta(hours=8))).timestamp()}",
         "official_account_key": key,
         "channel_name": req.channel_name,
         "channel_id": req.channel_id,
@@ -136,7 +136,7 @@ async def test_connection(channel_key: str):
     # 更新 LINE 連線資訊
     await db.update_channel(channel_key, {
         "bot_user_id": line_result.get("bot_user_id"),
-        "last_connected_at": datetime.utcnow().isoformat(),
+        "last_connected_at": datetime.now(timezone(timedelta(hours=8))).isoformat(),
     })
 
     # Phase 2: 若有 linked_agent_key，驗證 Agent 端點

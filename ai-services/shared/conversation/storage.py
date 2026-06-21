@@ -6,7 +6,7 @@ a unified interface for all platforms.
 """
 
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Any
 
 import httpx
@@ -163,7 +163,7 @@ class ConversationStorage:
             "role": role,
             "message": message,
             "metadata": metadata or {},
-            "created_at": (created_at or datetime.now(timezone.utc)).isoformat(),
+            "created_at": (created_at or datetime.now(timezone(timedelta(hours=8)))).isoformat(),
         }
 
         async with httpx.AsyncClient(timeout=10.0) as client:
