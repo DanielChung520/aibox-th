@@ -40,17 +40,16 @@ import SkillsManagement from './pages/knowledge/SkillsManagement';
 import KnowledgeBaseDetail from './pages/knowledge/KnowledgeBaseDetail';
 import IntentCatalog from './pages/IntentCatalog';
 import MermaidVerification from './pages/MermaidVerification';
-import DataDepthTracking from './pages/DataDepthTracking';
+import DataDepthTracking from './pages/DataDepthTracking/DataDepthTracking';
 import PlatformLINE from './pages/PlatformLINE';
 import PlatformBotPage from './pages/PlatformBotPage';
 import TodoBoard from './pages/TodoBoard';
 import ESGStandards from './pages/esg/ESGStandards';
 import ESGRecords from './pages/esg/ESGRecords';
 import ESGDashboard from './pages/esg/ESGDashboard';
-import SCMDashboard from './pages/scm/SCMDashboard';
+
 import CrmDashboard from './pages/eea-crm/DashboardPage';
-import CrmCustomerMap from './pages/eea-crm/CustomerMapPage';
-import CrmSalesDashboard from './pages/eea-crm/SalesDashboardPage';
+
 import CrmCustomers from './pages/eea-crm/CustomerListPage';
 import CrmContacts from './pages/eea-crm/ContactListPage';
 import CrmTimeline from './pages/eea-crm/TimelinePage';
@@ -263,10 +262,8 @@ function AppContent() {
               <Route path="esg/dashboard" element={<ESGDashboard />} />
               <Route path="esg/standards" element={<ESGStandards />} />
               <Route path="esg/records" element={<ESGRecords />} />
-              <Route path="scm/dashboard" element={<SCMDashboard />} />
-              <Route path="eea-crm/dashboard" element={<EeaCrmLayout context="dashboard"><CrmDashboard /></EeaCrmLayout>} />
-              <Route path="eea-crm/customer-map" element={<EeaCrmLayout context="dashboard"><CrmCustomerMap /></EeaCrmLayout>} />
-              <Route path="eea-crm/sales-performance" element={<EeaCrmLayout context="dashboard"><CrmSalesDashboard /></EeaCrmLayout>} />
+                <Route path="eea-crm/dashboard" element={<EeaCrmLayout context="dashboard"><CrmDashboard /></EeaCrmLayout>} />
+
               <Route path="eea-crm/customers" element={<EeaCrmLayout context="customers"><CrmCustomers /></EeaCrmLayout>} />
               <Route path="eea-crm/contacts" element={<EeaCrmLayout context="contacts"><CrmContacts /></EeaCrmLayout>} />
               <Route path="eea-crm/timeline" element={<EeaCrmLayout context="timeline"><CrmTimeline /></EeaCrmLayout>} />
