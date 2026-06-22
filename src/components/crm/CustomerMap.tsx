@@ -487,7 +487,7 @@ export default function CustomerMapComponent() {
             borderTop: '1px solid #f0f0f0', marginTop: 8, paddingTop: 12,
           }}>
             <Text strong style={{ fontSize: 13, display: 'block', marginBottom: 4 }}>📋 {activeMarker.name}</Text>
-            <div style={{ fontSize: 12, lineHeight: 1.8, color: '#555' }}>
+            <div style={{ fontSize: 12, lineHeight: 1.8 }}>
               {activeMarker.salesRep && <div>👤 {activeMarker.salesRep}</div>}
               {activeMarker.address && <div>📍 {activeMarker.address}</div>}
               {activeMarker.phone && <div>📞 {activeMarker.phone}</div>}
