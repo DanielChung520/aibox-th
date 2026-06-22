@@ -68,7 +68,56 @@ export default function CustomerMapComponent() {
 
   const DRAWER_WIDTH = 320;
   const CACHE_KEY = 'crm_map_cache';
-  const CACHE_MAX_AGE = 3600000; // 1 hour
+  const CACHE_MAX_AGE = 3600000;
+
+  // IndexedDB helpers
+  const idb = useMemo(() => ({
+    async get(key: string) {
+      return new Promise<unknown>((resolve) => {
+        try {
+          const req = indexedDB.open('CRMmap', 1);
+          req.onupgradeneeded = () => req.result.createObjectStore('kv');
+          req.onsuccess = () => {
+            const tx = req.result.transaction('kv', 'readonly');
+            const getReq = tx.objectStore('kv').get(key);
+            getReq.onsuccess = () => resolve(getReq.result);
+            getReq.onerror = () => resolve(null);
+          };
+          req.onerror = () => resolve(null);
+        } catch { resolve(null); }
+      });
+    },
+    async set(key: string, value: unknown) {
+      return new Promise<void>((resolve) => {
+        try {
+          const req = indexedDB.open('CRMmap', 1);
+          req.onupgradeneeded = () => req.result.createObjectStore('kv');
+          req.onsuccess = () => {
+            const tx = req.result.transaction('kv', 'readwrite');
+            tx.objectStore('kv').put(value, key);
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => resolve();
+          };
+          req.onerror = () => resolve();
+        } catch { resolve(); }
+      });
+    },
+    async remove(key: string) {
+      return new Promise<void>((resolve) => {
+        try {
+          const req = indexedDB.open('CRMmap', 1);
+          req.onupgradeneeded = () => req.result.createObjectStore('kv');
+          req.onsuccess = () => {
+            const tx = req.result.transaction('kv', 'readwrite');
+            tx.objectStore('kv').delete(key);
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => resolve();
+          };
+          req.onerror = () => resolve();
+        } catch { resolve(); }
+      });
+    },
+  }), []);
 
   /* ── State ── */
   const [searchQuery, setSearchQuery] = useState('');
@@ -87,55 +136,37 @@ export default function CustomerMapComponent() {
   const markerGroupRef = useRef<L.LayerGroup | null>(null);
   const initDoneRef = useRef(false);
 
-  /* ── Fetch data from API (with localStorage cache) ── */
-  const loadMapData = useCallback((forceRefresh = false) => {
-    const tryCache = () => {
-      if (forceRefresh) return null;
-      try {
-        const raw = localStorage.getItem(CACHE_KEY);
-        if (!raw) return null;
-        const cache = JSON.parse(raw);
-        if (Date.now() - cache.ts > CACHE_MAX_AGE) return null;
-        return cache;
-      } catch { return null; }
-    };
-
-    const cached = tryCache();
-    if (cached) {
-      setMarkers(cached.markers);
-      setSummary(cached.summary);
-      setLoading(false);
-      return;
+  /* ── Fetch data from API (with IndexedDB cache) ── */
+  const loadMapData = useCallback(async (forceRefresh = false) => {
+    if (!forceRefresh) {
+      const cached = await idb.get(CACHE_KEY) as { ts: number; markers: CRMMapMarker[]; summary: CRMMapResponse['summary'] } | null;
+      if (cached && Date.now() - cached.ts < CACHE_MAX_AGE) {
+        setMarkers(cached.markers);
+        setSummary(cached.summary);
+        setLoading(false);
+        return;
+      }
     }
 
     setLoading(true);
-    crmApi.map()
-      .then(res => {
-        const full = res.data.markers;
-        const light = full.map((m: CRMMapMarker) => ({
-          id: m.id, name: m.name, lat: m.lat, lng: m.lng,
-          abc_grade: m.abc_grade, category: m.category, source: m.source,
-          city: m.city, address: m.address, sales_rep: m.sales_rep,
-        }));
-        const data = { ts: Date.now(), markers: light, summary: res.data.summary };
-        const json = JSON.stringify(data);
-        console.log(`CRM cache: ${json.length} bytes for ${light.length} markers`);
-        try {
-          localStorage.setItem(CACHE_KEY, json);
-          console.log('CRM cache: saved to localStorage');
-        } catch (e) {
-          console.error('CRM cache: localStorage write failed', e);
-        }
-        setMarkers(light);
-        setSummary(res.data.summary);
-      })
-      .catch(err => {
-        console.error('Failed to fetch CRM map data:', err);
-      })
-      .finally(() => {
-        setLoading(false);
-      });
-  }, []);
+    try {
+      const res = await crmApi.map();
+      const full = res.data.markers;
+      const light = full.map((m: CRMMapMarker) => ({
+        id: m.id, name: m.name, lat: m.lat, lng: m.lng,
+        abc_grade: m.abc_grade, category: m.category, source: m.source,
+        city: m.city, address: m.address, sales_rep: m.sales_rep,
+      }));
+      const data = { ts: Date.now(), markers: light, summary: res.data.summary };
+      await idb.set(CACHE_KEY, data);
+      setMarkers(light);
+      setSummary(res.data.summary);
+    } catch (err) {
+      console.error('Failed to load CRM map data:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [idb]);
 
   useEffect(() => { loadMapData(); }, [loadMapData]);
 
@@ -414,8 +445,8 @@ export default function CustomerMapComponent() {
               size="middle"
               style={{ flex: 1 }}
             />
-            <Button size="small" icon={<ReloadOutlined />} onClick={() => {
-              localStorage.removeItem(CACHE_KEY);
+            <Button size="small" icon={<ReloadOutlined />} onClick={async () => {
+              await idb.remove(CACHE_KEY);
               loadMapData(true);
             }} />
           </div>
