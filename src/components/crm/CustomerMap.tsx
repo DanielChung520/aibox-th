@@ -507,13 +507,24 @@ export default function CustomerMapComponent() {
 
         {/* 路線狀態 */}
         {(startPoint || endPoint) && (
-          <div style={{ marginBottom: 8, fontSize: 12, padding: '6px 8px', background: '#f5f5f5', borderRadius: 6 }}>
-            {startPoint && <div>🚩 起點：{startPoint.name}</div>}
-            {endPoint && <div>🎯 終點：{endPoint.name}</div>}
-            <Button size="small" type="link" style={{ fontSize: 11, padding: 0, height: 20 }}
-              onClick={() => { setStartPoint(null); setEndPoint(null); }}>
-              清除路線
-            </Button>
+          <div style={{ marginBottom: 8, padding: '8px 10px', background: '#f5f5f5', borderRadius: 8 }}>
+            <div style={{ fontSize: 12, lineHeight: 1.8 }}>
+              {startPoint && <div>🚩 起點：<Text strong>{startPoint.name}</Text></div>}
+              {endPoint && <div>🎯 終點：<Text strong>{endPoint.name}</Text></div>}
+            </div>
+            <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+              <Button size="small" type="primary" icon={<AimOutlined />} style={{ flex: 1, fontSize: 11 }}
+                disabled={!startPoint || !endPoint}
+                onClick={() => {
+                  window.dispatchEvent(new CustomEvent('crm:route', { detail: { startId: startPoint?.id, endId: endPoint?.id } }));
+                }}>
+                計算路程
+              </Button>
+              <Button size="small" style={{ fontSize: 11 }}
+                onClick={() => { setStartPoint(null); setEndPoint(null); }}>
+                清除路線
+              </Button>
+            </div>
           </div>
         )}
 
