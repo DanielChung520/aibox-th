@@ -12,8 +12,6 @@ import { Input, Button, Checkbox, Typography, Tag, Spin, Card, Space } from 'ant
 import { SearchOutlined, EyeOutlined, CalendarOutlined, RobotOutlined, ReloadOutlined } from '@ant-design/icons';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import 'leaflet.markercluster/dist/MarkerCluster.css';
-import 'leaflet.markercluster/dist/MarkerCluster.Default.css';
 import { useContentTokens } from '../../contexts/AppThemeProvider';
 import { crmApi, CRMMapMarker, CRMMapResponse } from '../../services/api';
 import { useCrmStore } from '../../stores/crmStore';
@@ -173,6 +171,7 @@ export default function CustomerMapComponent() {
       zoom: 7.5,
       zoomControl: true,
       attributionControl: true,
+      preferCanvas: true,
     });
 
     /* CartoDB tiles (more reliable than raw OSM) */
@@ -182,16 +181,8 @@ export default function CustomerMapComponent() {
       subdomains: 'abcd',
     }).addTo(map);
 
-    /* Marker Cluster layer */
-    const markers = L.markerClusterGroup({
-      chunkedLoading: true,
-      chunkInterval: 100,
-      maxClusterRadius: 60,
-      spiderfyOnMaxZoom: true,
-      showCoverageOnHover: false,
-      zoomToBoundsOnClick: true,
-      disableClusteringAtZoom: 16,
-    }).addTo(map);
+    /* Marker layer */
+    const markers = L.layerGroup().addTo(map);
     markerGroupRef.current = markers;
     mapInstanceRef.current = map;
 
@@ -265,43 +256,13 @@ export default function CustomerMapComponent() {
         fillOpacity: 0.75,
       });
 
-      marker.bindTooltip(c.name, {
-        permanent: true,
-        direction: 'top',
-        offset: [0, -(cfg.radius + 4)],
-        className: 'crm-map-tooltip',
-      });
-
-      marker.bindPopup(
-        L.popup({ closeButton: true, maxWidth: 240, className: 'crm-map-popup' })
-          .setContent(`
-            <div style="min-width:180px;font-family:-apple-system,sans-serif;">
-              <div style="font-weight:600;font-size:13px;margin-bottom:4px;">${c.name}</div>
-              <div style="display:flex;gap:4;margin-bottom:6px;">
-                <span style="display:inline-block;padding:0 8px;border-radius:8px;font-size:10px;font-weight:600;color:#fff;background:${cfg.color};">${c.abc} 類</span>
-                <span style="display:inline-block;padding:0 8px;border-radius:8px;font-size:10px;background:#f0f0f0;color:#666;">${c.region}</span>
-              </div>
-              <div style="margin-bottom:4px;font-size:11px;color:#555;">📍 ${c.address || ''}</div>
-            </div>
-          `)
-      );
-
-      marker.on('click', () => {
-        setActiveMarker(c);
-      });
-
+      marker.bindTooltip(c.name, { direction: 'top', offset: [0, -(cfg.radius + 4)], className: 'crm-map-tooltip' });
+      marker.on('click', () => setActiveMarker(c));
       markers.addLayer(marker);
     });
 
     /* Dismiss floating menu on map click */
     map.on('click', () => setActiveMarker(null));
-
-    /* Close tooltips if zoom < 9 */
-    if (map.getZoom() < 9) {
-      markers.eachLayer(layer => {
-        if (layer instanceof L.CircleMarker) layer.closeTooltip();
-      });
-    }
   }, [filteredCustomers]);
 
   /* ── Handlers ── */
