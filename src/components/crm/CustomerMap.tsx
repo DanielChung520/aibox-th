@@ -15,6 +15,9 @@ import 'leaflet/dist/leaflet.css';
 import 'leaflet.markercluster/dist/MarkerCluster.css';
 import 'leaflet.markercluster/dist/MarkerCluster.Default.css';
 import { useContentTokens } from '../../contexts/AppThemeProvider';
+
+/** 台灣福祉總部位置 */
+const HQ_POSITION: [number, number] = [24.9907, 121.4205];
 import { crmApi, CRMMapMarker, CRMMapResponse } from '../../services/api';
 import { useCrmStore } from '../../stores/crmStore';
 
@@ -251,6 +254,17 @@ export default function CustomerMapComponent() {
     }).addTo(map);
     markerGroupRef.current = markers;
     mapInstanceRef.current = map;
+
+    /* HQ marker */
+    const hqIcon = L.divIcon({
+      html: '<div style="width:24px;height:24px;background:#ff4d4f;border:3px solid #fff;border-radius:50%;box-shadow:0 2px 8px rgba(255,77,79,0.5);display:flex;align-items:center;justify-content:center;"><div style="width:6px;height:6px;background:#fff;border-radius:50%;"></div></div>',
+      iconSize: [24, 24],
+      iconAnchor: [12, 12],
+      className: '',
+    });
+    L.marker(HQ_POSITION, { icon: hqIcon, zIndexOffset: 1000 })
+      .addTo(map)
+      .bindTooltip('🏢 台灣福祉總部', { permanent: true, direction: 'top', offset: [0, -16] });
 
     /* Tooltip visibility on zoom */
     map.on('zoomend', () => {
