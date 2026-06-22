@@ -12,6 +12,8 @@ import { Input, Button, Checkbox, Typography, Tag, Spin, Card, Space } from 'ant
 import { SearchOutlined, EyeOutlined, CalendarOutlined, RobotOutlined, ReloadOutlined } from '@ant-design/icons';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import 'leaflet.markercluster/dist/MarkerCluster.css';
+import 'leaflet.markercluster/dist/MarkerCluster.Default.css';
 import { useContentTokens } from '../../contexts/AppThemeProvider';
 import { crmApi, CRMMapMarker, CRMMapResponse } from '../../services/api';
 import { useCrmStore } from '../../stores/crmStore';
@@ -180,8 +182,16 @@ export default function CustomerMapComponent() {
       subdomains: 'abcd',
     }).addTo(map);
 
-    /* Marker layer */
-    const markers = L.layerGroup().addTo(map);
+    /* Marker Cluster layer */
+    const markers = L.markerClusterGroup({
+      chunkedLoading: true,
+      chunkInterval: 100,
+      maxClusterRadius: 60,
+      spiderfyOnMaxZoom: true,
+      showCoverageOnHover: false,
+      zoomToBoundsOnClick: true,
+      disableClusteringAtZoom: 16,
+    }).addTo(map);
     markerGroupRef.current = markers;
     mapInstanceRef.current = map;
 
