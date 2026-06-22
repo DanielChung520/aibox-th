@@ -82,6 +82,13 @@ async fn list_catalog(
         bind_entries.push(("agent_scope".into(), serde_json::json!(scope)));
     }
 
+    // ── welfare_secretary / BPA agent filter ──
+    let agent_key_name = params.get("agent_key_name").filter(|v| !v.trim().is_empty());
+    if let Some(ref akn) = agent_key_name {
+        filters.push("d.agent_key_name == @agent_key_name".into());
+        bind_entries.push(("agent_key_name".into(), serde_json::json!(akn)));
+    }
+
     // ── common filters ──
     if let Some(status) = params.get("status").filter(|v| !v.trim().is_empty()) {
         filters.push("d.status == @status".into());

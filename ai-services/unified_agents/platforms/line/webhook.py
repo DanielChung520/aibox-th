@@ -65,6 +65,48 @@ from unified_agents.platforms.line.services.line_api import (
 
 router = APIRouter(tags=["LINE Webhook"])
 
+ARANGO_URL = os.getenv("ARANGO_URL", "http://localhost:8529")
+ARANGO_DB = os.getenv("ARANGO_DB", "abc_desktop")
+ARANGO_USER = os.getenv("ARANGO_USER", "root")
+ARANGO_PASSWORD = os.getenv("ARANGO_PASSWORD", "abc_desktop_2026")
+
+
+async def ensure_crm_contact(line_user_id: str, display_name: str, channel_key: str, owner_key: str = "", introducer: str = ""):
+    """檢查並自動建立 CRM 聯絡人"""
+    try:
+        auth = (ARANGO_USER, ARANGO_PASSWORD)
+        base = f"{ARANGO_URL}/_db/{ARANGO_DB}"
+        async with httpx.AsyncClient(timeout=10.0, auth=auth) as c:
+            # 查是否已存在
+            q = {"query": f"FOR c IN crm_contacts FILTER c.line_user_id == @uid LIMIT 1 RETURN c._key",
+                 "bindVars": {"uid": line_user_id}}
+            resp = await c.post(f"{base}/_api/cursor", json=q)
+            if resp.status_code == 201:
+                data = resp.json()
+                if data.get("result") and len(data["result"]) > 0:
+                    return  # 已存在
+            # 不存在，自動建立
+            import uuid
+            now = datetime.utcnow().isoformat() + "Z"
+            doc = {
+                "_key": str(uuid.uuid4()),
+                "name_cn": display_name,
+                "source": "line",
+                "line_user_id": line_user_id,
+                "line_status": "connected",
+                "channel_key": channel_key,
+                "owner_key": owner_key or "",
+                "created_at": now,
+                "updated_at": now,
+                "created_by": "line_webhook",
+            }
+            if introducer:
+                doc["line_introducer"] = introducer
+            await c.post(f"{base}/_api/document/crm_contacts", json=doc)
+            logger.info(f"[CRM] Auto-created contact: {display_name} ({line_user_id})")
+    except Exception as e:
+        logger.warning(f"[CRM] Failed to auto-create contact: {e}")
+
 MULTIMEDIA_TOOL_URL = os.getenv("MULTIMEDIA_TOOL_URL", "http://localhost:8011/mcp/multimedia-analyzer")
 
 AITASK_URL = os.getenv("AITASK_URL", "http://localhost:8001")
@@ -359,6 +401,7 @@ async def handle_line_webhook(
                     )
                     metadata["group_name"] = group_name
                 await storage.save_message(session_id=session_id, platform="line", role="user", message=text, metadata=metadata)
+                await ensure_crm_contact(user_id, user_display_name, channel_key, owner_key=channel.get("business_user_key", ""))
 
                 if source_type in ("group", "room") and not is_mentioned_now:
                     continue
@@ -545,11 +588,19 @@ async def handle_line_webhook(
                         metadata={"user_name": user_display_name, "media_type": msg_type, "content_id": content_id},
                     )
 
-                    # 分流：用 Qwen2.5-VL-7B 的描述判斷是否為賀卡/問候
-                    desc = (mm.get("description") or "").lower()
-                    greeting_keywords = ["早安", "午安", "晚安", "祝福", "生日", "新年", "端午", "中秋", "佳節", "安好", "順心",
-                                         "賀卡", "慶祝", "聖誕", "除夕", "元宵", "母親節", "父親節", "感恩"]
-                    is_greeting = any(kw in desc for kw in greeting_keywords)
+                    # 用 LLM 判斷是否為節慶/問候/節氣圖片（取代關鍵字比對）
+                    desc_raw = mm.get("description") or ""
+                    is_greeting = False
+                    if desc_raw:
+                        cls = await _llm_reply(
+                            "你是一個圖片分類助理。根據圖片描述，判斷這張圖片是否與節慶、節氣、祝福、問候、感恩或慶祝相關。"
+                            "包含但不限於：新年、端午、中秋、聖誕、生日、母親節、父親節、情人節、元宵、"
+                            "春分、夏至、立秋、冬至等二十四節氣，以及早安、晚安、祝福、感謝、賀卡、慶祝、恭喜等情境。"
+                            "請只回覆一個字：Y 表示是，N 表示否。",
+                            f"圖片描述：{desc_raw}"
+                        )
+                        is_greeting = cls.strip().upper().startswith("Y")
+                    desc = desc_raw.lower()
 
                     # 若不是祝福圖片，且描述長度足夠，嘗試解析訂單
                     if not is_greeting and len(desc) > 20:
@@ -596,6 +647,18 @@ async def handle_line_webhook(
                               "導入師":"老師", "醫師":"老師", "律師":"老師", "教授":"老師", "副總":"副總",
                               "董事長":"執行長", "執行長":"執行長", "院長":"院長", "所長":"所長", "顧問":"顧問", "專員":"專員"}
 
+                    # 統整稱謂：名片OCR優先，其次LINE顯示名稱，最後用「您」
+                    card_greeting = "您"
+                    if card_name:
+                        surname = next((ch for ch in card_name if '\u4e00' <= ch <= '\u9fff'), "")
+                        raw_title = card_title if card_title and not any(card_title.endswith(k) for k in ["公司","企業","集團","行號"]) else ""
+                        matched_title = next((short for t, short in TITLES.items() if t in raw_title), "")
+                        if surname and matched_title:
+                            card_greeting = f"{surname}老師" if matched_title == "老師" else f"{surname}{matched_title}"
+                        elif surname:
+                            card_greeting = f"{surname}老師"
+                    addr = card_greeting if card_greeting != "您" else (user_display_name or "您")
+
                     if card_name:
                         surname = ""
                         for ch in card_name:
@@ -604,29 +667,15 @@ async def handle_line_webhook(
                                 break
                         # 檢查 title 是否真的像職稱（不是公司名）
                         raw_title = card_title if card_title and not any(card_title.endswith(k) for k in ["公司","企業","集團","行號"]) else ""
-                        matched_title = ""
-                        for t, short in TITLES.items():
-                            if t in raw_title:
-                                matched_title = short
-                                break
-                        greeting = "您"
-                        if surname and matched_title:
-                            if matched_title == "老師":
-                                greeting = f"{surname}老師"
-                            else:
-                                greeting = f"{surname}{matched_title}"
-                        elif surname:
-                            greeting = f"{surname}老師"
-
-                        logger.info(f"[IMG] Card greeting resolved: {greeting}")
+                        logger.info(f"[IMG] Card greeting resolved: {addr}")
                         # 判斷語言：姓名或公司有中文字→繁體中文，否則英文
                         check_text = f"{card_name} {card_company}"
                         is_chinese = any('\u4e00' <= c <= '\u9fff' for c in check_text)
                         if is_chinese:
-                            prompt = f"用繁體中文寫這句話：{greeting}，感謝您分享名片，很高興認識您。全中文，不要任何英文單字。"
+                            prompt = f"用繁體中文寫這句話：{addr}，感謝您分享名片，很高興認識您。全中文，不要任何英文單字。"
                             sys_p = "你是台灣的業務助理，只能用繁體中文，不可以夾雜英文。"
                         else:
-                            prompt = f"Reply in English: Address the person as \"{greeting}\", thank them for sharing their business card, express pleasure in meeting them. One sentence only."
+                            prompt = f"Reply in English: Address the person as \"{addr}\", thank them for sharing their business card, express pleasure in meeting them. One sentence only."
                             sys_p = "You are a professional business assistant. Respond politely and warmly."
                         reply_text = await _llm_reply(sys_p, prompt)
                         if not reply_text:
@@ -637,8 +686,13 @@ async def handle_line_webhook(
                         today_str = datetime.now().strftime("%Y-%m-%d")
                         greeted = await storage.get_greeting_responded_at(session_id)
                         if greeted != today_str:
-                            prompt = f"對方傳了一張節慶/問候圖片。圖片描述：{scene_desc}\n\n請根據圖片內容及時節，用優雅且有文學涵養的文字回覆對方的祝福或問候。要溫暖真誠，可以引用詩詞或應景用語，但不要過於制式。"
-                            sys_p = "你是個有文學素養且溫暖的助理，擅長用優美的中文回應節慶祝福與日常問候。"
+                            prompt = (
+                                f"{addr}傳了一張節慶/問候圖片。\n"
+                                f"圖片描述：{scene_desc}\n\n"
+                                f"請先感謝{addr}的祝福，再接一句簡短優美應景的話（30~50字）。"
+                                f"全文不超過60字。不要詩詞堆砌，不要分段，自然溫暖即可。"
+                            )
+                            sys_p = "你是溫暖真誠的業務助理，用繁體中文，簡潔有力。"
                             reply_text = await _llm_reply(sys_p, prompt)
                             if reply_text:
                                 await storage.set_greeting_responded_at(session_id, today_str)
@@ -716,6 +770,32 @@ async def handle_line_webhook(
                     channel_access_token=channel.get("channel_access_token", ""),
                     reply_token=reply_token,
                     messages=[{"type": "text", "text": ai_response}],
+                )
+
+            elif msg_type == "contact":
+                logger.info(f"[CONTACT] reply_token={bool(reply_token)} source_type={source_type}")
+                if not reply_token:
+                    continue
+                contact_info = msg.get("contact", {})
+                contact_name = contact_info.get("name", "未知")
+                contact_user_id = contact_info.get("userId", "")
+                if contact_user_id:
+                    storage = ConversationStorage()
+                    user_profile = await get_user_profile(contact_user_id, channel.get("channel_access_token", ""))
+                    display_name = user_profile.get("display_name", contact_name)
+                    await storage.save_message(
+                        session_id=build_session_id({"userId": contact_user_id}, channel_key),
+                        platform="line", role="user",
+                        message=f"[分享名片] {display_name}",
+                        metadata={"user_name": display_name, "media_type": "contact", "contact_user_id": contact_user_id},
+                    )
+                    await ensure_crm_contact(contact_user_id, display_name, channel_key,
+                                             owner_key=channel.get("business_user_key", ""),
+                                             introducer=user_id)
+                await reply_message(
+                    channel_access_token=channel.get("channel_access_token", ""),
+                    reply_token=reply_token,
+                    messages=[{"type": "text", "text": f"感謝您分享{contact_name}的名片，我已記錄下來。"}],
                 )
 
         elif event_type == "follow":

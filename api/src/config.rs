@@ -70,6 +70,7 @@ pub struct BillingConfig {
 pub struct ServerConfig {
     pub port: u16,
     pub host: String,
+    pub external_url: String,
 }
 
 impl Config {
@@ -146,6 +147,7 @@ impl Config {
                     .parse()
                     .unwrap_or(6500),
                 host: env::var("HOST").unwrap_or_else(|_| "127.0.0.1".to_string()),
+                external_url: env::var("EXTERNAL_URL").unwrap_or_else(|_| "https://eeaapi.ent4i.com".to_string()),
             },
         }
     }

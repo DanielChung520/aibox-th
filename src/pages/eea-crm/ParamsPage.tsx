@@ -65,7 +65,7 @@ const MOCK_PARAMS: CrmParam[] = [
     key: 'crm.scrape.sources',
     value: '衛福部長照機構清單,縣市立案機構,政府公開資料',
     type: 'array',
-    description: '潛在客戶爬取資料來源列表',
+    description: '衛服部資料更新來源列表',
     lastUpdated: '2026-06-01',
   },
   {

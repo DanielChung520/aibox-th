@@ -18,7 +18,7 @@ use crate::models::*;
 use crate::services::DemandEngine;
 use axum::{
     body::Bytes,
-    extract::{Path, Query},
+    extract::{Multipart, Path, Query},
     http::{header::AUTHORIZATION, HeaderMap, HeaderValue, Method, StatusCode, Uri},
     response::IntoResponse,
     routing::{any, get, post, put, patch, delete},
@@ -142,12 +142,20 @@ async fn list_bot_contacts(headers: HeaderMap) -> Result<impl IntoResponse, Stat
     let results: Vec<Value> = db.aql_bind_vars(
         r#"
         LET my_channels = (
-            FOR c IN channels FILTER c.business_user_key == @user_key RETURN c._key
+            FOR c IN channels FILTER c.business_user_key == @user_key
+            RETURN { key: c._key, name: c.business_user_name || c._key }
         )
         FOR m IN bot_chat_sessions
-            LET channel_key = SPLIT(m.session_id, ":")[1]
-            FILTER channel_key IN my_channels
+            FILTER SPLIT(m.session_id, ":")[0] == "line"
+            FILTER SPLIT(m.session_id, ":")[1] IN my_channels[*].key
             COLLECT user_id = SPLIT(m.session_id, ":")[2] INTO groups
+            LET conv_channels = UNIQUE(
+                FOR g IN groups
+                    LET ck = SPLIT(g.m.session_id, ":")[1]
+                    FOR mc IN my_channels
+                        FILTER mc.key == ck
+                        RETURN { key: ck, name: mc.name }
+            )
             LET sorted = (FOR g IN groups SORT g.m.created_at DESC RETURN g.m)
             LET record_with_name = (
                 FOR g IN groups
@@ -158,6 +166,7 @@ async fn list_bot_contacts(headers: HeaderMap) -> Result<impl IntoResponse, Stat
             LET last = FIRST(sorted)
             RETURN {
                 user_id,
+                channels: conv_channels,
                 display_name: FIRST(record_with_name) || last.metadata.user_name,
                 message_count: LENGTH(groups),
                 last_message: SUBSTRING(last.message, 0, 80),
@@ -205,6 +214,119 @@ async fn list_bot_messages(headers: HeaderMap, Path(user_id): Path<String>) -> R
     .await
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(Json(json!({"code": 200, "data": results})))
+}
+
+#[derive(serde::Deserialize)]
+struct BotPushReq {
+    user_id: String,
+    #[serde(default)]
+    message: String,
+    channel_key: String,
+    #[serde(default, rename = "type")]
+    msg_type: String,
+    #[serde(default)]
+    image_url: String,
+}
+
+async fn delete_bot_messages(headers: HeaderMap, Path(user_id): Path<String>) -> Result<impl IntoResponse, StatusCode> {
+    use serde_json::{json, Value};
+    let user_key = headers
+        .get(AUTHORIZATION).and_then(|v| v.to_str().ok())
+        .and_then(|v| v.strip_prefix("Bearer "))
+        .and_then(|t| verify_jwt(t).ok())
+        .map(|t| t.claims.username).unwrap_or_default();
+    if user_key.is_empty() { return Ok(Json(json!({"code": 401, "error": "Unauthorized"}))); }
+    let db = get_db();
+    let pattern = format!("%:{}", user_id);
+    let bind = vec![("user_key", json!(user_key)), ("pattern", json!(pattern))].into_iter().collect();
+    let results: Vec<Value> = db.aql_bind_vars(
+        r#"LET my_channels = (FOR c IN channels FILTER c.business_user_key == @user_key RETURN c._key)
+        FOR m IN bot_chat_sessions FILTER m.session_id LIKE @pattern
+        FILTER SPLIT(m.session_id, ":")[1] IN my_channels
+        REMOVE m IN bot_chat_sessions
+        RETURN {deleted: OLD}"#, bind,
+    ).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let deleted = results.len();
+    Ok(Json(json!({"code": 200, "data": {"deleted": deleted}})))
+}
+
+async fn bot_push_message(headers: HeaderMap, Json(body): Json<BotPushReq>) -> Result<impl IntoResponse, StatusCode> {
+    use serde_json::{json, Value};
+    let user_key = headers
+        .get(AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.strip_prefix("Bearer "))
+        .and_then(|t| verify_jwt(t).ok())
+        .map(|t| t.claims.username)
+        .unwrap_or_default();
+    if user_key.is_empty() {
+        return Ok(Json(json!({"code": 401, "error": "Unauthorized"})));
+    }
+    let db = get_db();
+    let ch_bind = vec![
+        ("user_key", json!(user_key)),
+        ("ch_key", json!(body.channel_key)),
+    ].into_iter().collect();
+    let channels: Vec<Value> = db.aql_bind_vars(
+        r#"FOR c IN channels FILTER c._key == @ch_key AND c.business_user_key == @user_key
+           RETURN { _key: c._key, access_token: c.config.access_token }"#, ch_bind,
+    ).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let token = channels.first()
+        .and_then(|c| c.get("access_token"))
+        .and_then(|t| t.as_str())
+        .map(|s| s.to_string())
+        .ok_or(StatusCode::FORBIDDEN)?;
+    let msg_type = body.msg_type.as_str();
+    let messages = if msg_type == "image" && !body.image_url.is_empty() {
+        json!([{"type": "image", "originalContentUrl": body.image_url, "previewImageUrl": body.image_url}])
+    } else {
+        json!([{"type": "text", "text": body.message}])
+    };
+    let payload = json!({"to": body.user_id, "messages": messages});
+    let client = reqwest::Client::new();
+    let resp = client.post("https://api.line.me/v2/bot/message/push")
+        .header("Authorization", format!("Bearer {}", token))
+        .header("Content-Type", "application/json")
+        .json(&payload).send().await.map_err(|_| StatusCode::BAD_GATEWAY)?;
+    let status = resp.status().as_u16();
+    let resp_body = resp.text().await.unwrap_or_default();
+    Ok(Json(json!({"code": status == 200 || status == 202, "line_status": status, "line_response": resp_body})))
+}
+
+async fn upload_line_image(
+    headers: HeaderMap, mut multipart: Multipart,
+) -> Result<impl IntoResponse, StatusCode> {
+    use serde_json::json;
+    let user_key = headers.get(AUTHORIZATION).and_then(|v| v.to_str().ok())
+        .and_then(|v| v.strip_prefix("Bearer ")).and_then(|t| verify_jwt(t).ok())
+        .map(|t| t.claims.username).unwrap_or_default();
+    if user_key.is_empty() { return Ok(Json(json!({"code": 401, "error": "Unauthorized"}))); }
+    let field = multipart.next_field().await.map_err(|_| StatusCode::BAD_REQUEST)?
+        .ok_or(StatusCode::BAD_REQUEST)?;
+    let content_type = field.content_type().map(|s| s.to_string()).unwrap_or_default();
+    let data = field.bytes().await.map_err(|_| StatusCode::BAD_REQUEST)?;
+    if data.len() > 10 * 1024 * 1024 {
+        return Ok(Json(json!({"code": 413, "error": "File too large (max 10MB)"})));
+    }
+    let ext = match content_type.as_str() {
+        "image/jpeg" | "image/jpg" => "jpg", "image/png" => "png",
+        "image/gif" => "gif", "image/webp" => "webp",
+        _ => return Ok(Json(json!({"code": 400, "error": "Unsupported image type"}))),
+    };
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_nanos();
+    let unique_name = format!("{}.{}", ts, ext);
+    let seaweed_path = format!("line_images/{}", unique_name);
+    let client = reqwest::Client::new();
+    let resp = client.put(&format!("http://localhost:8888/{}", seaweed_path))
+        .header("Content-Type", &content_type).body(data.to_vec())
+        .send().await.map_err(|_| StatusCode::BAD_GATEWAY)?;
+    if !resp.status().is_success() {
+        return Ok(Json(json!({"code": 500, "error": "Storage upload failed"})));
+    }
+    let public_url = format!("{}/api/v1/filer/{}",
+        CONFIG.server.external_url.trim_end_matches('/'), seaweed_path);
+    Ok(Json(json!({"code": 200, "data": {"url": public_url, "path": seaweed_path}})))
 }
 
 async fn storage_stats() -> Result<impl IntoResponse, StatusCode> {
@@ -512,7 +634,9 @@ pub fn create_router() -> Router {
         .merge(channels::create_channel_router().route_layer(middleware::from_fn(jwt_auth_middleware)))
         .merge(business_users::create_business_users_router().route_layer(middleware::from_fn(jwt_auth_middleware)))
         .route("/api/v1/bot-contacts", get(list_bot_contacts))
-        .route("/api/v1/bot-messages/{user_id}", get(list_bot_messages))
+        .route("/api/v1/bot-messages/{user_id}", get(list_bot_messages).delete(delete_bot_messages))
+        .route("/api/v1/bot-push", post(bot_push_message))
+        .route("/api/v1/upload/line-image", post(upload_line_image))
         .route("/api/v1/storage/stats", get(storage_stats))
         .route("/api/v1/filer/list", get(filer_list_root))
         .route("/api/v1/filer/list/{*path}", get(filer_list))

@@ -139,46 +139,48 @@
     },
     {
       "name": "image_processor",
-      "description": "圖片分類與處理：問候回覆生成、名片 OCR 結構化、其他圖片摘要",
-      "version": "1.0.0",
+      "description": "圖片分類與處理(含ActionScript)：名片OCR+稱謂回覆、賀卡回賀(50字內)、業務圖片通知、一般圖片感謝。使用MLX Qwen3-VL-8B",
+      "version": "2.0.0",
       "source": "skills/image_processor/skill.py",
       "intent_hints": {
         "triggers": [
-          "image_analyze",
-          "ocr",
-          "business_card"
+          "image_process",
+          "business_card",
+          "greeting_card"
         ],
         "keywords": [
           "圖片",
           "名片",
+          "賀卡",
+          "問候",
           "OCR",
           "掃描",
-          "問候圖片",
-          "照片",
-          "影像"
+          "照片"
         ],
         "example_phrases": [
           "幫我看這張名片",
-          "掃描名片",
-          "收到一張問候圖片",
-          "這是什麼圖片",
-          "圖片內容是什麼"
+          "這張賀卡怎麼回",
+          "處理這張圖片"
         ]
       },
       "input": {
-        "image_base64": "string: base64 編碼的圖片資料",
-        "mode": "enum: auto | greeting | business_card | other"
+        "image_base64": "string: ✅ base64編碼圖片",
+        "mode": "enum: ❌ auto / business_card / greeting / business_image / other",
+        "contact_name": "string: ❌ 聯絡人稱謂（如「鍾副總」）",
+        "sales_contact": "string: ❌ 業務本人（給 business_image 用）"
       },
       "output": {
-        "classification": "string: greeting | business_card | other",
-        "description": "string: 圖片描述或摘要",
-        "structured_data": "object|null: 名片 OCR 結果 {name, company, title, phone, email, address}",
-        "reply_text": "string|null: 問候回覆或處理結果"
+        "classification": "string: business_card / greeting / business_image / other",
+        "description": "string: 圖片描述",
+        "language": "string: 語言代碼",
+        "structured_data": "object|null: 名片解析結果",
+        "reply_text": "string: 回覆文字"
       },
       "dependencies": [
-        "shared.multimedia.analyze_image"
+        "mlx_api: Qwen3-VL-8B"
       ],
-      "label": "圖片處理（OCR/問候分類）"
+      "label": "圖片處理（OCR/問候分類）",
+      "action_script": "SKL-2626-001"
     },
     {
       "name": "timeline_engine",

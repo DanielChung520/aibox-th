@@ -14,9 +14,11 @@ import {
   MenuUnfoldOutlined,
   SettingOutlined,
   LoadingOutlined,
+  StarOutlined,
 } from '@ant-design/icons';
 import { authStore } from '../stores/auth';
 import { authApi, functionApi, paramsApi, Function } from '../services/api';
+import { favoriteStore } from '../stores/favoriteStore';
 import { iconMap } from '../utils/icons';
 import { useThemeMode, useShellTokens, useContentTokens, useEffectiveTheme } from '../contexts/AppThemeProvider';
 import AppLogo from '../components/AppLogo';
@@ -37,6 +39,12 @@ export default function MainLayout() {
   const [user, setUser] = useState(authStore.getState().user);
   const [functions, setFunctions] = useState<Function[]>([]);
   const [appLogo, setAppLogo] = useState('');
+
+  // ── Context menu for favorite toggle ──
+  const [ctxTarget, setCtxTarget] = useState<{ code: string; x: number; y: number } | null>(null);
+
+  const PREFIX_FAV = '__fav_';
+  const PREFIX_FREQ = '__freq_';
 
   const shellTokens = useShellTokens();
   const contentTokens = useContentTokens();
@@ -110,34 +118,137 @@ export default function MainLayout() {
       return [{ key: 'loading', icon: <LoadingOutlined />, label: '載入中...', disabled: true }];
     }
 
+    const setCtx = (e: React.MouseEvent, code: string) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setCtxTarget({ code, x: e.clientX, y: e.clientY });
+    };
+
     const topGroups = functions
       .filter(f => f.function_type === 'group' && f.status === 'enabled')
       .sort((a, b) => a.sort_order - b.sort_order);
 
-    return topGroups.map(group => {
+    // ── Build quick-access sections ──
+    const enabledSubs = functions.filter(
+      f => f.function_type === 'sub_function' && f.status === 'enabled',
+    );
+
+    const favItems = enabledSubs
+      .filter(f => favoriteStore.isFavorite(f.code))
+      .map(f => ({
+        key: `${PREFIX_FAV}${f.path || f.code}`,
+        icon: buildIcon(f.icon),
+        label: (
+          <span onContextMenu={(e) => setCtx(e, f.code)}>
+            {f.name}
+          </span>
+        ),
+      }));
+
+    const freqItems = enabledSubs
+      .filter(
+        f =>
+          !favoriteStore.isFavorite(f.code) &&
+          favoriteStore.getUsageCount(f.code) > 10,
+      )
+      .sort(
+        (a, b) =>
+          favoriteStore.getUsageCount(b.code) -
+          favoriteStore.getUsageCount(a.code),
+      )
+      .slice(0, 5)
+      .map(f => ({
+        key: `${PREFIX_FREQ}${f.path || f.code}`,
+        icon: buildIcon(f.icon),
+        label: (
+          <span onContextMenu={(e) => setCtx(e, f.code)}>
+            {f.name}
+          </span>
+        ),
+      }));
+
+    const result: any[] = [];
+
+    if (favItems.length > 0) {
+      result.push({
+        type: 'group',
+        label: '⭐ 我的收藏',
+        key: `${PREFIX_FAV}section`,
+        children: favItems,
+      });
+    }
+
+    if (freqItems.length > 0) {
+      result.push({
+        type: 'group',
+        label: '🔥 我的常用',
+        key: `${PREFIX_FREQ}section`,
+        children: freqItems,
+      });
+    }
+
+    if (result.length > 0) {
+      result.push({ type: 'divider', key: '__quick_divider' });
+    }
+
+    // ── Regular function groups ──
+    topGroups.forEach(group => {
       const subs = functions
-        .filter(f => f.function_type === 'sub_function' && f.parent_key === group.code && f.status === 'enabled')
+        .filter(
+          f =>
+            f.function_type === 'sub_function' &&
+            f.parent_key === group.code &&
+            f.status === 'enabled',
+        )
         .sort((a, b) => a.sort_order - b.sort_order);
 
-      const item: any = { key: group.path || group.code, icon: buildIcon(group.icon), label: group.name };
+      const item: any = {
+        key: group.path || group.code,
+        icon: buildIcon(group.icon),
+        label: (
+          <span onContextMenu={(e) => setCtx(e, group.code)}>
+            {group.name}
+          </span>
+        ),
+      };
 
       if (subs.length > 0) {
-        item.children = subs.map(sub => ({ key: sub.path || sub.code, label: sub.name }));
+        item.children = subs.map(sub => ({
+          key: sub.path || sub.code,
+          label: (
+            <span onContextMenu={(e) => setCtx(e, sub.code)}>
+              {sub.name}
+            </span>
+          ),
+        }));
       } else if (group.path) {
         item.onClick = () => navigate(group.path!);
       }
 
-      return item;
+      result.push(item);
     });
+
+    return result;
   })();
 
   const handleMenuClick = ({ key }: { key: string }) => {
-    const item = functions.find(f => (f.path || f.code) === key);
-    if (item?.path) navigate(item.path);
+    const cleanKey = key.startsWith(PREFIX_FAV)
+      ? key.slice(PREFIX_FAV.length)
+      : key.startsWith(PREFIX_FREQ)
+        ? key.slice(PREFIX_FREQ.length)
+        : key;
+    const item = functions.find(f => (f.path || f.code) === cleanKey);
+    if (item?.path) {
+      navigate(item.path);
+      favoriteStore.incrementUsage(item.code);
+    } else if (cleanKey.startsWith('/')) {
+      navigate(cleanKey);
+    }
   };
 
   const handleLogout = () => {
     userProfileStore.clear();
+    favoriteStore.clear();
     authStore.logout();
     navigate('/login');
   };
@@ -198,6 +309,53 @@ export default function MainLayout() {
             onClick={({ key }) => handleMenuClick({ key })}
             style={{ borderRight: 0, background: 'transparent' }}
           />
+
+          {ctxTarget && (
+            <>
+              <div
+                style={{ position: 'fixed', inset: 0, zIndex: 1050 }}
+                onClick={() => setCtxTarget(null)}
+                onContextMenu={(e) => { e.preventDefault(); setCtxTarget(null); }}
+              />
+              <div
+                style={{
+                  position: 'fixed',
+                  top: ctxTarget.y,
+                  left: ctxTarget.x,
+                  zIndex: 1060,
+                  background: isDark ? '#1e293b' : '#fff',
+                  borderRadius: 6,
+                  boxShadow: '0 6px 16px 0 rgba(0,0,0,0.08), 0 3px 6px -4px rgba(0,0,0,0.12)',
+                  padding: '4px 0',
+                  minWidth: 140,
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div
+                  onClick={() => {
+                    favoriteStore.toggleFavorite(ctxTarget.code);
+                    setCtxTarget(null);
+                  }}
+                  style={{
+                    padding: '5px 12px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    fontSize: 13,
+                    color: isDark ? '#e2e8f0' : '#333',
+                    borderRadius: 4,
+                    transition: 'background 0.15s',
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = isDark ? '#334155' : '#f0f0f0'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                >
+                  <StarOutlined style={{ fontSize: 14 }} />
+                  {favoriteStore.isFavorite(ctxTarget.code) ? '取消收藏' : '加入收藏'}
+                </div>
+              </div>
+            </>
+          )}
 
           <div style={{
             position: 'absolute', bottom: 16, left: 0, right: 0,

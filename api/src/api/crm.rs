@@ -1,7 +1,7 @@
 /**
  * @file        crm.rs
  * @description EEA-CRM API — customers CRUD, map markers, import endpoints
- * @lastUpdate  2026-06-13 13:00:00
+ * @lastUpdate  2026-06-22 22:42:00
  * @author      Daniel Chung
  * @version     1.0.0
  */
@@ -19,7 +19,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 pub fn create_crm_router() -> Router {
@@ -38,6 +38,8 @@ pub fn create_crm_router() -> Router {
         .route("/api/v1/crm/contacts", get(list_contacts).post(create_contact))
         .route("/api/v1/crm/contacts/{key}", get(get_contact).patch(update_contact).delete(delete_contact))
         .route("/api/v1/crm/contacts/by-customer/{customer_key}", get(list_contacts_by_customer))
+        .route("/api/v1/crm/contacts/by-line-user/{line_user_id}", get(find_contact_by_line_user_id))
+        .route("/api/v1/crm/contacts/sync-from-line", post(sync_contacts_from_line))
         .route("/api/v1/crm/contacts/assign", post(assign_contact))
         .route("/api/v1/crm/contacts/{key}/set-primary", post(set_primary_contact))
 }
@@ -196,12 +198,20 @@ fn err_500() -> (StatusCode, Json<Value>) {
     (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "code": 500, "message": "internal server error" })))
 }
 
+fn err_500_msg(msg: &str) -> (StatusCode, Json<Value>) {
+    (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "code": 500, "message": msg })))
+}
+
 fn err_404() -> (StatusCode, Json<Value>) {
     (StatusCode::NOT_FOUND, Json(json!({ "code": 404, "message": "customer not found" })))
 }
 
 fn err_400(msg: &str) -> (StatusCode, Json<Value>) {
     (StatusCode::BAD_REQUEST, Json(json!({ "code": 400, "message": msg })))
+}
+
+fn err_409(msg: &str) -> (StatusCode, Json<Value>) {
+    (StatusCode::CONFLICT, Json(json!({ "code": 409, "message": msg })))
 }
 
 fn now_iso() -> String {
@@ -683,10 +693,254 @@ async fn import_business_kindom(
 }
 
 async fn import_mohw() -> Result<impl IntoResponse, (StatusCode, Json<Value>)> {
-    Ok(Json(json!({
-        "code": 200,
-        "message": "MOHW import triggered — stub endpoint, actual CSV fetch+parse to be implemented in Python job runner",
-        "data": { "status": "stub" }
+    let db = get_db();
+    let now = now_iso();
+    let batch_id = format!("mohw_import_{}", chrono::Utc::now().format("%Y%m%d_%H%M%S"));
+    let csv_url = "https://ltcpap.mohw.gov.tw/publish/abc.csv";
+
+    let mut imported = 0usize;
+    let mut updated = 0usize;
+    let mut skipped = 0usize;
+    let mut errors: Vec<String> = Vec::new();
+    let mut csv_mohw_ids: HashSet<String> = HashSet::new();
+
+    // Step 1: Download CSV from MOHW
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(120))
+        .build()
+        .map_err(|e| err_500_msg(&format!("Failed to create HTTP client: {e}")))?;
+
+    let resp = client
+        .get(csv_url)
+        .header("User-Agent", "Mozilla/5.0 (compatible; ABC-Desktop/1.0)")
+        .send()
+        .await
+        .map_err(|e| err_500_msg(&format!("Failed to download MOHW CSV: {e}")))?;
+
+    if !resp.status().is_success() {
+        return Err(err_500_msg(&format!(
+            "MOHW CSV download failed with status: {}",
+            resp.status()
+        )));
+    }
+
+    let csv_bytes = resp
+        .bytes()
+        .await
+        .map_err(|e| err_500_msg(&format!("Failed to read MOHW CSV response: {e}")))?;
+
+    // Step 2: Cache raw CSV to .tmp/
+    let _ = tokio::fs::create_dir_all(".tmp").await;
+    let cache_path = format!(
+        ".tmp/mohw_import_{}.csv",
+        chrono::Utc::now().format("%Y%m%d_%H%M%S")
+    );
+    let _ = tokio::fs::write(&cache_path, &csv_bytes).await;
+
+    // Step 3: Parse CSV (handle UTF-8 BOM)
+    let csv_text = String::from_utf8_lossy(&csv_bytes);
+    // Strip UTF-8 BOM if present (common in Taiwan government CSV exports)
+    let csv_text = csv_text.trim_start_matches('\u{feff}');
+
+    let mut reader = csv::ReaderBuilder::new()
+        .has_headers(true)
+        .flexible(true)
+        .from_reader(csv_text.as_bytes());
+
+    let headers = match reader.headers() {
+        Ok(h) => h.clone(),
+        Err(e) => return Err(err_500_msg(&format!("Failed to read CSV headers: {e}"))),
+    };
+
+    // Column name -> index mapping (Chinese column names)
+    let col_map: HashMap<String, usize> = headers
+        .iter()
+        .enumerate()
+        .map(|(i, name)| (name.trim().to_string(), i))
+        .collect();
+
+    // Helper: extract cell by Chinese column name
+    let get_col = |record: &csv::StringRecord, names: &[&str]| -> String {
+        for name in names {
+            if let Some(idx) = col_map.get(&name.to_string()) {
+                if let Some(val) = record.get(*idx) {
+                    let trimmed = val.trim();
+                    if !trimmed.is_empty() {
+                        return trimmed.to_string();
+                    }
+                }
+            }
+        }
+        String::new()
+    };
+
+    // Step 4: Process each CSV record — UPSERT by mohw_id
+    for result in reader.records() {
+        let record = match result {
+            Ok(r) => r,
+            Err(e) => {
+                errors.push(format!("CSV row parse error: {e}"));
+                skipped += 1;
+                continue;
+            }
+        };
+
+        let mohw_id = get_col(&record, &["機構代碼"]);
+        if mohw_id.is_empty() {
+            skipped += 1;
+            continue;
+        }
+
+        let name = get_col(&record, &["機構名稱"]);
+        if name.is_empty() {
+            skipped += 1;
+            continue;
+        }
+
+        csv_mohw_ids.insert(mohw_id.clone());
+
+        let category_raw = get_col(&record, &["機構種類", "機構種類代碼第三階層"]);
+        let city = get_col(&record, &["縣市"]);
+        let district = get_col(&record, &["區"]);
+        let address = get_col(&record, &["地址全址"]);
+        let phone = get_col(&record, &["機構電話"]);
+        let o_abc = get_col(&record, &["O_ABC"]);
+
+        let lat = get_col(&record, &["經度"]).parse::<f64>().ok();
+        let lng = get_col(&record, &["緯度"]).parse::<f64>().ok();
+
+        let mut tags: Vec<String> = Vec::new();
+        if !category_raw.is_empty() {
+            tags.push(category_raw);
+        }
+        if !o_abc.is_empty() {
+            tags.push(format!("O_ABC:{}", o_abc));
+        }
+
+        // Attempt UPDATE by mohw_id
+        let update_result: Result<Vec<Value>, _> = db
+            .aql_bind_vars(
+                r#"
+                FOR c IN crm_customers
+                    FILTER c.mohw_id == @mohw_id
+                    UPDATE c WITH {
+                        name: @name,
+                        phone: @phone,
+                        address: @address,
+                        city: @city,
+                        district: @district,
+                        lat: @lat,
+                        lng: @lng,
+                        category: @category,
+                        source: "mohw",
+                        mohw_id: @mohw_id,
+                        import_batch: @batch_id,
+                        updated_at: @now,
+                        synced_at: @now
+                    } IN crm_customers
+                    RETURN OLD._key
+                "#,
+                HashMap::from([
+                    ("mohw_id", json!(mohw_id)),
+                    ("name", json!(name)),
+                    ("phone", json!(phone)),
+                    ("address", json!(address)),
+                    ("city", json!(city)),
+                    ("district", json!(district)),
+                    ("lat", json!(lat)),
+                    ("lng", json!(lng)),
+                    ("category", json!(tags)),
+                    ("batch_id", json!(batch_id)),
+                    ("now", json!(now)),
+                ]),
+            )
+            .await;
+
+        match update_result {
+            Ok(rows) if !rows.is_empty() => {
+                updated += 1;
+                continue;
+            }
+            _ => {}
+        }
+
+        // No match found → INSERT new customer
+        let key = uuid::Uuid::new_v4().to_string();
+        let doc = json!({
+            "_key": key,
+            "source": "mohw",
+            "status": "potential",
+            "name": name,
+            "mohw_id": mohw_id,
+            "phone": phone,
+            "address": address,
+            "city": city,
+            "district": district,
+            "lat": lat,
+            "lng": lng,
+            "category": tags,
+            "created_at": now,
+            "updated_at": now,
+            "synced_at": now,
+            "import_batch": batch_id,
+        });
+
+        let col: Collection<_> = db.collection("crm_customers").await.map_err(|_| err_500())?;
+        match col.create_document(doc, Default::default()).await {
+            Ok(_) => imported += 1,
+            Err(e) => errors.push(format!("insert error for {}: {}", name, e)),
+        }
+    }
+
+    // Step 5: Mark deregistered customers
+    // MOHW-sourced customers whose mohw_id no longer appears in the CSV are flagged
+    if !csv_mohw_ids.is_empty() {
+        let ids_array: Vec<String> = csv_mohw_ids.into_iter().collect();
+        let deregistered: Result<Vec<Value>, _> = db
+            .aql_bind_vars(
+                r#"
+                FOR c IN crm_customers
+                    FILTER c.source == "mohw"
+                    FILTER c.mohw_id != null
+                    FILTER c.mohw_id NOT IN @active_ids
+                    FILTER c.status != "deregistered"
+                    UPDATE c WITH {
+                        status: "deregistered",
+                        updated_at: @now,
+                        import_batch: @batch_id
+                    } IN crm_customers
+                    RETURN OLD.name
+                "#,
+                HashMap::from([
+                    ("active_ids", json!(ids_array)),
+                    ("batch_id", json!(batch_id)),
+                    ("now", json!(now)),
+                ]),
+            )
+            .await;
+
+        if let Ok(dereg_names) = deregistered {
+            if !dereg_names.is_empty() {
+                let names: Vec<&str> = dereg_names
+                    .iter()
+                    .filter_map(|v| v.as_str())
+                    .collect();
+                if !names.is_empty() {
+                    errors.push(format!(
+                        "已註銷機構 (CSV 中不存在): {}",
+                        names.join(", ")
+                    ));
+                }
+            }
+        }
+    }
+
+    Ok(Json(json!(ImportResult {
+        imported,
+        updated,
+        skipped,
+        errors,
+        batch_id,
     })))
 }
 
@@ -829,16 +1083,23 @@ pub struct ContactPaginationMeta {
 pub struct CreateContactPayload {
     pub name_cn: Option<String>,
     pub name_en: Option<String>,
+    pub title: Option<String>,
+    pub gender: Option<String>,
+    pub birthday: Option<String>,
     pub customer_key: Option<String>,
     pub titles: Option<Value>,
     pub phones: Option<Value>,
     pub emails: Option<Value>,
     pub social_accounts: Option<Value>,
+    pub family_members: Option<Value>,
     pub organizations: Option<Value>,
     pub notes: Option<String>,
     pub card_images: Option<Value>,
     pub source: Option<String>,
+    pub line_user_id: Option<String>,
+    pub line_introducer: Option<String>,
     pub line_status: Option<String>,
+    pub is_self: Option<bool>,
     pub is_primary: Option<bool>,
     pub owner_key: Option<String>,
     pub channel_key: Option<String>,
@@ -846,18 +1107,27 @@ pub struct CreateContactPayload {
 
 #[derive(Debug, Deserialize)]
 pub struct UpdateContactPayload {
+    #[serde(default)]
+    pub _rev: Option<String>,
     pub name_cn: Option<String>,
     pub name_en: Option<String>,
+    pub title: Option<String>,
+    pub gender: Option<String>,
+    pub birthday: Option<String>,
     pub customer_key: Option<String>,
     pub titles: Option<Value>,
     pub phones: Option<Value>,
     pub emails: Option<Value>,
     pub social_accounts: Option<Value>,
+    pub family_members: Option<Value>,
     pub organizations: Option<Value>,
     pub notes: Option<String>,
     pub card_images: Option<Value>,
     pub source: Option<String>,
+    pub line_user_id: Option<String>,
+    pub line_introducer: Option<String>,
     pub line_status: Option<String>,
+    pub is_self: Option<bool>,
     pub is_primary: Option<bool>,
     pub owner_key: Option<String>,
     pub channel_key: Option<String>,
@@ -889,9 +1159,9 @@ async fn list_contacts(
         ("limit", json!(page_size)),
     ];
 
-    // 權限過濾：一般用戶只看自己的聯絡人
+    // 一般用戶只看自己的聯絡人 + 未指派(owner_key 為 null/空)的聯絡人
     // (管理員可指定 owner_key 參數查看其他人)
-    filters.push("c.owner_key == @owner_key".to_string());
+    filters.push("(c.owner_key == @owner_key OR c.owner_key == null OR c.owner_key == '' OR c.owner_key == 'None')".to_string());
     bind_vars.push(("owner_key", json!(effective_owner)));
 
     if let Some(ref q) = params.q {
@@ -990,6 +1260,7 @@ async fn create_contact(
     doc_map.insert("source".into(), json!(payload.source.unwrap_or_else(|| "manual".to_string())));
     doc_map.insert("line_status".into(), json!(payload.line_status.unwrap_or_else(|| "none".to_string())));
     doc_map.insert("is_primary".into(), json!(payload.is_primary.unwrap_or(false)));
+    doc_map.insert("is_self".into(), json!(payload.is_self.unwrap_or(false)));
     doc_map.insert("owner_key".into(), json!(owner));
     doc_map.insert("created_at".into(), json!(now.clone()));
     doc_map.insert("updated_at".into(), json!(now));
@@ -997,13 +1268,19 @@ async fn create_contact(
 
     if let Some(v) = payload.name_cn { doc_map.insert("name_cn".into(), json!(v)); }
     if let Some(v) = payload.name_en { doc_map.insert("name_en".into(), json!(v)); }
+    if let Some(v) = payload.title { doc_map.insert("title".into(), json!(v)); }
+    if let Some(v) = payload.gender { doc_map.insert("gender".into(), json!(v)); }
+    if let Some(v) = payload.birthday { doc_map.insert("birthday".into(), json!(v)); }
     if let Some(v) = payload.titles { doc_map.insert("titles".into(), v); }
     if let Some(v) = payload.phones { doc_map.insert("phones".into(), v); }
     if let Some(v) = payload.emails { doc_map.insert("emails".into(), v); }
     if let Some(v) = payload.social_accounts { doc_map.insert("social_accounts".into(), v); }
+    if let Some(v) = payload.family_members { doc_map.insert("family_members".into(), v); }
     if let Some(v) = payload.organizations { doc_map.insert("organizations".into(), v); }
     if let Some(v) = payload.notes { doc_map.insert("notes".into(), json!(v)); }
     if let Some(v) = payload.card_images { doc_map.insert("card_images".into(), v); }
+    if let Some(v) = payload.line_user_id { doc_map.insert("line_user_id".into(), json!(v)); }
+    if let Some(v) = payload.line_introducer { doc_map.insert("line_introducer".into(), json!(v)); }
     if let Some(v) = payload.channel_key { doc_map.insert("channel_key".into(), json!(v)); }
 
     let doc = Value::Object(doc_map);
@@ -1060,12 +1337,34 @@ async fn update_contact(
     if let Some(v) = payload.source { patch.insert("source".into(), json!(v)); }
     if let Some(v) = payload.line_status { patch.insert("line_status".into(), json!(v)); }
     if let Some(v) = payload.is_primary { patch.insert("is_primary".into(), json!(v)); }
+    if let Some(v) = payload.is_self { patch.insert("is_self".into(), json!(v)); }
     if let Some(v) = payload.owner_key { patch.insert("owner_key".into(), json!(v)); }
+    if let Some(v) = payload.title { patch.insert("title".into(), json!(v)); }
+    if let Some(v) = payload.gender { patch.insert("gender".into(), json!(v)); }
+    if let Some(v) = payload.birthday { patch.insert("birthday".into(), json!(v)); }
+    if let Some(v) = payload.family_members { patch.insert("family_members".into(), v); }
+    if let Some(v) = payload.line_user_id { patch.insert("line_user_id".into(), json!(v)); }
+    if let Some(v) = payload.line_introducer { patch.insert("line_introducer".into(), json!(v)); }
 
     if patch.is_empty() {
         return Err(err_400("no fields to update"));
     }
     patch.insert("updated_at".into(), json!(now_iso()));
+
+    // _rev 版本衝突檢查
+    if let Some(request_rev) = &payload._rev {
+        if !request_rev.is_empty() {
+            let current: Vec<Value> = db.aql_bind_vars(
+                "FOR c IN crm_contacts FILTER c._key == @key LIMIT 1 RETURN c._rev",
+                [("key", json!(key))].into(),
+            ).await.map_err(|_| err_500())?;
+            let db_rev = current.first()
+                .and_then(|v| v.as_str()).unwrap_or("");
+            if request_rev != db_rev {
+                return Err(err_409("此資料已被其他人修改，請重新載入"));
+            }
+        }
+    }
 
     col.update_document(&key, Value::Object(patch), Default::default())
         .await
@@ -1113,6 +1412,89 @@ async fn list_contacts_by_customer(
     })?;
 
     Ok(Json(json!({ "code": 200, "data": results })))
+}
+
+async fn find_contact_by_line_user_id(
+    Path(line_user_id): Path<String>,
+) -> Result<impl IntoResponse, (StatusCode, Json<Value>)> {
+    let db = get_db();
+    let results: Vec<Value> = db.aql_bind_vars(
+        r#"FOR c IN crm_contacts FILTER c.line_user_id == @line_user_id LIMIT 1 RETURN c"#,
+        [("line_user_id", json!(line_user_id))].into(),
+    ).await.map_err(|e| {
+        eprintln!("crm find by line_user_id error: {}", e);
+        err_500()
+    })?;
+    Ok(Json(json!({"code": 200, "data": results.first()})))
+}
+
+async fn sync_contacts_from_line(
+    headers: HeaderMap,
+) -> Result<impl IntoResponse, (StatusCode, Json<Value>)> {
+    use serde_json::{json, Value};
+    let db = get_db();
+    let user_key = resolve_auth(&headers).await.0.unwrap_or_default();
+    if user_key.is_empty() {
+        return Err((StatusCode::UNAUTHORIZED, Json(json!({"code": 401, "error": "Unauthorized"}))));
+    }
+    // 取得用戶頻道
+    let channels: Vec<Value> = db.aql_bind_vars(
+        r#"FOR c IN channels FILTER c.business_user_key == @user_key
+           RETURN { key: c._key, owner: c.business_user_key }"#,
+        [("user_key", json!(user_key))].into(),
+    ).await.map_err(|_| err_500())?;
+    let ch_keys: Vec<String> = channels.iter()
+        .filter_map(|c| c["key"].as_str().map(String::from)).collect();
+    let default_owner = channels.first()
+        .and_then(|c| c["owner"].as_str()).unwrap_or("");
+    if ch_keys.is_empty() {
+        return Ok(Json(json!({"code": 200, "data": {"created": 0, "message": "No LINE channels found"}})));
+    }
+    // 取得所有 LINE 用戶 ID
+    let bind = vec![("ch_keys", json!(ch_keys))].into_iter().collect();
+    let line_users: Vec<Value> = db.aql_bind_vars(
+        r#"FOR m IN bot_chat_sessions
+           FILTER SPLIT(m.session_id, ":")[0] == "line"
+           FILTER SPLIT(m.session_id, ":")[1] IN @ch_keys
+           COLLECT uid = SPLIT(m.session_id, ":")[2]
+           LET display = FIRST(
+               FOR m2 IN bot_chat_sessions
+                   FILTER m2.session_id LIKE CONCAT("%:", uid)
+                   FILTER m2.metadata.user_name != null
+                   SORT m2.created_at DESC LIMIT 1
+                   RETURN m2.metadata.user_name
+           )
+           RETURN { uid, display }"#, bind,
+    ).await.map_err(|_| err_500())?;
+    // 比對既有 CRM 聯絡人
+    let existing: Vec<Value> = db.aql_bind_vars(
+        r#"FOR c IN crm_contacts FILTER c.line_user_id != null RETURN c.line_user_id"#,
+        [].into(),
+    ).await.map_err(|_| err_500())?;
+    let existing_ids: Vec<&str> = existing.iter().filter_map(|v| v.as_str()).collect();
+    let mut created = 0;
+    let now = now_iso();
+    let col = db.collection("crm_contacts").await.map_err(|_| err_500())?;
+    for user in &line_users {
+        let uid = user["uid"].as_str().unwrap_or("");
+        if uid.is_empty() || existing_ids.contains(&uid) { continue; }
+        let display = user["display"].as_str().unwrap_or(uid);
+        let key = uuid::Uuid::new_v4().to_string();
+        let doc = json!({
+            "_key": key,
+            "name_cn": display,
+            "source": "line",
+            "line_user_id": uid,
+            "line_status": "connected",
+            "owner_key": default_owner,
+            "created_at": now,
+            "updated_at": now,
+            "created_by": "line_sync",
+        });
+        col.create_document(doc, Default::default()).await.map_err(|_| err_500())?;
+        created += 1;
+    }
+    Ok(Json(json!({"code": 200, "data": {"created": created}})))
 }
 
 async fn assign_contact(

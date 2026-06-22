@@ -37,6 +37,7 @@ import DataLakePage from './pages/data-agent/DataLakePage';
 import OntologyList from './pages/knowledge/OntologyList';
 import KnowledgeBaseManagement from './pages/knowledge/KnowledgeBaseManagement';
 import SkillsManagement from './pages/knowledge/SkillsManagement';
+import ActionScriptDetail from './pages/knowledge/ActionScriptDetail';
 import KnowledgeBaseDetail from './pages/knowledge/KnowledgeBaseDetail';
 import IntentCatalog from './pages/IntentCatalog';
 import MermaidVerification from './pages/MermaidVerification';
@@ -258,6 +259,7 @@ function AppContent() {
               <Route path="knowledge/management" element={<KnowledgeBaseManagement />} />
               <Route path="knowledge/management/:id" element={<KnowledgeBaseDetail />} />
               <Route path="knowledge/skills" element={<SkillsManagement />} />
+              <Route path="knowledge/skills/:skill_no" element={<ActionScriptDetail />} />
               <Route path="knowledge/todos" element={<TodoBoard />} />
               <Route path="intent-orchestration" element={<IntentCatalog />} />
               <Route path="mermaid-verification" element={<MermaidVerification />} />

@@ -36,6 +36,7 @@ const MOCK_VISITS = [
 
 function ConversationView() {
   const { message: msgApi } = App.useApp();
+  const contentTokens = useContentTokens();
   const [search, setSearch] = useState('');
   const [contacts, setContacts] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -150,36 +151,42 @@ function ConversationView() {
   });
 
   return (
-    <div style={{ display: 'flex', height: 'calc(100vh - 180px)', gap: 0, border: '1px solid #e8e8e8', borderRadius: 8, overflow: 'hidden' }}>
+    <div style={{ display: 'flex', height: 'calc(100vh - 180px)', gap: 0, border: `1px solid ${contentTokens.tableHeaderBg}`, borderRadius: 8, overflow: 'hidden', background: contentTokens.containerBg }}>
       {/* Left: contact list */}
-      <div style={{ width: 280, borderRight: '1px solid #e8e8e8', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
-        <div style={{ padding: '8px 10px', borderBottom: '1px solid #e8e8e8' }}>
+      <div style={{ width: 280, borderRight: `1px solid ${contentTokens.tableHeaderBg}`, display: 'flex', flexDirection: 'column', flexShrink: 0, background: contentTokens.containerBg }}>
+        <div style={{ padding: '8px 10px', borderBottom: `1px solid ${contentTokens.tableHeaderBg}` }}>
           <Input.Search size="small" placeholder="搜尋..." value={search} onChange={e => setSearch(e.target.value)} />
         </div>
         <div style={{ flex: 1, overflowY: 'auto' }}>
           {loading ? (
-            <div style={{ padding: 20, textAlign: 'center', color: '#888' }}>載入中...</div>
+            <div style={{ padding: 20, textAlign: 'center', color: contentTokens.textSecondary }}>載入中...</div>
           ) : filtered.length === 0 ? (
-            <div style={{ padding: 20, textAlign: 'center', color: '#888' }}>尚無對話</div>
+            <div style={{ padding: 20, textAlign: 'center', color: contentTokens.textSecondary }}>尚無對話</div>
           ) : (
             filtered.map(c => (
               <div key={c.user_id} onClick={() => selectContact(c)}
                 style={{
-                  display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', cursor: 'pointer',
-                  background: selectedId === c.user_id ? '#e6f4ff' : 'transparent',
-                  borderBottom: '1px solid #f5f5f5',
-                }}>
-                <Avatar size={32} icon={<UserOutlined />} style={{ background: '#1677ff', flexShrink: 0 }} />
+                  display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', cursor: 'pointer',
+                  background: selectedId === c.user_id ? contentTokens.tableRowHoverBg : 'transparent',
+                  borderBottom: `1px solid ${contentTokens.tableHeaderBg}`,
+                  transition: 'background 0.15s ease',
+                }}
+                onMouseEnter={e => { if (selectedId !== c.user_id) e.currentTarget.style.background = contentTokens.tableRowHoverBg; }}
+                onMouseLeave={e => { if (selectedId !== c.user_id) e.currentTarget.style.background = 'transparent'; }}>
+                <Avatar size={32} icon={<UserOutlined />} style={{ background: contentTokens.colorPrimary, flexShrink: 0 }} />
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={{ fontSize: 13, fontWeight: selectedId === c.user_id ? 600 : 400 }}>
+                  <Text style={{ fontSize: 13, fontWeight: selectedId === c.user_id ? 600 : 400, color: contentTokens.colorTextBase }}>
                     {c.display_name || c.user_id?.slice(-8) || '未知'}
                   </Text>
-                  <div style={{ fontSize: 11, color: '#999', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <div style={{ fontSize: 11, color: contentTokens.textSecondary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 1 }}>
                     {c.last_message || ''}
                   </div>
                 </div>
-                <Button type="text" size="small" icon={<DeleteOutlined />} onClick={e => handleDeleteChat(e, c.user_id)}
-                  style={{ color: '#ccc', flexShrink: 0 }} />
+                <Button type="text" size="small" icon={<DeleteOutlined />} danger
+                  onClick={e => handleDeleteChat(e, c.user_id)}
+                  style={{ flexShrink: 0, opacity: 0.5, transition: 'opacity 0.15s ease' }}
+                  onMouseEnter={e => e.currentTarget.style.opacity = '1'}
+                  onMouseLeave={e => e.currentTarget.style.opacity = '0.5'} />
               </div>
             ))
           )}
@@ -187,15 +194,16 @@ function ConversationView() {
       </div>
 
       {/* Right: chat room */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: contentTokens.containerBg }}>
         {!selectedId ? (
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ccc', fontSize: 14 }}>
-            請選擇聯絡人開始聊天
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: contentTokens.textSecondary, fontSize: 14, gap: 6 }}>
+            <MessageOutlined style={{ opacity: 0.4 }} /> 請選擇聯絡人開始聊天
           </div>
         ) : (
           <>
-            <div style={{ padding: '8px 12px', borderBottom: '1px solid #e8e8e8', display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontWeight: 600, fontSize: 13 }}>{selectedContact?.display_name || selectedId?.slice(-8)}</span>
+            <div style={{ padding: '10px 14px', borderBottom: `1px solid ${contentTokens.tableHeaderBg}`, display: 'flex', alignItems: 'center', gap: 8, background: contentTokens.containerBg }}>
+              <Avatar size={28} icon={<UserOutlined />} style={{ background: contentTokens.colorPrimary, flexShrink: 0 }} />
+              <span style={{ fontWeight: 600, fontSize: 13, color: contentTokens.colorTextBase }}>{selectedContact?.display_name || selectedId?.slice(-8)}</span>
               {selectedContact?.channels?.length > 1 && (
                 <Select size="small" value={selectedChannel?.key}
                   onChange={val => setSelectedChannel(selectedContact.channels.find((ch: any) => ch.key === val))}
@@ -203,29 +211,34 @@ function ConversationView() {
                   style={{ width: 120 }} />
               )}
             </div>
-            <div style={{ flex: 1, overflowY: 'auto', padding: '8px 12px', background: '#f5f5f5' }}>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '12px 14px', background: contentTokens.chatInputBg }}>
               {msgLoading ? (
-                <div style={{ padding: 20, textAlign: 'center', color: '#888' }}>載入中...</div>
+                <div style={{ padding: 20, textAlign: 'center', color: contentTokens.textSecondary }}>載入中...</div>
               ) : messages.length === 0 ? (
-                <div style={{ padding: 20, textAlign: 'center', color: '#999', fontSize: 12 }}>尚無對話記錄</div>
+                <div style={{ padding: 20, textAlign: 'center', color: contentTokens.textSecondary, fontSize: 12 }}>尚無對話記錄</div>
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {messages.map((msg: any, i: number) => {
                     const fromLineUser = msg.role === 'user';
                     return (
-                      <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: fromLineUser ? 'flex-start' : 'flex-end' }}>
+                      <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: fromLineUser ? 'flex-start' : 'flex-end', maxWidth: '85%', alignSelf: fromLineUser ? 'flex-start' : 'flex-end' }}>
                         <div style={{
-                          maxWidth: '75%', padding: msg.type === 'image' ? '4px' : '6px 10px', borderRadius: 10,
-                          background: fromLineUser ? '#fff' : msg.type === 'image' ? 'transparent' : '#1677ff',
-                          color: fromLineUser ? '#222' : '#fff',
+                          padding: msg.type === 'image' ? '4px' : '8px 12px',
+                          borderRadius: fromLineUser ? '4px 16px 16px 16px' : '16px 4px 16px 16px',
+                          background: fromLineUser
+                            ? contentTokens.chatUserBubble
+                            : msg.type === 'image' ? 'transparent' : contentTokens.chatAssistantBubble,
+                          color: fromLineUser ? contentTokens.colorTextBase : '#fff',
                           fontSize: 13,
-                          boxShadow: msg.type === 'image' ? 'none' : '0 1px 2px rgba(0,0,0,0.06)',
+                          lineHeight: 1.5,
+                          boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+                          wordBreak: 'break-word',
                         }}>
                           {msg.type === 'image' && msg.image_url ? (
                             <img src={msg.image_url} alt="圖片" style={{ maxWidth: 240, maxHeight: 240, borderRadius: 8, display: 'block' }} />
                           ) : null}
                           {msg.message ? <div>{msg.message}</div> : null}
-                          <div style={{ fontSize: 10, opacity: 0.5, marginTop: 2, textAlign: 'right' }}>
+                          <div style={{ fontSize: 10, opacity: 0.45, marginTop: 3, textAlign: 'right', userSelect: 'none' }}>
                             {msg.created_at?.slice(11, 16) || ''}
                           </div>
                         </div>
@@ -236,14 +249,14 @@ function ConversationView() {
                 </div>
               )}
             </div>
-            <div style={{ padding: '8px 12px', borderTop: '1px solid #e8e8e8', display: 'flex', gap: 6, alignItems: 'center', background: '#fff' }}>
+            <div style={{ padding: '10px 14px', borderTop: `1px solid ${contentTokens.tableHeaderBg}`, display: 'flex', gap: 8, alignItems: 'center', background: contentTokens.containerBg }}>
               <input type="file" accept="image/*" ref={fileInputRef}
                 onChange={handleImageSelect} style={{ display: 'none' }} />
               <Button icon={<PictureOutlined />} loading={imageUploading}
                 onClick={() => fileInputRef.current?.click()} size="small" />
               <Input.TextArea rows={1} size="small" placeholder="輸入訊息..." value={inputText}
                 onChange={e => setInputText(e.target.value)} onKeyDown={handleKeyDown}
-                style={{ flex: 1, borderRadius: 6, resize: 'none' }} />
+                style={{ flex: 1, borderRadius: 8, resize: 'none', background: contentTokens.chatInputBg }} />
               <Button type="primary" icon={<SendOutlined />} loading={sending} onClick={handleSend} size="small" />
             </div>
           </>
@@ -255,6 +268,7 @@ function ConversationView() {
 
 function GreetingScheduler() {
   const { message: msg } = App.useApp();
+  const contentTokens = useContentTokens();
   const [schedules, setSchedules] = useState<MessageSchedule[]>([]);
   const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
@@ -409,14 +423,14 @@ function GreetingScheduler() {
         <Button size="small" type="primary" icon={<SendOutlined />} onClick={handleSendGreeting}>立即發送訊息</Button>
       </div>
 
-      <Table dataSource={schedules} columns={columns} rowKey="_key" pagination={false} size="middle" loading={loading} />
+      <Table dataSource={schedules} columns={columns} rowKey="_key" pagination={false} size="middle" loading={loading} style={{ borderRadius: 8 }} />
 
       {/* 立即發送 Modal */}
       <Modal title="選擇發送對象與內容" open={targetModalOpen}
         onCancel={() => setTargetModalOpen(false)}
         onOk={handleConfirmTarget} okText="確認發送" width={520}>
         <div style={{ marginBottom: 12 }}>
-          <Text strong style={{ fontSize: 13 }}>📋 訊息類型</Text>
+          <Text strong style={{ fontSize: 13, color: contentTokens.colorTextBase }}>📋 訊息類型</Text>
           <div style={{ marginTop: 6, display: 'flex', gap: 8 }}>
             <Tag color={sendMessageType === 'greeting' ? 'green' : 'default'} style={{ cursor: 'pointer' }}
               onClick={() => setSendMessageType('greeting')}>💬 問候</Tag>
@@ -435,18 +449,18 @@ function GreetingScheduler() {
             { key: 'select', label: '📋 手動選擇', desc: '從聯絡人清單中勾選' },
           ] as const).map(item => (
             <div key={item.key} onClick={() => setTargetType(item.key)} style={{
-              padding: '10px 14px', borderRadius: 8, border: '1px solid', cursor: 'pointer',
-              borderColor: targetType === item.key ? '#1677ff' : '#d9d9d9',
-              background: targetType === item.key ? '#e6f4ff' : '#fff',
+              padding: '10px 14px', borderRadius: 8, border: '1px solid', cursor: 'pointer', transition: 'all 0.15s ease',
+              borderColor: targetType === item.key ? contentTokens.colorPrimary : contentTokens.tableHeaderBg,
+              background: targetType === item.key ? contentTokens.tableRowHoverBg : contentTokens.containerBg,
             }}>
-              <Text strong>{item.label}</Text>
-              <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>{item.desc}</div>
+              <Text strong style={{ color: contentTokens.colorTextBase }}>{item.label}</Text>
+              <div style={{ fontSize: 12, color: contentTokens.textSecondary, marginTop: 2 }}>{item.desc}</div>
             </div>
           ))}
         </div>
 
-        <Divider style={{ margin: '12px 0' }} />
-        <Text strong style={{ fontSize: 13 }}>💬 訊息內容</Text>
+        <Divider style={{ margin: '12px 0', borderColor: contentTokens.tableHeaderBg }} />
+        <Text strong style={{ fontSize: 13, color: contentTokens.colorTextBase }}>💬 訊息內容</Text>
         <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
           <Tag color={contentMode === 'template' ? 'blue' : 'default'} style={{ cursor: 'pointer' }}
             onClick={() => setContentMode('template')}>📝 固定模板</Tag>
@@ -497,7 +511,7 @@ function GreetingScheduler() {
             <Input placeholder="每天 08:00" />
           </Form.Item>
 
-          <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 8 }}>🎯 發送對象</div>
+          <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 8, color: contentTokens.colorTextBase }}>🎯 發送對象</div>
           <Form.Item name="target_type" noStyle>
             <Radio.Group style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 12 }}>
               <Radio value="all">👥 全部聯絡人</Radio>
@@ -507,8 +521,8 @@ function GreetingScheduler() {
             </Radio.Group>
           </Form.Item>
 
-          <Divider style={{ margin: '4px 0' }} />
-          <Text strong style={{ fontSize: 13 }}>💬 訊息內容</Text>
+          <Divider style={{ margin: '4px 0', borderColor: contentTokens.tableHeaderBg }} />
+          <Text strong style={{ fontSize: 13, color: contentTokens.colorTextBase }}>💬 訊息內容</Text>
           <div style={{ marginTop: 6, marginBottom: 8, display: 'flex', gap: 8 }}>
             <Tag color={scheduleContentMode === 'template' ? 'blue' : 'default'} style={{ cursor: 'pointer' }}
               onClick={() => setScheduleContentMode('template')}>📝 固定模板</Tag>
@@ -531,6 +545,7 @@ function GreetingScheduler() {
 }
 function ContactListView() {
   const { message: msg } = App.useApp();
+  const contentTokens = useContentTokens();
   const [search, setSearch] = useState('');
   const [contacts, setContacts] = useState<any[]>([]);
   const [selected, setSelected] = useState<any>(null);
@@ -570,6 +585,7 @@ function ContactListView() {
 
   const startEdit = () => {
     setEditForm({
+      _rev: (selected as any)._rev || '',
       name_cn: selected.name_cn || '',
       name_en: selected.name_en || '',
       title: selected.title || '',
@@ -597,15 +613,22 @@ function ContactListView() {
           msg.warning(`⚠️ ${dup.map(c => c.name_cn || c.name_en).join('、')} 也已標記為「本人」`);
         }
       }
-      await crmApi.updateContact(selected._key, editForm);
+      const res = await crmApi.updateContact(selected._key, editForm) as any;
       msg.success('已儲存');
       setEditing(false);
       setEditForm({});
-      // 更新 selected 與 contacts
-      const updated = { ...selected, ...editForm };
+      // 更新 selected 與 contacts（含新版 _rev）
+      const saved = res?.data?.data || {};
+      const updated = { ...selected, ...editForm, _rev: saved._rev || selected._rev };
       setSelected(updated);
       setContacts(prev => prev.map(c => c._key === updated._key ? updated : c));
-    } catch { msg.error('儲存失敗'); }
+    } catch (err: any) {
+      if (err?.response?.status === 409) {
+        msg.error('此聯絡人已被其他人修改，請重新整理頁面');
+      } else {
+        msg.error('儲存失敗');
+      }
+    }
     setSaving(false);
   };
 
@@ -625,10 +648,10 @@ function ContactListView() {
   };
 
   return (
-    <div style={{ display: 'flex', height: 'calc(100vh - 180px)', gap: 0, border: '1px solid #e8e8e8', borderRadius: 8, overflow: 'hidden' }}>
+    <div style={{ display: 'flex', height: 'calc(100vh - 180px)', gap: 0, border: `1px solid ${contentTokens.tableHeaderBg}`, borderRadius: 8, overflow: 'hidden', background: contentTokens.containerBg }}>
       {/* Left: contact list */}
-      <div style={{ width: 300, borderRight: '1px solid #e8e8e8', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
-        <div style={{ padding: '8px 10px', borderBottom: '1px solid #e8e8e8', display: 'flex', gap: 6 }}>
+      <div style={{ width: 300, borderRight: `1px solid ${contentTokens.tableHeaderBg}`, display: 'flex', flexDirection: 'column', flexShrink: 0, background: contentTokens.containerBg }}>
+        <div style={{ padding: '8px 10px', borderBottom: `1px solid ${contentTokens.tableHeaderBg}`, display: 'flex', gap: 6 }}>
           <Input.Search size="small" placeholder="搜尋姓名或公司..." value={search}
             onChange={e => { setSearch(e.target.value); setPage(1); }} />
           <Button size="small" icon={<ReloadOutlined />} loading={syncing} onClick={handleSync} />
@@ -637,48 +660,56 @@ function ContactListView() {
           {contacts.map((c: any) => (
             <div key={c._key} onClick={() => setSelected(c)}
               style={{
-                display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', cursor: 'pointer',
-                background: selected?._key === c._key ? '#e6f4ff' : 'transparent',
-                borderBottom: '1px solid #f5f5f5',
-              }}>
-              <Avatar size={36} icon={<UserOutlined />} style={{ background: '#1677ff', flexShrink: 0 }} />
+                display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', cursor: 'pointer',
+                background: selected?._key === c._key ? contentTokens.tableRowHoverBg : 'transparent',
+                borderBottom: `1px solid ${contentTokens.tableHeaderBg}`,
+                transition: 'background 0.15s ease',
+              }}
+              onMouseEnter={e => { if (selected?._key !== c._key) e.currentTarget.style.background = contentTokens.tableRowHoverBg; }}
+              onMouseLeave={e => { if (selected?._key !== c._key) e.currentTarget.style.background = 'transparent'; }}>
+              <Avatar size={36} icon={<UserOutlined />} style={{ background: contentTokens.colorPrimary, flexShrink: 0 }} />
               <div style={{ flex: 1, minWidth: 0 }}>
-                <Text style={{ fontSize: 13, fontWeight: selected?._key === c._key ? 600 : 400 }}>
+                <Text style={{ fontSize: 13, fontWeight: selected?._key === c._key ? 600 : 400, color: contentTokens.colorTextBase }}>
                   {c.name_cn || c.name_en || '未知'}
                 </Text>
-                <div style={{ fontSize: 11, color: '#999', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <div style={{ fontSize: 11, color: contentTokens.textSecondary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 1 }}>
                   {c.titles?.[0]?.title || c.organizations?.[0]?.name || c.source || ''}
                 </div>
               </div>
-              <Button type="text" size="small" icon={<DeleteOutlined />}
+              <Button type="text" size="small" icon={<DeleteOutlined />} danger
                 onClick={e => { e.stopPropagation(); handleDeleteContact(c); }}
-                style={{ color: '#ccc', flexShrink: 0 }} />
+                style={{ flexShrink: 0, opacity: 0.5, transition: 'opacity 0.15s ease' }}
+                onMouseEnter={e => e.currentTarget.style.opacity = '1'}
+                onMouseLeave={e => e.currentTarget.style.opacity = '0.5'} />
             </div>
           ))}
         </div>
       </div>
 
       {/* Right: contact detail */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
+      <div style={{ flex: 1, overflowY: 'auto', padding: 20, background: contentTokens.containerBg }}>
         {!selected ? (
-          <div style={{ textAlign: 'center', color: '#ccc', paddingTop: 80 }}>請選擇聯絡人</div>
+          <div style={{ textAlign: 'center', color: contentTokens.textSecondary, paddingTop: 80, fontSize: 14 }}>
+            <UserOutlined style={{ fontSize: 32, display: 'block', marginBottom: 8, opacity: 0.3 }} />
+            請選擇聯絡人
+          </div>
         ) : (
           <>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-              <Avatar size={48} icon={<UserOutlined />} style={{ background: '#1677ff', flexShrink: 0 }} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
+              <Avatar size={48} icon={<UserOutlined />} style={{ background: contentTokens.colorPrimary, flexShrink: 0 }} />
               <div style={{ flex: 1 }}>
                 {editing
                   ? <Input size="small" value={editForm.name_cn} onChange={e => setEditForm({...editForm, name_cn: e.target.value})}
                       style={{ maxWidth: 200, marginBottom: 4 }} />
-                  : <Text strong style={{ fontSize: 16 }}>
+                  : <Text strong style={{ fontSize: 16, color: contentTokens.colorTextBase }}>
                       {selected.name_cn || selected.name_en || '未知'}
-                      {selected.is_self && <Tag color="blue" style={{ marginLeft: 6, fontSize: 10 }}>本人</Tag>}
+                      {selected.is_self && <Tag color={contentTokens.colorPrimary} style={{ marginLeft: 6, fontSize: 10 }}>本人</Tag>}
                     </Text>
                 }
                 {editing
                   ? <Input size="small" value={editForm.title} onChange={e => setEditForm({...editForm, title: e.target.value})}
                       placeholder="稱謂" style={{ maxWidth: 150 }} />
-                  : <div style={{ fontSize: 12, color: selected.title ? '#888' : '#ccc' }}>{selected.title || '(無稱謂)'}</div>
+                  : <div style={{ fontSize: 12, color: selected.title ? contentTokens.textSecondary : contentTokens.textSecondary, opacity: selected.title ? 1 : 0.5 }}>{selected.title || '(無稱謂)'}</div>
                 }
               </div>
               {editing ? (
@@ -691,7 +722,7 @@ function ContactListView() {
               )}
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 16px', fontSize: 13, marginBottom: 16 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 16px', fontSize: 13, marginBottom: 20, padding: 14, background: contentTokens.chatInputBg, borderRadius: 8 }}>
               <EditField label="姓名(英)" value={editForm.name_en} editing={editing}
                 onChange={v => setEditForm({...editForm, name_en: v})} />
               <EditField label="性別" value={editing ? editForm.gender : selected.gender} editing={editing}
@@ -701,9 +732,9 @@ function ContactListView() {
                 onChange={v => setEditForm({...editForm, birthday: v})} />
               {editing && (
                 <div style={{ display: 'flex', gap: 4, padding: '2px 0', alignItems: 'center' }}>
-                  <span style={{ color: '#888', minWidth: 60, fontSize: 13 }}>本人</span>
+                  <span style={{ color: contentTokens.textSecondary, minWidth: 60, fontSize: 13 }}>本人</span>
                   <Switch size="small" checked={editForm.is_self} onChange={v => setEditForm({...editForm, is_self: v})} />
-                  <span style={{ fontSize: 12, color: '#999' }}>{editForm.is_self ? '這是我的聯絡人' : ''}</span>
+                  <span style={{ fontSize: 12, color: contentTokens.textSecondary }}>{editForm.is_self ? '這是我的聯絡人' : ''}</span>
                 </div>
               )}
               <Field label="來源" value={selected.source} />
@@ -758,7 +789,7 @@ function ContactListView() {
                 onChange={e => setEditForm({...editForm, notes: e.target.value})}
                 style={{ fontSize: 13, marginBottom: 12 }} placeholder="（無備註）" />
             ) : (
-              <div style={{ fontSize: 13, color: selected.notes ? '#333' : '#bbb', marginBottom: 12 }}>
+              <div style={{ fontSize: 13, color: selected.notes ? contentTokens.colorTextBase : contentTokens.textSecondary, marginBottom: 12, opacity: selected.notes ? 1 : 0.6 }}>
                 {selected.notes || '（無備註）'}
               </div>
             )}
@@ -769,7 +800,7 @@ function ContactListView() {
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 6, marginBottom: 12 }}>
                 {selected.card_images.map((url: string, i: number) => (
                   <img key={i} src={url} alt={`名片${i+1}`}
-                    style={{ width: 180, height: 120, objectFit: 'contain', border: '1px solid #e8e8e8', borderRadius: 6, cursor: 'pointer' }}
+                    style={{ width: 180, height: 120, objectFit: 'contain', border: `1px solid ${contentTokens.tableHeaderBg}`, borderRadius: 6, cursor: 'pointer', transition: 'box-shadow 0.15s ease' }}
                     onClick={() => window.open(url, '_blank')} />
                 ))}
               </div>
@@ -784,24 +815,28 @@ function ContactListView() {
 }
 
 function Field({ label, value }: { label: string; value?: string | null }) {
+  const ct = useContentTokens();
   return (
     <div style={{ display: 'flex', gap: 4, padding: '2px 0' }}>
-      <span style={{ color: '#888', minWidth: 60 }}>{label}</span>
-      <span style={{ color: value ? '#333' : '#ccc' }}>{value || '—'}</span>
+      <span style={{ color: ct.textSecondary, minWidth: 60 }}>{label}</span>
+      <span style={{ color: value ? ct.colorTextBase : ct.textSecondary, opacity: value ? 1 : 0.6 }}>{value || '—'}</span>
     </div>
   );
 }
 
 function SectionTitle({ title }: { title: string }) {
-  return <div style={{ fontWeight: 600, fontSize: 12, color: '#666', marginTop: 8, marginBottom: 4, borderBottom: '1px solid #eee', paddingBottom: 2 }}>{title}</div>;
+  const ct = useContentTokens();
+  return <div style={{ fontWeight: 600, fontSize: 12, color: ct.textSecondary, marginTop: 12, marginBottom: 6, borderBottom: `1px solid ${ct.tableHeaderBg}`, paddingBottom: 4 }}>{title}</div>;
 }
 
 function FieldValue({ icon, value }: { icon: string; value: string }) {
-  return <div style={{ fontSize: 13, marginBottom: 2 }}>{icon} {value}</div>;
+  const ct = useContentTokens();
+  return <div style={{ fontSize: 13, marginBottom: 2, color: ct.colorTextBase }}>{icon} {value}</div>;
 }
 
 function EmptyValue({ text }: { text: string }) {
-  return <div style={{ fontSize: 12, color: '#ccc', marginBottom: 4, fontStyle: 'italic' }}>{text}</div>;
+  const ct = useContentTokens();
+  return <div style={{ fontSize: 12, color: ct.textSecondary, marginBottom: 4, fontStyle: 'italic', opacity: 0.6 }}>{text}</div>;
 }
 
 function EditField({ label, value, editing, onChange, options }: {
@@ -809,9 +844,10 @@ function EditField({ label, value, editing, onChange, options }: {
   onChange: (v: string) => void;
   options?: { value: string; label: string }[];
 }) {
+  const ct = useContentTokens();
   return (
     <div style={{ display: 'flex', gap: 4, padding: '2px 0', alignItems: 'center' }}>
-      <span style={{ color: '#888', minWidth: 60, fontSize: 13 }}>{label}</span>
+      <span style={{ color: ct.textSecondary, minWidth: 60, fontSize: 13 }}>{label}</span>
       {editing ? (
         options ? (
           <Select size="small" value={value || ''} onChange={onChange}
@@ -822,13 +858,14 @@ function EditField({ label, value, editing, onChange, options }: {
             style={{ maxWidth: 160 }} placeholder="—" />
         )
       ) : (
-        <span style={{ color: value ? '#333' : '#ccc', fontSize: 13 }}>{value || '—'}</span>
+        <span style={{ color: value ? ct.colorTextBase : ct.textSecondary, fontSize: 13, opacity: value ? 1 : 0.6 }}>{value || '—'}</span>
       )}
     </div>
   );
 }
 
 function PendingContacts() {
+  const contentTokens = useContentTokens();
   const columns = [
     { title: 'LINE ID', dataIndex: 'lineId', key: 'lineId', width: 100, render: (v: string) => <Text code style={{ fontSize: 11 }}>{v}</Text> },
     { title: '姓名', dataIndex: 'name', key: 'name', width: 80 },
@@ -841,10 +878,11 @@ function PendingContacts() {
         ? <><Button size="small" type="link">確認</Button><Button size="small" type="link" danger>忽略</Button></>
         : <Text type="secondary" style={{ fontSize: 11 }}>已建檔</Text> },
   ];
-  return <Table dataSource={MOCK_PENDING} columns={columns} rowKey="key" pagination={false} size="middle" />;
+  return <Table dataSource={MOCK_PENDING} columns={columns} rowKey="key" pagination={false} size="middle" style={{ borderRadius: contentTokens.borderRadius }} />;
 }
 
 function VisitBoard() {
+  const contentTokens = useContentTokens();
   const columns = [
     { title: '客戶', dataIndex: 'customer', key: 'customer', width: 100 },
     { title: '日期', dataIndex: 'date', key: 'date', width: 100 },
@@ -863,7 +901,7 @@ function VisitBoard() {
   return (
     <div>
       <div style={{ marginBottom: 12 }}><Button size="small" icon={<PlusOutlined />}>新增行程</Button></div>
-      <Table dataSource={MOCK_VISITS} columns={columns} rowKey="key" pagination={false} size="middle" />
+      <Table dataSource={MOCK_VISITS} columns={columns} rowKey="key" pagination={false} size="middle" style={{ borderRadius: contentTokens.borderRadius }} />
     </div>
   );
 }
@@ -889,10 +927,10 @@ export default function LineAssistantPage() {
   const filteredTabs = TABS;  // channels moved to standalone ChannelAdminPage
 
   return (
-    <div style={{ padding: 20, background: contentTokens.contentBg, minHeight: '100%' }}>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 8 }}>
-        <Text strong style={{ fontSize: 16 }}>📱 我的 LINE 助手</Text>
-        <Text type="secondary" style={{ fontSize: 12 }}>管理業務頻道、對話與客戶互動</Text>
+    <div style={{ padding: 24, background: contentTokens.contentBg, minHeight: '100%' }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 4 }}>
+        <Text strong style={{ fontSize: 18, color: contentTokens.colorTextBase, letterSpacing: '0.3px' }}>📱 我的 LINE 助手</Text>
+        <Text type="secondary" style={{ fontSize: 13, color: contentTokens.textSecondary }}>管理業務頻道、對話與客戶互動</Text>
       </div>
 
       <Tabs activeKey={activeTab} onChange={setActiveTab}

@@ -7,6 +7,7 @@
  */
 
 import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Typography, Button, Input, Space, App, Modal, Form, Select, Tag, Table, Tabs, Upload, Slider, InputNumber, Switch, Spin, Tooltip } from 'antd';
 import {
   PlusOutlined,
@@ -68,7 +69,7 @@ const STATUS_OPTIONS = [
 interface StepItem {
   title: string;
   description?: string;
-  type: 'llm_prompt' | 'script' | 'manual' | 'agent' | 'tool';
+  type: 'llm_prompt' | 'script' | 'manual' | 'agent' | 'tool' | 'condition';
   model?: string;
   temperature?: number;
   max_tokens?: number;
@@ -80,9 +81,13 @@ interface StepItem {
   agent_name?: string;
   tool_name?: string;
   tool_params?: string;
+  // 條件分支專用
+  condition?: string;
+  branches?: { label: string; target?: number }[];
 }
 
 export default function SkillsManagement() {
+  const navigate = useNavigate();
   const contentTokens = useContentTokens();
   const { message } = App.useApp();
   const { dispatchEntity } = useEntityPerception({ defaultEntityType: 'skill', defaultAction: 'list' });
@@ -108,7 +113,7 @@ export default function SkillsManagement() {
   const [localSteps, setLocalSteps] = useState<StepItem[]>([]);
   const [stepModalVisible, setStepModalVisible] = useState(false);
   const [editingStepIndex, setEditingStepIndex] = useState<number | null>(null);
-  const [stepType, setStepType] = useState<'llm_prompt' | 'script' | 'manual' | 'agent' | 'tool'>('llm_prompt');
+  const [stepType, setStepType] = useState<'llm_prompt' | 'script' | 'manual' | 'agent' | 'tool' | 'condition'>('llm_prompt');
   const [stepForm] = Form.useForm();
 
   const [syncing, setSyncing] = useState(false);
@@ -305,22 +310,65 @@ export default function SkillsManagement() {
       manual: { fill: '#f6ffed', stroke: '#52c41a', color: '#135200' },
       agent: { fill: '#f9f0ff', stroke: '#722ed1', color: '#391063' },
       tool: { fill: '#fff0f6', stroke: '#eb2f96', color: '#9c0e5c' },
+      condition: { fill: '#fffbe6', stroke: '#faad14', color: '#874d00' },
     };
 
     let code = 'flowchart TD\n';
+    let condIndex = 0;
 
     steps.forEach((step, i) => {
       const id = `step${i}`;
-      const typeLabel = step.type === 'llm_prompt' ? 'LLM' : step.type === 'script' ? 'Script' : step.type === 'manual' ? 'Manual' : step.type === 'agent' ? 'Agent' : 'Tool';
+      const typeLabel = step.type === 'llm_prompt' ? 'LLM' : step.type === 'script' ? 'Script' : step.type === 'manual' ? 'Manual' : step.type === 'agent' ? 'Agent' : step.type === 'condition' ? '條件' : 'Tool';
       const label = `${i + 1}. ${step.title} (${typeLabel})`.replace(/"/g, '#quot;');
-      code += `    ${id}["${label}"]\n`;
+
+      if (step.type === 'condition') {
+        code += `    ${id}{"${label}"}\n`;
+        // 找條件後的後續步驟作為預設流
+        const nextNonBranch = (() => {
+          for (let j = i + 1; j < steps.length; j++) {
+            if (steps[j].type !== 'condition') return j;
+          }
+          return -1;
+        })();
+        if (step.branches && step.branches.length > 0) {
+          step.branches.forEach((br, bi) => {
+            const bid = `cond${condIndex}_${bi}`;
+            const blabel = br.label.replace(/"/g, '#quot;');
+            code += `    ${bid}["${blabel}"]\n`;
+            code += `    ${id} -->|${blabel}| ${bid}\n`;
+            // 分支指向後續步驟
+            const target = br.target !== undefined ? br.target : (nextNonBranch >= 0 ? nextNonBranch : -1);
+            if (target >= 0 && target < steps.length) {
+              code += `    ${bid} --> step${target}\n`;
+            } else if (nextNonBranch >= 0) {
+              code += `    ${bid} --> step${nextNonBranch}\n`;
+            } else {
+              code += `    ${bid} --> done["✅ 完成"]\n`;
+            }
+          });
+          condIndex++;
+        } else {
+          // 無分支時當一般步驟處理
+          code += `    ${id}["${label}"]\n`;
+        }
+      } else {
+        code += `    ${id}["${label}"]\n`;
+      }
     });
 
-    if (steps.length > 0) {
-      for (let i = 0; i < steps.length - 1; i++) {
-        code += `    step${i} --> step${i + 1}\n`;
+    // 非條件節點之間的連線
+    const nonCondIndices = steps.map((s, i) => s.type !== 'condition' ? i : -1).filter(i => i >= 0);
+    for (let ci = 0; ci < nonCondIndices.length - 1; ci++) {
+      const from = nonCondIndices[ci];
+      const to = nonCondIndices[ci + 1];
+      // 確認 from 和 to 之間沒有 condition 已經處理了連線
+      const hasCondBetween = steps.slice(from + 1, to).some(s => s.type === 'condition');
+      if (!hasCondBetween) {
+        code += `    step${from} --> step${to}\n`;
       }
-      code += `    step${steps.length - 1} --> done["✅ 完成"]\n`;
+    }
+    if (nonCondIndices.length > 0) {
+      code += `    step${nonCondIndices[nonCondIndices.length - 1]} --> done["✅ 完成"]\n`;
     }
 
     code += `    style done fill:#f6ffed,stroke:#52c41a,color:#135200\n`;
@@ -667,6 +715,11 @@ export default function SkillsManagement() {
       dataIndex: 'name',
       key: 'name',
       ellipsis: true,
+      render: (name: string, record: ActionScript) => (
+        <Button type="link" style={{ padding: 0 }} onClick={() => navigate(`/app/knowledge/skills/${record.skill_no}`)}>
+          {name || record.skill_no}
+        </Button>
+      ),
     },
     {
       title: '綁定Agent',
@@ -1037,9 +1090,53 @@ export default function SkillsManagement() {
                 { label: 'Manual', value: 'manual' },
                 { label: 'Agent', value: 'agent' },
                 { label: 'Tools', value: 'tool' },
+                { label: '◆ 條件分支', value: 'condition' },
               ]}
             />
           </Form.Item>
+          {stepType === 'condition' && (
+            <>
+              <Form.Item name="condition" label="條件描述" rules={[{ required: true, message: '請輸入條件!' }]}>
+                <TextArea rows={2} placeholder="例如：圖片分類結果為何？" />
+              </Form.Item>
+              <Form.Item label="分支" required>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {(() => {
+                    const branches = stepForm.getFieldValue('branches') as { label: string; target?: number }[] || [];
+                    return (
+                      <div>
+                        {branches.map((br, bi) => (
+                          <div key={bi} style={{ display: 'flex', gap: 6, marginBottom: 6, alignItems: 'center' }}>
+                            <Input
+                              size="small" placeholder="分支名稱（如：名片）"
+                              value={br.label}
+                              onChange={e => {
+                                const b = [...branches];
+                                b[bi] = { ...b[bi], label: e.target.value };
+                                stepForm.setFieldsValue({ branches: b });
+                              }}
+                              style={{ flex: 1 }}
+                            />
+                            <Button size="small" danger
+                              onClick={() => {
+                                const b = branches.filter((_, i) => i !== bi);
+                                stepForm.setFieldsValue({ branches: b });
+                              }}>✕</Button>
+                          </div>
+                        ))}
+                        <Button size="small" type="dashed"
+                          onClick={() => {
+                            stepForm.setFieldsValue({ branches: [...branches, { label: '' }] });
+                          }}>
+                          ＋ 新增分支
+                        </Button>
+                      </div>
+                    );
+                  })()}
+                </div>
+              </Form.Item>
+            </>
+          )}
           {stepType === 'llm_prompt' && (
             <>
               <Form.Item name="model" label="Model">

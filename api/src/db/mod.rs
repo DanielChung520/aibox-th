@@ -114,6 +114,7 @@ async fn ensure_indexes(_db: &Database<ReqwestClient>) -> Result<(), String> {
         ("channels", &["platform", "status"]),
         ("crm_customers", &["source"]),
         ("crm_customers", &["status"]),
+        ("crm_customers", &["mohw_id"]),
         ("crm_customers", &["city", "district"]),
         ("crm_customer_permissions", &["customer_key"]),
         ("crm_contacts", &["owner_key", "source"]),

@@ -67,7 +67,7 @@ def llm_batch_normalize(names):
             resp.raise_for_status()
             data = resp.json()
             content = data["choices"][0]["message"]["content"].strip()
-            lines = [l.strip() for l in content.split("\n") if l.strip()]
+            lines = [line.strip() for line in content.split("\n") if line.strip()]
             if len(lines) >= len(names) * 0.8:
                 return lines[: len(names)]
         except Exception as e:
@@ -178,7 +178,6 @@ def phase_match():
     matched = []
     unmatched = []
     for norm, entries in groups.items():
-        has_mohw = any(s == "mohw" for s, _ in entries)
         has_bk = any(s == "bk" for s, _ in entries)
         if not has_bk:
             continue
@@ -230,7 +229,7 @@ def phase_match():
         for t in u["new_category"]:
             tdist[t] += 1
 
-    print(f"\nTypes:")
+    print("\nTypes:")
     for t, c in sorted(tdist.items(), key=lambda x: -x[1]):
         print(f"  {t}: {c}")
 

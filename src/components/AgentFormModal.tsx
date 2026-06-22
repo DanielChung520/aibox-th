@@ -13,6 +13,7 @@ import IconPicker from './IconPicker';
 import { roleApi, knowledgeApi, toolApi, daApi, agentApi, modelProviderApi } from '../services/api';
 import { authStore } from '../stores/auth';
 import DemandTab from './DemandTab';
+import DeclaredIntentTab from './DeclaredIntentTab';
 import { trackModal, trackAgentAction } from '../utils/analytics';
 import { pageContextManager } from '../services/PageContextManager';
 import { actionTrail } from '../services/actionTrail';
@@ -403,6 +404,11 @@ export default function AgentFormModal({
           )}
         </>
       ),
+    },
+    {
+      key: 'declared_intents',
+      label: '宣告意圖',
+      children: <DeclaredIntentTab agentKey={agent?._key || agent?.id || ''} />,
     },
   ];
 
