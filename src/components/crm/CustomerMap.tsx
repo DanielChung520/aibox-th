@@ -152,9 +152,10 @@ export default function CustomerMapComponent() {
     try {
       const res = await crmApi.map();
       const full = res.data.markers;
-      const light = full.map((m: CRMMapMarker) => ({
+      const light: CRMMapMarker[] = full.map((m) => ({
         id: m.id, name: m.name, lat: m.lat, lng: m.lng,
-        abc_grade: m.abc_grade, category: m.category, source: m.source,
+        status: m.status || '', abc_grade: m.abc_grade,
+        category: m.category, source: m.source || '',
         city: m.city, address: m.address, sales_rep: m.sales_rep,
       }));
       const data = { ts: Date.now(), markers: light, summary: res.data.summary };
@@ -220,9 +221,10 @@ export default function CustomerMapComponent() {
       const map = L.map(mapContainerRef.current, {
         center: [23.8, 121.0],
         zoom: 7.5,
-        zoomControl: true,
+        zoomControl: false,
         attributionControl: true,
       });
+      L.control.zoom({ position: 'topright' }).addTo(map);
 
     /* CartoDB tiles (more reliable than raw OSM) */
     L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
