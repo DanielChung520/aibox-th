@@ -361,12 +361,31 @@ export default function CustomerMapComponent() {
 
   /* ── Route markers (start/end) ── */
   const routeLayerRef = useRef<L.LayerGroup | null>(null);
+  const routeLineRef = useRef<L.Polyline | null>(null);
+
+  const calcRoute = useCallback(async (from: [number, number], to: [number, number]) => {
+    try {
+      const url = `https://router.project-osrm.org/route/v1/driving/${from[1]},${from[0]};${to[1]},${to[0]}?overview=full&geometries=geojson`;
+      const resp = await fetch(url);
+      const data = await resp.json();
+      if (!data.routes?.length) return;
+      const coords = data.routes[0].geometry.coordinates.map((c: [number, number]) => [c[1], c[0]] as [number, number]);
+      if (routeLineRef.current) routeLineRef.current.remove();
+      routeLineRef.current = L.polyline(coords, {
+        color: '#1677ff', weight: 4, opacity: 0.8,
+        dashArray: '10, 6',
+      }).addTo(mapInstanceRef.current!);
+      mapInstanceRef.current?.fitBounds(routeLineRef.current.getBounds(), { padding: [40, 40] });
+    } catch { /* OSRM unavailable */ }
+  }, []);
+
   useEffect(() => {
     if (!mapInstanceRef.current) return;
     if (!routeLayerRef.current) {
       routeLayerRef.current = L.layerGroup().addTo(mapInstanceRef.current);
     }
     routeLayerRef.current.clearLayers();
+    if (routeLineRef.current) { routeLineRef.current.remove(); routeLineRef.current = null; }
 
     if (startPoint) {
       L.circleMarker([startPoint.lat, startPoint.lng], {
@@ -528,14 +547,19 @@ export default function CustomerMapComponent() {
             </div>
             <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
               <Button size="small" type="primary" icon={<AimOutlined />} style={{ flex: 1, fontSize: 11 }}
-                disabled={!startPoint || !endPoint}
+                disabled={!endPoint}
                 onClick={() => {
-                  window.dispatchEvent(new CustomEvent('crm:route', { detail: { startId: startPoint?.id, endId: endPoint?.id } }));
+                  const from: [number, number] = startPoint ? [startPoint.lat, startPoint.lng] : HQ_POSITION;
+                  const to: [number, number] = [endPoint!.lat, endPoint!.lng];
+                  calcRoute(from, to);
                 }}>
                 計算路程
               </Button>
               <Button size="small" style={{ fontSize: 11 }}
-                onClick={() => { setStartPoint(null); setEndPoint(null); }}>
+                onClick={() => {
+                  if (routeLineRef.current) { routeLineRef.current.remove(); routeLineRef.current = null; }
+                  setStartPoint(null); setEndPoint(null);
+                }}>
                 清除路線
               </Button>
             </div>
