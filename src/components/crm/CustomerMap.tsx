@@ -391,12 +391,12 @@ export default function CustomerMapComponent() {
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
-          background: 'rgba(255,255,255,0.65)',
+          background: tokens.contentBg,
           zIndex: 2000,
           borderRadius: 8,
         }}>
           <Spin size="large" />
-          <div style={{ marginTop: 12, color: '#666', fontSize: 14 }}>載入地圖資料...</div>
+          <div style={{ marginTop: 12, color: tokens.textSecondary, fontSize: 14 }}>載入地圖資料...</div>
         </div>
       )}
 
@@ -440,7 +440,7 @@ export default function CustomerMapComponent() {
         {/* Search + Refresh */}
         <div style={{ marginBottom: 16, display: 'flex', gap: 6 }}>
           <Input
-            prefix={<SearchOutlined style={{ color: '#999' }} />}
+            prefix={<SearchOutlined style={{ color: tokens.iconDefault }} />}
             placeholder="搜尋機構名稱或地址"
             allowClear
             value={searchQuery}
@@ -507,7 +507,7 @@ export default function CustomerMapComponent() {
 
         {/* 路線狀態 */}
         {(startPoint || endPoint) && (
-          <div style={{ marginBottom: 8, padding: '8px 10px', background: '#f5f5f5', borderRadius: 8 }}>
+          <div style={{ marginBottom: 8, padding: '8px 10px', background: tokens.tableHeaderBg, borderRadius: 8 }}>
             <div style={{ fontSize: 12, lineHeight: 1.8 }}>
               {startPoint && <div>🚩 起點：<Text strong>{startPoint.name}</Text></div>}
               {endPoint && <div>🎯 終點：<Text strong>{endPoint.name}</Text></div>}
@@ -531,7 +531,7 @@ export default function CustomerMapComponent() {
         {/* 客戶詳情 */}
         {activeMarker && (
           <div style={{
-            borderTop: '1px solid #f0f0f0', marginTop: 8, paddingTop: 12,
+            borderTop: `1px solid ${tokens.tableHeaderBg}`, marginTop: 8, paddingTop: 12,
           }}>
             <Text strong style={{ fontSize: 13, display: 'block', marginBottom: 4 }}>📋 {activeMarker.name}</Text>
             <div style={{ fontSize: 12, lineHeight: 1.8 }}>
@@ -552,7 +552,7 @@ export default function CustomerMapComponent() {
           onClick={() => setDrawerOpen(true)}
           style={{
             position: 'absolute', top: 16, left: 16, zIndex: 1000,
-            boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
+            boxShadow: tokens.tableShadow,
             borderRadius: 8,
           }}
         />
@@ -569,7 +569,7 @@ export default function CustomerMapComponent() {
         }}>
           <Card size="small" style={{
             width: 200, borderRadius: 10,
-            boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+            boxShadow: tokens.cardShadow,
           }}>
             <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 6, paddingRight: 20 }}>
               {activeMarker.name}
@@ -629,7 +629,7 @@ export default function CustomerMapComponent() {
         background: tokens.contentBg,
         borderRadius: 10,
         padding: '10px 14px',
-        boxShadow: '0 2px 12px rgba(0,0,0,0.12)',
+        boxShadow: tokens.tableShadow,
         fontSize: 12,
         zIndex: 1000,
         minWidth: 120,
