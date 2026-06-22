@@ -17,28 +17,17 @@ import type { AssistantContextPayload } from '../types/assistantContext';
 
 function resolveApiBaseUrl(): string {
   const configured = import.meta.env.VITE_API_URL;
-
-  if (!configured) {
-    return import.meta.env.DEV ? '' : '/';
-  }
-
-  // In production build, same-origin proxy via Vite / nginx
-  return '/';
-
-  if (!import.meta.env.DEV) {
-    return configured;
-  }
-
-  try {
-    const parsed = new URL(configured);
-    if (parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1') {
-      return '';
+  if (configured) return configured;
+  if (import.meta.env.DEV) return '';
+  // Production: API on separate subdomain (eea.ent4i.com → eeaapi.ent4i.com)
+  const host = window.location.hostname;
+  if (host !== 'localhost' && host !== '127.0.0.1') {
+    const parts = host.split('.');
+    if (parts.length >= 2) {
+      return `https://${parts[0]}api.${parts.slice(1).join('.')}`;
     }
-  } catch {
-    return configured;
   }
-
-  return configured;
+  return '/';
 }
 
 export const API_BASE_URL = resolveApiBaseUrl();
@@ -1483,22 +1472,29 @@ export interface CRMContact {
   customer_name?: string;
   name_cn?: string;
   name_en?: string;
+  title?: string;
+  gender?: string;
+  birthday?: string;
   titles?: ContactTitle[];
   phones?: ContactPhone[];
   emails?: ContactEmail[];
   social_accounts?: ContactSocialAccount[];
+  family_members?: ContactFamilyMember[];
   organizations?: ContactOrganization[];
   notes?: string;
   card_images?: ContactCardImage[];
   avatar_url?: string;
   source: 'manual' | 'line_card' | 'line_photo' | 'assignment' | 'import';
   line_uid?: string;
+  line_user_id?: string;
+  line_introducer?: string;
   line_status?: 'connected' | 'disconnected' | 'expired' | 'none';
   line_display_name?: string;
   line_picture_url?: string;
   line_card_image_url?: string;
   line_connected_at?: string;
   channel_key?: string;
+  is_self?: boolean;
   is_primary?: boolean;
   owner_key: string;
   assigned_by?: string;
@@ -1506,6 +1502,12 @@ export interface CRMContact {
   created_at: string;
   updated_at: string;
   created_by?: string;
+}
+
+export interface ContactFamilyMember {
+  name?: string;
+  birthday?: string;
+  relation?: string;
 }
 
 export interface CRMContactListResponse {
@@ -1560,7 +1562,10 @@ export interface UpdateContactPayload {
   notes?: string;
   card_images?: ContactCardImage[];
   source?: string;
+  line_user_id?: string;
+  line_introducer?: string;
   line_status?: string;
+  is_self?: boolean;
   is_primary?: boolean;
   owner_key?: string;
   channel_key?: string;

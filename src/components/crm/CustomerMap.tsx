@@ -2,35 +2,21 @@
  * @file        EEA-CRM 客戶地圖元件
  * @description Leaflet 地圖整合 — 包含客戶標記、篩選面板、圖例顯示、統計摘要
  *              仿照衛福部長照地圖（ltcpap.mohw.gov.tw）的左側覆蓋面板 + 全幅地圖佈局
- * @lastUpdate  2026-06-08
+ * @lastUpdate  2026-06-22
  * @author      Sisyphus-Junior
- * @version     1.0.0
+ * @version     2.0.0
  */
 
-import { useState, useEffect, useRef, useMemo } from 'react';
-import { Input, Button, Checkbox, Typography, Tag } from 'antd';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { Input, Button, Checkbox, Typography, Tag, Spin } from 'antd';
 import { SearchOutlined } from '@ant-design/icons';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useContentTokens } from '../../contexts/AppThemeProvider';
+import { crmApi, CRMMapMarker, CRMMapResponse } from '../../services/api';
+import { useCrmStore } from '../../stores/crmStore';
 
 const { Text } = Typography;
-
-/* ---------- Types ---------- */
-
-interface CustomerMarker {
-  id: string;
-  name: string;
-  lat: number;
-  lng: number;
-  abc: 'A' | 'B' | 'C';
-  region: '北部' | '中部' | '南部' | '東部';
-  tags: string[];
-  address: string;
-  salesRep: string;
-  lastVisit: string;
-  revenue: number;
-}
 
 /* ---------- Constants ---------- */
 
@@ -38,54 +24,55 @@ const ABC_CONFIG: Record<string, { color: string; radius: number; label: string 
   A: { color: '#52c41a', radius: 10, label: 'A 類 · 高價值' },
   B: { color: '#faad14', radius: 8, label: 'B 類 · 中等' },
   C: { color: '#ff4d4f', radius: 6, label: 'C 類 · 一般' },
+  E: { color: '#722ed1', radius: 7, label: 'E 類 · 外部來源' },
 };
 
 const REGIONS = ['北部', '中部', '南部', '東部'] as const;
 
 const SERVICE_TYPES = ['養護機構', '居家服務', '護理之家', '長照機構', '社區服務'];
 
-/* ---------- Mock Data (20 筆全台機構) ---------- */
+/** Check if category array contains meaningful Chinese labels (not just ASCII codes) */
+function hasExternalType(category?: string[]): boolean {
+  if (!category) return false;
+  return category.some(c => /[\u4e00-\u9fff]/.test(c));
+}
 
-const MOCK_CUSTOMERS: CustomerMarker[] = [
-  // ── 北部 (8) ──
-  { id: 'C001', name: '陽光老人養護中心',  lat: 25.0330, lng: 121.5432, abc: 'A', region: '北部', tags: ['養護機構'],           address: '台北市大安區忠孝東路四段100號', salesRep: '王大明', lastVisit: '2026-06-05', revenue: 3_200_000 },
-  { id: 'C002', name: '仁愛居家長照機構',  lat: 25.0111, lng: 121.4598, abc: 'B', region: '北部', tags: ['居家服務'],           address: '新北市板橋區中山路一段50號',  salesRep: '陳小華', lastVisit: '2026-06-03', revenue: 1_800_000 },
-  { id: 'C003', name: '平安社區服務中心',  lat: 25.0338, lng: 121.5645, abc: 'C', region: '北部', tags: ['長照機構', '社區服務'], address: '台北市信義區松仁路30號',      salesRep: '張偉強', lastVisit: '2026-05-28', revenue: 950_000 },
-  { id: 'C004', name: '萬華老人服務中心',  lat: 25.0289, lng: 121.4969, abc: 'B', region: '北部', tags: ['社區服務', '長照機構'], address: '台北市萬華區桂林路20號',      salesRep: '林怡君', lastVisit: '2026-06-01', revenue: 1_450_000 },
-  { id: 'C005', name: '桃園長照中心',      lat: 24.9934, lng: 121.2994, abc: 'A', region: '北部', tags: ['護理之家', '養護機構'], address: '桃園市桃園區中山路200號',     salesRep: '王大明', lastVisit: '2026-06-06', revenue: 2_800_000 },
-  { id: 'C006', name: '新北居家護理所',    lat: 25.0142, lng: 121.4680, abc: 'B', region: '北部', tags: ['居家服務', '護理之家'], address: '新北市中和區景平路80號',      salesRep: '李志明', lastVisit: '2026-05-25', revenue: 1_200_000 },
-  { id: 'C007', name: '基隆長照服務中心',  lat: 25.1276, lng: 121.7392, abc: 'C', region: '北部', tags: ['長照機構'],           address: '基隆市中正區義一路30號',       salesRep: '黃淑芬', lastVisit: '2026-05-20', revenue: 780_000 },
-  { id: 'C008', name: '士林老人養護所',    lat: 25.0924, lng: 121.5251, abc: 'A', region: '北部', tags: ['養護機構'],           address: '台北市士林區中山北路五段60號', salesRep: '陳小華', lastVisit: '2026-06-02', revenue: 3_500_000 },
-
-  // ── 中部 (5) ──
-  { id: 'C009', name: '台中慈濟護理之家',  lat: 24.1555, lng: 120.6839, abc: 'A', region: '中部', tags: ['護理之家'],           address: '台中市北區健行路150號',        salesRep: '張偉強', lastVisit: '2026-06-04', revenue: 4_100_000 },
-  { id: 'C010', name: '台中居家服務中心',  lat: 24.1446, lng: 120.6678, abc: 'B', region: '中部', tags: ['居家服務'],           address: '台中市西區公益路100號',        salesRep: '林怡君', lastVisit: '2026-05-30', revenue: 1_600_000 },
-  { id: 'C011', name: '彰化老人養護中心',  lat: 24.0767, lng: 120.5359, abc: 'B', region: '中部', tags: ['養護機構'],           address: '彰化市民族路80號',            salesRep: '李志明', lastVisit: '2026-05-22', revenue: 1_350_000 },
-  { id: 'C012', name: '南投長照機構',      lat: 23.9110, lng: 120.6872, abc: 'C', region: '中部', tags: ['長照機構'],           address: '南投縣南投市復興路120號',      salesRep: '黃淑芬', lastVisit: '2026-05-15', revenue: 680_000 },
-  { id: 'C013', name: '員林社區服務站',    lat: 23.9610, lng: 120.5763, abc: 'C', region: '中部', tags: ['社區服務', '居家服務'], address: '彰化縣員林市中山路二段60號',   salesRep: '吳佩珊', lastVisit: '2026-05-18', revenue: 520_000 },
-
-  // ── 南部 (5) ──
-  { id: 'C014', name: '高醫附設護理之家',  lat: 22.6431, lng: 120.3244, abc: 'A', region: '南部', tags: ['護理之家', '養護機構'], address: '高雄市三民區自由一路100號',     salesRep: '王大明', lastVisit: '2026-06-07', revenue: 5_600_000 },
-  { id: 'C015', name: '台南老人養護中心',  lat: 22.9937, lng: 120.2020, abc: 'B', region: '南部', tags: ['養護機構'],           address: '台南市中西區民生路一段50號',   salesRep: '陳小華', lastVisit: '2026-05-29', revenue: 1_900_000 },
-  { id: 'C016', name: '嘉義長照機構',      lat: 23.4799, lng: 120.4494, abc: 'C', region: '南部', tags: ['長照機構', '居家服務'], address: '嘉義市西區中興路80號',         salesRep: '劉建宏', lastVisit: '2026-05-12', revenue: 720_000 },
-  { id: 'C017', name: '高雄居家長照機構',  lat: 22.6218, lng: 120.3300, abc: 'A', region: '南部', tags: ['居家服務', '長照機構'], address: '高雄市苓雅區中正二路60號',     salesRep: '林怡君', lastVisit: '2026-06-06', revenue: 2_900_000 },
-  { id: 'C018', name: '屏東社區服務中心',  lat: 22.6761, lng: 120.4959, abc: 'B', region: '南部', tags: ['社區服務'],           address: '屏東縣屏東市中華路100號',      salesRep: '趙雅婷', lastVisit: '2026-05-26', revenue: 1_100_000 },
-
-  // ── 東部 (2) ──
-  { id: 'C019', name: '花蓮慈濟長照中心',  lat: 23.9886, lng: 121.6090, abc: 'A', region: '東部', tags: ['長照機構', '護理之家'], address: '花蓮縣花蓮市中央路三段100號',  salesRep: '張偉強', lastVisit: '2026-06-01', revenue: 2_400_000 },
-  { id: 'C020', name: '台東居家護理所',    lat: 22.7552, lng: 121.1470, abc: 'C', region: '東部', tags: ['居家服務'],           address: '台東縣台東市更生路60號',       salesRep: '楊宗翰', lastVisit: '2026-05-10', revenue: 450_000 },
-];
+/** Classify a city string into one of the four Taiwan regions */
+function classifyRegion(city?: string): string {
+  if (!city) return '未分類';
+  if (
+    city.startsWith('台北') || city.startsWith('新北') ||
+    city.startsWith('桃園') || city.startsWith('基隆') ||
+    city.startsWith('宜蘭') || city.startsWith('新竹')
+  ) return '北部';
+  if (
+    city.startsWith('台中') || city.startsWith('彰化') ||
+    city.startsWith('南投') || city.startsWith('苗栗') ||
+    city.startsWith('雲林')
+  ) return '中部';
+  if (
+    city.startsWith('高雄') || city.startsWith('台南') ||
+    city.startsWith('嘉義') || city.startsWith('屏東')
+  ) return '南部';
+  if (city.startsWith('花蓮') || city.startsWith('台東')) return '東部';
+  return '未分類';
+}
 
 /* ==================== Component ==================== */
 
 export default function CustomerMapComponent() {
   const tokens = useContentTokens();
+  const { openAgentDrawer } = useCrmStore();
 
   /* ── State ── */
   const [searchQuery, setSearchQuery] = useState('');
   const [abcFilter, setAbcFilter] = useState<string>('all');
   const [regionFilter, setRegionFilter] = useState<string>('all');
   const [serviceTypeFilter, setServiceTypeFilter] = useState<string[]>([]);
+  const [markers, setMarkers] = useState<CRMMapMarker[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [summary, setSummary] = useState<CRMMapResponse['summary'] | null>(null);
+
 
   /* ── Refs ── */
   const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -93,27 +80,64 @@ export default function CustomerMapComponent() {
   const markerGroupRef = useRef<L.LayerGroup | null>(null);
   const initDoneRef = useRef(false);
 
+  /* ── Fetch data from API ── */
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+
+    crmApi.map()
+      .then(res => {
+        if (cancelled) return;
+        setMarkers(res.data.markers);
+        setSummary(res.data.summary);
+      })
+      .catch(err => {
+        if (cancelled) return;
+        console.error('Failed to fetch CRM map data:', err);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => { cancelled = true; };
+  }, []);
+
   /* ── Filtered data ── */
   const filteredCustomers = useMemo(() => {
-    return MOCK_CUSTOMERS.filter(c => {
-      if (abcFilter !== 'all' && c.abc !== abcFilter) return false;
-      if (regionFilter !== 'all' && c.region !== regionFilter) return false;
-      if (serviceTypeFilter.length > 0 && !c.tags.some(t => serviceTypeFilter.includes(t))) return false;
-      if (searchQuery) {
-        const q = searchQuery.toLowerCase();
-        if (!c.name.toLowerCase().includes(q) && !c.address.toLowerCase().includes(q)) return false;
-      }
-      return true;
-    });
-  }, [abcFilter, regionFilter, serviceTypeFilter, searchQuery]);
+    return markers
+      .map(m => ({
+        id: m.id,
+        name: m.name,
+        lat: m.lat,
+        lng: m.lng,
+        abc: (m.abc_grade && 'ABC'.includes(m.abc_grade)) ? m.abc_grade : (hasExternalType(m.category || m.org_tags) ? 'E' : 'C'),
+        region: classifyRegion(m.city),
+        tags: m.category || m.org_tags || [],
+        address: m.address || '',
+        salesRep: m.sales_rep || '',
+        lastVisit: 'N/A' as string,
+        revenue: 0,
+      }))
+      .filter(c => {
+        if (abcFilter !== 'all' && c.abc !== abcFilter) return false;
+        if (regionFilter !== 'all' && c.region !== regionFilter) return false;
+        if (serviceTypeFilter.length > 0 && !c.tags.some(t => serviceTypeFilter.includes(t))) return false;
+        if (searchQuery) {
+          const q = searchQuery.toLowerCase();
+          if (!c.name.toLowerCase().includes(q) && !c.address.toLowerCase().includes(q)) return false;
+        }
+        return true;
+      });
+  }, [markers, abcFilter, regionFilter, serviceTypeFilter, searchQuery]);
 
   const stats = useMemo(() => {
     const total = filteredCustomers.length;
     const aCount = filteredCustomers.filter(c => c.abc === 'A').length;
     const bCount = filteredCustomers.filter(c => c.abc === 'B').length;
     const cCount = filteredCustomers.filter(c => c.abc === 'C').length;
-    return { total, aCount, bCount, cCount };
-  }, [filteredCustomers]);
+    const eCount = filteredCustomers.filter(c => c.abc === 'E').length;
+    return { total, aCount, bCount, cCount, eCount, dbTotal: summary?.total ?? 0 };
+  }, [filteredCustomers, summary]);
 
   /* ── Init map (once) ── */
   useEffect(() => {
@@ -198,7 +222,7 @@ export default function CustomerMapComponent() {
 
     markers.clearLayers();
 
-    const popupHtml = (c: CustomerMarker, color: string) => `
+    const popupHtml = (c: typeof filteredCustomers[number], color: string) => `
       <div style="min-width:210px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
         <div style="font-weight:700;font-size:14px;margin-bottom:4px;">${c.name}</div>
         <div style="display:flex;gap:6px;margin-bottom:8px;">
@@ -208,12 +232,12 @@ export default function CustomerMapComponent() {
         <div style="font-size:12px;color:#555;margin-bottom:2px;">📍 ${c.address}</div>
         <div style="font-size:12px;color:#555;margin-bottom:2px;">👤 ${c.salesRep}</div>
         <div style="font-size:12px;color:#555;margin-bottom:6px;">📅 ${c.lastVisit}</div>
-        <div style="font-size:12px;color:#1677ff;cursor:default;text-align:right;border-top:1px solid #f0f0f0;padding-top:6px;">查看詳情 →</div>
+        <div class="crm-popup-detail" style="font-size:12px;color:#1677ff;cursor:pointer;text-align:right;border-top:1px solid #f0f0f0;padding-top:6px;">查看詳情 →</div>
       </div>
     `;
 
     filteredCustomers.forEach(c => {
-      const cfg = ABC_CONFIG[c.abc];
+      const cfg = ABC_CONFIG[c.abc] || ABC_CONFIG['C'];
       const marker = L.circleMarker([c.lat, c.lng], {
         radius: cfg.radius,
         fillColor: cfg.color,
@@ -230,10 +254,23 @@ export default function CustomerMapComponent() {
         className: 'crm-map-tooltip',
       });
 
-      marker.bindPopup(popupHtml(c, cfg.color), {
-        closeButton: true,
-        maxWidth: 280,
-        className: 'crm-map-popup',
+      const popup = L.popup({ closeButton: true, maxWidth: 280, className: 'crm-map-popup' })
+        .setContent(popupHtml(c, cfg.color));
+
+      marker.bindPopup(popup);
+
+      marker.on('popupopen', () => {
+        const container = popup.getElement();
+        if (container) {
+          const detailLink = container.querySelector('.crm-popup-detail');
+          if (detailLink) {
+            detailLink.addEventListener('click', () => openAgentDrawer('customers', c.id));
+          }
+        }
+      });
+
+      marker.on('click', () => {
+        openAgentDrawer('customers', c.id);
       });
 
       markers.addLayer(marker);
@@ -259,6 +296,27 @@ export default function CustomerMapComponent() {
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
       {/* Map container */}
       <div ref={mapContainerRef} style={{ width: '100%', height: '100%', borderRadius: 8 }} />
+
+      {/* ── Loading overlay ── */}
+      {loading && (
+        <div style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: 'rgba(255,255,255,0.65)',
+          zIndex: 2000,
+          borderRadius: 8,
+        }}>
+          <Spin size="large" />
+          <div style={{ marginTop: 12, color: '#666', fontSize: 14 }}>載入地圖資料...</div>
+        </div>
+      )}
 
       {/* ── Inline styles for Leaflet overrides ── */}
       <style>{`
@@ -313,9 +371,9 @@ export default function CustomerMapComponent() {
 
         {/* ABC Classification */}
         <div style={{ marginBottom: 16 }}>
-          <Text strong style={{ fontSize: 13, display: 'block', marginBottom: 8 }}>ABC 分類</Text>
+          <Text strong style={{ fontSize: 13, display: 'block', marginBottom: 8 }}>ABC／E 分類</Text>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            {(['all', 'A', 'B', 'C'] as const).map(key => (
+            {(['all', 'A', 'B', 'C', 'E'] as const).map(key => (
               <Button
                 key={key}
                 size="small"
@@ -375,11 +433,15 @@ export default function CustomerMapComponent() {
         <div>
           <Text style={{ fontSize: 13, color: tokens.textSecondary }}>
             顯示 <span style={{ fontWeight: 600, color: tokens.colorTextBase }}>{stats.total}</span> 筆機構
+            {stats.dbTotal > 0 && (
+              <span style={{ color: tokens.textSecondary }}> (資料庫共 {stats.dbTotal})</span>
+            )}
           </Text>
           <div style={{ display: 'flex', gap: 12, marginTop: 8, flexWrap: 'wrap' }}>
             <Tag color="#52c41a" style={{ borderRadius: 6, fontSize: 12 }}>A 類：{stats.aCount}</Tag>
             <Tag color="#faad14" style={{ borderRadius: 6, fontSize: 12 }}>B 類：{stats.bCount}</Tag>
             <Tag color="#ff4d4f" style={{ borderRadius: 6, fontSize: 12 }}>C 類：{stats.cCount}</Tag>
+            <Tag color="#722ed1" style={{ borderRadius: 6, fontSize: 12 }}>E 類：{stats.eCount}</Tag>
           </div>
         </div>
       </div>
@@ -398,9 +460,9 @@ export default function CustomerMapComponent() {
         minWidth: 120,
       }}>
         <div style={{ fontWeight: 600, marginBottom: 6, fontSize: 13, color: tokens.colorTextBase }}>
-          ABC 分類圖例
+          ABC／E 分類圖例
         </div>
-        {(['A', 'B', 'C'] as const).map(c => (
+        {(['A', 'B', 'C', 'E'] as const).map(c => (
           <div key={c} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
             <span style={{
               width: ABC_CONFIG[c].radius,

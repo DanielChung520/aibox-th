@@ -6,12 +6,12 @@
  * @version     1.0.0
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Tabs, Table, Button, Tag, Modal, Form, Input, Select, Switch,
-         Typography, Avatar, Drawer, App, Radio, Divider } from 'antd';
+         Typography, Avatar, App, Radio, Divider, Space } from 'antd';
 import {
   MessageOutlined, ClockCircleOutlined, UserOutlined,
-  SendOutlined, PlusOutlined, ReloadOutlined,
+  SendOutlined, PlusOutlined, PictureOutlined, ReloadOutlined, EditOutlined, DeleteOutlined,
 } from '@ant-design/icons';
 import { useContentTokens } from '../../contexts/AppThemeProvider';
 import { pageContextManager } from '../../services/PageContextManager';
@@ -35,13 +35,20 @@ const MOCK_VISITS = [
 /* ─── Tab Components ────────────────────────────── */
 
 function ConversationView() {
+  const { message: msgApi } = App.useApp();
   const [search, setSearch] = useState('');
   const [contacts, setContacts] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
-  const [selected, setSelected] = useState<any>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedContact, setSelectedContact] = useState<any>(null);
+  const [selectedChannel, setSelectedChannel] = useState<any>(null);
   const [messages, setMessages] = useState<any[]>([]);
   const [msgLoading, setMsgLoading] = useState(false);
-  const [limit, setLimit] = useState(20);
+  const [inputText, setInputText] = useState('');
+  const [sending, setSending] = useState(false);
+  const [imageUploading, setImageUploading] = useState(false);
+  const msgsEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const loadContacts = useCallback(() => {
     setLoading(true);
@@ -53,109 +60,195 @@ function ConversationView() {
 
   useEffect(() => { loadContacts(); }, [loadContacts]);
 
-  const loadMessages = (userId: string) => {
-    setSelected(userId);
+  const loadMessages = useCallback(async (userId: string) => {
     setMsgLoading(true);
-    apiClient.get(`/api/v1/bot-messages/${userId}`)
-      .then((res: any) => setMessages(res.data?.data || []))
-      .catch(() => setMessages([]))
-      .finally(() => setMsgLoading(false));
+    try {
+      const res = await apiClient.get(`/api/v1/bot-messages/${userId}`);
+      setMessages(res.data?.data || []);
+    } catch { setMessages([]); }
+    setMsgLoading(false);
+  }, []);
+
+  useEffect(() => {
+    msgsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  const selectContact = (c: any) => {
+    setSelectedId(c.user_id);
+    setSelectedContact(c);
+    setSelectedChannel(c.channels?.[0] || null);
+    loadMessages(c.user_id);
+  };
+
+  const handleSend = async () => {
+    const text = inputText.trim();
+    if (!text || !selectedContact || !selectedChannel) return;
+    setSending(true);
+    setInputText('');
+    const optimistic = { role: 'assistant', message: text, created_at: new Date().toISOString() };
+    setMessages(prev => [...prev, optimistic]);
+    try {
+      const res = await apiClient.post('/api/v1/bot-push', {
+        user_id: selectedContact.user_id,
+        message: text,
+        channel_key: selectedChannel.key,
+      });
+      const data = res.data || {};
+      if (data.code) msgApi.success('訊息已送出');
+      else msgApi.warning(`LINE API 回應異常: ${data.line_status}`);
+    } catch { msgApi.error('發送失敗（連線異常）'); }
+    setSending(false);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
+  };
+
+  const handleDeleteChat = (e: React.MouseEvent, userId: string) => {
+    e.stopPropagation();
+    Modal.confirm({
+      title: '刪除聊天記錄',
+      content: '確定刪除此聯絡人的所有聊天記錄？',
+      onOk: async () => {
+        try {
+          await apiClient.delete(`/api/v1/bot-messages/${userId}`);
+          msgApi.success('已刪除');
+          if (selectedId === userId) { setSelectedId(null); setSelectedContact(null); }
+          loadContacts();
+        } catch { msgApi.error('刪除失敗'); }
+      },
+    });
+  };
+
+  const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !selectedContact || !selectedChannel) return;
+    setImageUploading(true);
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const uploadRes = await apiClient.post('/api/v1/upload/line-image', form);
+      const imgUrl = uploadRes.data?.data?.url;
+      if (!imgUrl) { msgApi.error('圖片上傳失敗'); return; }
+      const optimistic = { role: 'assistant', type: 'image', image_url: imgUrl, message: '', created_at: new Date().toISOString() };
+      setMessages(prev => [...prev, optimistic]);
+      const pushRes = await apiClient.post('/api/v1/bot-push', {
+        user_id: selectedContact.user_id, message: '',
+        channel_key: selectedChannel.key, type: 'image', image_url: imgUrl,
+      });
+      if (pushRes.data?.code) msgApi.success('圖片已送出');
+      else msgApi.warning(`LINE API 回應: ${pushRes.data?.line_status}`);
+    } catch { msgApi.error('圖片發送失敗'); }
+    setImageUploading(false);
+    if (e.target) e.target.value = '';
   };
 
   const filtered = contacts.filter((c: any) => {
     const uid = c.user_id || '';
     const lastMsg = c.last_message || '';
     return !search || uid.includes(search) || lastMsg.includes(search);
-  }).slice(0, limit);
+  });
 
   return (
-    <div>
-      <div style={{ marginBottom: 12, display: 'flex', gap: 8 }}>
-        <Input.Search
-          placeholder="搜尋 LINE ID 或對話內容..."
-          style={{ maxWidth: 320 }} size="small" allowClear
-          value={search} onChange={e => setSearch(e.target.value)}
-        />
-        <Button size="small" icon={<ReloadOutlined />} loading={loading} onClick={loadContacts} />
-        <Text type="secondary" style={{ fontSize: 11, alignSelf: 'center' }}>
-          {loading ? '載入中...' : `${filtered.length} 位聯絡人`}
-        </Text>
-      </div>
-
-      {filtered.length === 0 ? (
-        <Text type="secondary" style={{ display: 'block', textAlign: 'center', padding: 40 }}>
-          {loading ? '載入中...' : '尚無對話記錄'}
-        </Text>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          {filtered.map((c: any) => (
-            <div key={c.user_id}
-              onClick={() => loadMessages(c.user_id)}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px',
-                borderRadius: 8, cursor: 'pointer',
-                background: selected === c.user_id ? '#e6f4ff' : 'transparent',
-              }}>
-              <Avatar size={36} icon={<UserOutlined />} style={{ background: '#1677ff' }} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <Text strong style={{ fontSize: 13 }}>{c.display_name || c.user_id?.slice(-8) || '未知'}</Text>
-                <div style={{ fontSize: 12, color: '#888', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {c.last_message || '(無訊息)'}
-                </div>
-              </div>
-              <Text type="secondary" style={{ fontSize: 11 }}>{c.message_count || 0} 則</Text>
-            </div>
-          ))}
+    <div style={{ display: 'flex', height: 'calc(100vh - 180px)', gap: 0, border: '1px solid #e8e8e8', borderRadius: 8, overflow: 'hidden' }}>
+      {/* Left: contact list */}
+      <div style={{ width: 280, borderRight: '1px solid #e8e8e8', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
+        <div style={{ padding: '8px 10px', borderBottom: '1px solid #e8e8e8' }}>
+          <Input.Search size="small" placeholder="搜尋..." value={search} onChange={e => setSearch(e.target.value)} />
         </div>
-      )}
-
-      {limit < contacts.length && (
-        <Button type="link" size="small" onClick={() => setLimit(limit + 20)} style={{ marginTop: 8 }}>
-          載入更多...
-        </Button>
-      )}
-
-      <Drawer title={`💬 對話記錄`}
-        open={!!selected} onClose={() => setSelected(null)} width={560}
-        styles={{ body: { padding: 0 } }}>
-        {msgLoading ? (
-          <div style={{ padding: 40, textAlign: 'center', color: '#888' }}>載入中...</div>
-        ) : messages.length === 0 ? (
-          <div style={{ padding: 40, textAlign: 'center', color: '#888', fontSize: 13 }}>尚無對話記錄</div>
-        ) : (
-          <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 2 }}>
-            {messages.map((msg: any, i: number) => {
-              const isBot = msg.role !== 'user';
-              return (
-              <div key={i} style={{
-                display: 'flex', flexDirection: 'column',
-                alignItems: isBot ? 'flex-start' : 'flex-end',
-                marginBottom: 8,
-              }}>
-                <div style={{
-                  fontSize: 11, color: '#999', marginBottom: 2,
-                  paddingLeft: isBot ? 4 : 0, paddingRight: isBot ? 0 : 4,
+        <div style={{ flex: 1, overflowY: 'auto' }}>
+          {loading ? (
+            <div style={{ padding: 20, textAlign: 'center', color: '#888' }}>載入中...</div>
+          ) : filtered.length === 0 ? (
+            <div style={{ padding: 20, textAlign: 'center', color: '#888' }}>尚無對話</div>
+          ) : (
+            filtered.map(c => (
+              <div key={c.user_id} onClick={() => selectContact(c)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', cursor: 'pointer',
+                  background: selectedId === c.user_id ? '#e6f4ff' : 'transparent',
+                  borderBottom: '1px solid #f5f5f5',
                 }}>
-                  {isBot ? '🤖 i舒雅' : `👤 ${selected?.slice(-8) || '用戶'}`}
-                </div>
-                <div style={{
-                  maxWidth: '75%', padding: '8px 14px', borderRadius: 12,
-                  background: isBot ? '#e8e8e8' : '#1677ff',
-                  color: isBot ? '#222' : '#fff',
-                  fontSize: 13, lineHeight: 1.6,
-                  border: isBot ? '1px solid #d9d9d9' : 'none',
-                }}>
-                  <div>{msg.message}</div>
-                  <div style={{ fontSize: 10, opacity: 0.6, marginTop: 4, textAlign: 'right' }}>
-                    {msg.created_at?.slice(0, 16) || ''}
+                <Avatar size={32} icon={<UserOutlined />} style={{ background: '#1677ff', flexShrink: 0 }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={{ fontSize: 13, fontWeight: selectedId === c.user_id ? 600 : 400 }}>
+                    {c.display_name || c.user_id?.slice(-8) || '未知'}
+                  </Text>
+                  <div style={{ fontSize: 11, color: '#999', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {c.last_message || ''}
                   </div>
                 </div>
+                <Button type="text" size="small" icon={<DeleteOutlined />} onClick={e => handleDeleteChat(e, c.user_id)}
+                  style={{ color: '#ccc', flexShrink: 0 }} />
               </div>
-              );
-            })}
+            ))
+          )}
+        </div>
+      </div>
+
+      {/* Right: chat room */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+        {!selectedId ? (
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ccc', fontSize: 14 }}>
+            請選擇聯絡人開始聊天
           </div>
+        ) : (
+          <>
+            <div style={{ padding: '8px 12px', borderBottom: '1px solid #e8e8e8', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontWeight: 600, fontSize: 13 }}>{selectedContact?.display_name || selectedId?.slice(-8)}</span>
+              {selectedContact?.channels?.length > 1 && (
+                <Select size="small" value={selectedChannel?.key}
+                  onChange={val => setSelectedChannel(selectedContact.channels.find((ch: any) => ch.key === val))}
+                  options={selectedContact.channels.map((ch: any) => ({ label: ch.name || ch.key, value: ch.key }))}
+                  style={{ width: 120 }} />
+              )}
+            </div>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '8px 12px', background: '#f5f5f5' }}>
+              {msgLoading ? (
+                <div style={{ padding: 20, textAlign: 'center', color: '#888' }}>載入中...</div>
+              ) : messages.length === 0 ? (
+                <div style={{ padding: 20, textAlign: 'center', color: '#999', fontSize: 12 }}>尚無對話記錄</div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {messages.map((msg: any, i: number) => {
+                    const fromLineUser = msg.role === 'user';
+                    return (
+                      <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: fromLineUser ? 'flex-start' : 'flex-end' }}>
+                        <div style={{
+                          maxWidth: '75%', padding: msg.type === 'image' ? '4px' : '6px 10px', borderRadius: 10,
+                          background: fromLineUser ? '#fff' : msg.type === 'image' ? 'transparent' : '#1677ff',
+                          color: fromLineUser ? '#222' : '#fff',
+                          fontSize: 13,
+                          boxShadow: msg.type === 'image' ? 'none' : '0 1px 2px rgba(0,0,0,0.06)',
+                        }}>
+                          {msg.type === 'image' && msg.image_url ? (
+                            <img src={msg.image_url} alt="圖片" style={{ maxWidth: 240, maxHeight: 240, borderRadius: 8, display: 'block' }} />
+                          ) : null}
+                          {msg.message ? <div>{msg.message}</div> : null}
+                          <div style={{ fontSize: 10, opacity: 0.5, marginTop: 2, textAlign: 'right' }}>
+                            {msg.created_at?.slice(11, 16) || ''}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  <div ref={msgsEndRef} />
+                </div>
+              )}
+            </div>
+            <div style={{ padding: '8px 12px', borderTop: '1px solid #e8e8e8', display: 'flex', gap: 6, alignItems: 'center', background: '#fff' }}>
+              <input type="file" accept="image/*" ref={fileInputRef}
+                onChange={handleImageSelect} style={{ display: 'none' }} />
+              <Button icon={<PictureOutlined />} loading={imageUploading}
+                onClick={() => fileInputRef.current?.click()} size="small" />
+              <Input.TextArea rows={1} size="small" placeholder="輸入訊息..." value={inputText}
+                onChange={e => setInputText(e.target.value)} onKeyDown={handleKeyDown}
+                style={{ flex: 1, borderRadius: 6, resize: 'none' }} />
+              <Button type="primary" icon={<SendOutlined />} loading={sending} onClick={handleSend} size="small" />
+            </div>
+          </>
         )}
-      </Drawer>
+      </div>
     </div>
   );
 }
@@ -436,61 +529,301 @@ function GreetingScheduler() {
     </div>
   );
 }
-function TimelineView() {
+function ContactListView() {
+  const { message: msg } = App.useApp();
   const [search, setSearch] = useState('');
-  const activities = [
-    { name: '陳董', type: '訊息', summary: '追問貨物出貨進度', time: '10:30' },
-    { name: '林經理', type: '問候', summary: '傳送早安問候', time: '昨天 08:00' },
-    { name: '林經理', type: '訊息', summary: '回覆「早安，請問下週方便拜訪嗎？」', time: '昨天 08:01' },
-    { name: '張老闆', type: '名片', summary: '傳送名片圖片（待確認建檔）', time: '06/12' },
-    { name: '王老師', type: '訊息', summary: '詢問產品規格與價格', time: '06/11' },
-    { name: '趙主任', type: '訊息', summary: '反應品質問題，情緒不滿', time: '06/08' },
-    { name: '黃小姐', type: '訊息', summary: '預約維修時間', time: '06/07' },
-    { name: '吳先生', type: '名片', summary: '傳送名片圖片', time: '06/05' },
-    { name: '周副理', type: '群發', summary: '接收促銷活動訊息（已讀）', time: '06/03' },
-    { name: '許課長', type: '訊息', summary: '更換聯絡電話', time: '06/01' },
-  ];
-  const filtered = activities.filter(a =>
-    a.name.includes(search) || a.summary.includes(search),
-  );
+  const [contacts, setContacts] = useState<any[]>([]);
+  const [selected, setSelected] = useState<any>(null);
+  const [page, setPage] = useState(1);
+  const [syncing, setSyncing] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editForm, setEditForm] = useState<any>({});
+  const [saving, setSaving] = useState(false);
+  const pageSize = 50;
 
-  const typeColors: Record<string, string> = {
-    '訊息': 'cyan', '問候': 'green', '名片': 'orange', '群發': 'purple',
+  const loadContacts = useCallback(async () => {
+    try {
+      const res = await crmApi.listContacts({ page, page_size: pageSize, q: search || undefined }) as any;
+      const list = res?.data?.data;
+      setContacts(Array.isArray(list) ? list : []);
+    } catch {
+      setContacts([]);
+    }
+  }, [page, search]);
+
+  useEffect(() => { loadContacts(); }, [loadContacts]);
+
+  const handleSync = async () => {
+    setSyncing(true);
+    try {
+      const res = await apiClient.post('/api/v1/crm/contacts/sync-from-line') as any;
+      const n = res?.data?.data?.created || 0;
+      if (n > 0) {
+        msg.success(`已新增 ${n} 位聯絡人`);
+        loadContacts();
+      } else {
+        msg.info('沒有遺漏的聯絡人');
+      }
+    } catch { msg.error('同步失敗'); }
+    setSyncing(false);
+  };
+
+  const startEdit = () => {
+    setEditForm({
+      name_cn: selected.name_cn || '',
+      name_en: selected.name_en || '',
+      title: selected.title || '',
+      gender: selected.gender || '',
+      birthday: selected.birthday || '',
+      notes: selected.notes || '',
+      is_self: selected.is_self || false,
+    });
+    setEditing(true);
+  };
+
+  const cancelEdit = () => {
+    setEditing(false);
+    setEditForm({});
+  };
+
+  const handleSave = async () => {
+    if (!selected) return;
+    setSaving(true);
+    try {
+      // 若設為本人，檢查是否有重複（僅警告，不阻止）
+      if (editForm.is_self) {
+        const dup = contacts.filter(c => c._key !== selected._key && c.is_self && c.owner_key === selected.owner_key);
+        if (dup.length > 0) {
+          msg.warning(`⚠️ ${dup.map(c => c.name_cn || c.name_en).join('、')} 也已標記為「本人」`);
+        }
+      }
+      await crmApi.updateContact(selected._key, editForm);
+      msg.success('已儲存');
+      setEditing(false);
+      setEditForm({});
+      // 更新 selected 與 contacts
+      const updated = { ...selected, ...editForm };
+      setSelected(updated);
+      setContacts(prev => prev.map(c => c._key === updated._key ? updated : c));
+    } catch { msg.error('儲存失敗'); }
+    setSaving(false);
+  };
+
+  const handleDeleteContact = (c: any) => {
+    Modal.confirm({
+      title: '刪除聯絡人',
+      content: `確定刪除 ${c.name_cn || c.name_en || '此聯絡人'}？此操作不可復原。`,
+      onOk: async () => {
+        try {
+          await crmApi.deleteContact(c._key);
+          msg.success('已刪除');
+          if (selected?._key === c._key) setSelected(null);
+          setContacts(prev => prev.filter(x => x._key !== c._key));
+        } catch { msg.error('刪除失敗'); }
+      },
+    });
   };
 
   return (
-    <div>
-      <div style={{ marginBottom: 12 }}>
-        <Input.Search
-          placeholder="搜尋聯絡人名稱或活動摘要..."
-          style={{ maxWidth: 360 }} size="small" allowClear
-          value={search} onChange={e => setSearch(e.target.value)}
-        />
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        {filtered.map((a, i) => (
-          <div key={i} style={{
-            display: 'flex', alignItems: 'center', gap: 10,
-            padding: '8px 12px', borderRadius: 8,
-            background: i % 2 === 0 ? '#fafafa' : 'transparent',
-          }}>
-            <Avatar size={36} icon={<UserOutlined />} style={{ background: '#1677ff', flexShrink: 0 }} />
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <Text strong style={{ fontSize: 13 }}>{a.name}</Text>
-                <Tag color={typeColors[a.type] || 'default'} style={{ fontSize: 10, lineHeight: '16px', padding: '0 4px' }}>{a.type}</Tag>
+    <div style={{ display: 'flex', height: 'calc(100vh - 180px)', gap: 0, border: '1px solid #e8e8e8', borderRadius: 8, overflow: 'hidden' }}>
+      {/* Left: contact list */}
+      <div style={{ width: 300, borderRight: '1px solid #e8e8e8', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
+        <div style={{ padding: '8px 10px', borderBottom: '1px solid #e8e8e8', display: 'flex', gap: 6 }}>
+          <Input.Search size="small" placeholder="搜尋姓名或公司..." value={search}
+            onChange={e => { setSearch(e.target.value); setPage(1); }} />
+          <Button size="small" icon={<ReloadOutlined />} loading={syncing} onClick={handleSync} />
+        </div>
+        <div style={{ flex: 1, overflowY: 'auto' }}>
+          {contacts.map((c: any) => (
+            <div key={c._key} onClick={() => setSelected(c)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', cursor: 'pointer',
+                background: selected?._key === c._key ? '#e6f4ff' : 'transparent',
+                borderBottom: '1px solid #f5f5f5',
+              }}>
+              <Avatar size={36} icon={<UserOutlined />} style={{ background: '#1677ff', flexShrink: 0 }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <Text style={{ fontSize: 13, fontWeight: selected?._key === c._key ? 600 : 400 }}>
+                  {c.name_cn || c.name_en || '未知'}
+                </Text>
+                <div style={{ fontSize: 11, color: '#999', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {c.titles?.[0]?.title || c.organizations?.[0]?.name || c.source || ''}
+                </div>
               </div>
-              <div style={{ fontSize: 12, color: '#555', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {a.summary}
-              </div>
+              <Button type="text" size="small" icon={<DeleteOutlined />}
+                onClick={e => { e.stopPropagation(); handleDeleteContact(c); }}
+                style={{ color: '#ccc', flexShrink: 0 }} />
             </div>
-            <Text type="secondary" style={{ fontSize: 11, flexShrink: 0 }}>{a.time}</Text>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
-      <Text type="secondary" style={{ display: 'block', textAlign: 'center', marginTop: 12, fontSize: 11 }}>
-        僅顯示 LINE 相關活動（訊息、問候、名片、群發）
-      </Text>
+
+      {/* Right: contact detail */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
+        {!selected ? (
+          <div style={{ textAlign: 'center', color: '#ccc', paddingTop: 80 }}>請選擇聯絡人</div>
+        ) : (
+          <>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+              <Avatar size={48} icon={<UserOutlined />} style={{ background: '#1677ff', flexShrink: 0 }} />
+              <div style={{ flex: 1 }}>
+                {editing
+                  ? <Input size="small" value={editForm.name_cn} onChange={e => setEditForm({...editForm, name_cn: e.target.value})}
+                      style={{ maxWidth: 200, marginBottom: 4 }} />
+                  : <Text strong style={{ fontSize: 16 }}>
+                      {selected.name_cn || selected.name_en || '未知'}
+                      {selected.is_self && <Tag color="blue" style={{ marginLeft: 6, fontSize: 10 }}>本人</Tag>}
+                    </Text>
+                }
+                {editing
+                  ? <Input size="small" value={editForm.title} onChange={e => setEditForm({...editForm, title: e.target.value})}
+                      placeholder="稱謂" style={{ maxWidth: 150 }} />
+                  : <div style={{ fontSize: 12, color: selected.title ? '#888' : '#ccc' }}>{selected.title || '(無稱謂)'}</div>
+                }
+              </div>
+              {editing ? (
+                <Space>
+                  <Button size="small" onClick={cancelEdit}>取消</Button>
+                  <Button size="small" type="primary" loading={saving} onClick={handleSave}>保存</Button>
+                </Space>
+              ) : (
+                <Button size="small" icon={<EditOutlined />} onClick={startEdit}>編輯</Button>
+              )}
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 16px', fontSize: 13, marginBottom: 16 }}>
+              <EditField label="姓名(英)" value={editForm.name_en} editing={editing}
+                onChange={v => setEditForm({...editForm, name_en: v})} />
+              <EditField label="性別" value={editing ? editForm.gender : selected.gender} editing={editing}
+                onChange={v => setEditForm({...editForm, gender: v})}
+                options={[{value:'male',label:'男'},{value:'female',label:'女'}]} />
+              <EditField label="生日" value={editing ? editForm.birthday : selected.birthday} editing={editing}
+                onChange={v => setEditForm({...editForm, birthday: v})} />
+              {editing && (
+                <div style={{ display: 'flex', gap: 4, padding: '2px 0', alignItems: 'center' }}>
+                  <span style={{ color: '#888', minWidth: 60, fontSize: 13 }}>本人</span>
+                  <Switch size="small" checked={editForm.is_self} onChange={v => setEditForm({...editForm, is_self: v})} />
+                  <span style={{ fontSize: 12, color: '#999' }}>{editForm.is_self ? '這是我的聯絡人' : ''}</span>
+                </div>
+              )}
+              <Field label="來源" value={selected.source} />
+              <Field label="LINE ID" value={selected.line_user_id} />
+              <Field label="LINE 狀態" value={selected.line_status} />
+              <Field label="建立者" value={selected.created_by} />
+              <Field label="建立時間" value={selected.created_at?.slice(0, 10)} />
+            </div>
+
+            {/* 多筆電話 */}
+            <SectionTitle title="電話" />
+            {selected.phones && Array.isArray(selected.phones) && selected.phones.length > 0
+              ? selected.phones.map((p: any, i: number) => (
+                  <FieldValue key={i} icon="📞" value={`${p.number || p}${p.type ? ` (${p.type})` : ''}`} />
+                ))
+              : <EmptyValue text="（尚無電話）" />}
+
+            {/* Email */}
+            <SectionTitle title="Email" />
+            {selected.emails && Array.isArray(selected.emails) && selected.emails.length > 0
+              ? selected.emails.map((e: string, i: number) => <FieldValue key={i} icon="✉️" value={e} />)
+              : <EmptyValue text="（尚無 Email）" />}
+
+            {/* 社群平台 */}
+            <SectionTitle title="社群平台" />
+            {selected.social_accounts && Array.isArray(selected.social_accounts) && selected.social_accounts.length > 0
+              ? selected.social_accounts.map((s: any, i: number) => (
+                  <FieldValue key={i} icon="🔗" value={`${s.platform}: ${s.account_id}`} />
+                ))
+              : <EmptyValue text="（尚無社群帳號）" />}
+
+            {/* 公司/組織 */}
+            <SectionTitle title="公司/組織" />
+            {selected.organizations && Array.isArray(selected.organizations) && selected.organizations.length > 0
+              ? selected.organizations.map((o: any, i: number) => (
+                  <FieldValue key={i} icon="🏢" value={`${o.name}${o.title ? ` - ${o.title}` : ''}`} />
+                ))
+              : <EmptyValue text="（尚無公司資料）" />}
+
+            {/* 家人 */}
+            <SectionTitle title="家人" />
+            {selected.family_members && Array.isArray(selected.family_members) && selected.family_members.length > 0
+              ? selected.family_members.map((fm: any, i: number) => (
+                  <FieldValue key={i} icon="👨‍👩‍👧" value={`${fm.name}${fm.relation ? ` (${fm.relation})` : ''}${fm.birthday ? ` 🎂${fm.birthday}` : ''}`} />
+                ))
+              : <EmptyValue text="（尚無家人資料）" />}
+
+            {/* 備註 */}
+            <SectionTitle title="備註" />
+            {editing ? (
+              <Input.TextArea rows={2} size="small" value={editForm.notes}
+                onChange={e => setEditForm({...editForm, notes: e.target.value})}
+                style={{ fontSize: 13, marginBottom: 12 }} placeholder="（無備註）" />
+            ) : (
+              <div style={{ fontSize: 13, color: selected.notes ? '#333' : '#bbb', marginBottom: 12 }}>
+                {selected.notes || '（無備註）'}
+              </div>
+            )}
+
+            {/* 名片 */}
+            <SectionTitle title={`名片 (${(selected.card_images || []).length} 張)`} />
+            {selected.card_images && Array.isArray(selected.card_images) && selected.card_images.length > 0 ? (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 6, marginBottom: 12 }}>
+                {selected.card_images.map((url: string, i: number) => (
+                  <img key={i} src={url} alt={`名片${i+1}`}
+                    style={{ width: 180, height: 120, objectFit: 'contain', border: '1px solid #e8e8e8', borderRadius: 6, cursor: 'pointer' }}
+                    onClick={() => window.open(url, '_blank')} />
+                ))}
+              </div>
+            ) : (
+              <EmptyValue text="（尚无名片）" />
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Field({ label, value }: { label: string; value?: string | null }) {
+  return (
+    <div style={{ display: 'flex', gap: 4, padding: '2px 0' }}>
+      <span style={{ color: '#888', minWidth: 60 }}>{label}</span>
+      <span style={{ color: value ? '#333' : '#ccc' }}>{value || '—'}</span>
+    </div>
+  );
+}
+
+function SectionTitle({ title }: { title: string }) {
+  return <div style={{ fontWeight: 600, fontSize: 12, color: '#666', marginTop: 8, marginBottom: 4, borderBottom: '1px solid #eee', paddingBottom: 2 }}>{title}</div>;
+}
+
+function FieldValue({ icon, value }: { icon: string; value: string }) {
+  return <div style={{ fontSize: 13, marginBottom: 2 }}>{icon} {value}</div>;
+}
+
+function EmptyValue({ text }: { text: string }) {
+  return <div style={{ fontSize: 12, color: '#ccc', marginBottom: 4, fontStyle: 'italic' }}>{text}</div>;
+}
+
+function EditField({ label, value, editing, onChange, options }: {
+  label: string; value?: string; editing: boolean;
+  onChange: (v: string) => void;
+  options?: { value: string; label: string }[];
+}) {
+  return (
+    <div style={{ display: 'flex', gap: 4, padding: '2px 0', alignItems: 'center' }}>
+      <span style={{ color: '#888', minWidth: 60, fontSize: 13 }}>{label}</span>
+      {editing ? (
+        options ? (
+          <Select size="small" value={value || ''} onChange={onChange}
+            style={{ minWidth: 100 }}
+            options={[{ value: '', label: '—' }, ...options]} />
+        ) : (
+          <Input size="small" value={value || ''} onChange={e => onChange(e.target.value)}
+            style={{ maxWidth: 160 }} placeholder="—" />
+        )
+      ) : (
+        <span style={{ color: value ? '#333' : '#ccc', fontSize: 13 }}>{value || '—'}</span>
+      )}
     </div>
   );
 }
@@ -538,9 +871,9 @@ function VisitBoard() {
 /* ─── Main Page ─────────────────────────────────── */
 
 const TABS = [
-  { key: 'conversations', label: '對話查詢', icon: <MessageOutlined />, component: <ConversationView /> },
+  { key: 'conversations', label: '聊天室', icon: <MessageOutlined />, component: <ConversationView /> },
   { key: 'greeting', label: '信息發送排程', icon: <SendOutlined />, component: <GreetingScheduler /> },
-  { key: 'timeline', label: '客戶 Timeline', icon: <ClockCircleOutlined />, component: <TimelineView /> },
+  { key: 'timeline', label: '我的聯絡人', icon: <UserOutlined />, component: <ContactListView /> },
   { key: 'contacts', label: '名片待確認', icon: <UserOutlined />, component: <PendingContacts /> },
   { key: 'visits', label: '行程看板', icon: <ClockCircleOutlined />, component: <VisitBoard /> },
 ];

@@ -49,6 +49,8 @@ import ESGRecords from './pages/esg/ESGRecords';
 import ESGDashboard from './pages/esg/ESGDashboard';
 
 import CrmDashboard from './pages/eea-crm/DashboardPage';
+import CrmCustomerMap from './pages/eea-crm/CustomerMapPage';
+import CrmSalesDashboard from './pages/eea-crm/SalesDashboardPage';
 
 import CrmCustomers from './pages/eea-crm/CustomerListPage';
 import CrmContacts from './pages/eea-crm/ContactListPage';
@@ -263,6 +265,8 @@ function AppContent() {
               <Route path="esg/standards" element={<ESGStandards />} />
               <Route path="esg/records" element={<ESGRecords />} />
                 <Route path="eea-crm/dashboard" element={<EeaCrmLayout context="dashboard"><CrmDashboard /></EeaCrmLayout>} />
+                <Route path="eea-crm/customer-map" element={<EeaCrmLayout context="dashboard"><CrmCustomerMap /></EeaCrmLayout>} />
+                <Route path="eea-crm/sales-performance" element={<EeaCrmLayout context="dashboard"><CrmSalesDashboard /></EeaCrmLayout>} />
 
               <Route path="eea-crm/customers" element={<EeaCrmLayout context="customers"><CrmCustomers /></EeaCrmLayout>} />
               <Route path="eea-crm/contacts" element={<EeaCrmLayout context="contacts"><CrmContacts /></EeaCrmLayout>} />

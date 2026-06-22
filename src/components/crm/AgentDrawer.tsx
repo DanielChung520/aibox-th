@@ -407,6 +407,18 @@ export default function AgentDrawer() {
           </Button>
           <Button
             size="small"
+            style={{ flex: 1, fontSize: 12, borderRadius: 6 }}
+            onClick={() => {
+              window.dispatchEvent(new CustomEvent('crm:schedule', {
+                detail: { recordId: selectedRecordId, agentCode: selectedAgentCode },
+              }));
+              message.success('已開啟行程規劃');
+            }}
+          >
+            📅 行程
+          </Button>
+          <Button
+            size="small"
             type="primary"
             ghost
             style={{ flex: 1, fontSize: 12, borderRadius: 6 }}
