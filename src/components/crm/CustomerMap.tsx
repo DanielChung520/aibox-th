@@ -126,6 +126,7 @@ export default function CustomerMapComponent() {
   const [summary, setSummary] = useState<CRMMapResponse['summary'] | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(true);
   const [activeMarker, setActiveMarker] = useState<typeof filteredCustomers[number] | null>(null);
+  const [baselineStats, setBaselineStats] = useState<{ total: number; aCount: number; bCount: number; cCount: number; eCount: number } | null>(null);
 
   /* ── Refs ── */
   const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -140,6 +141,7 @@ export default function CustomerMapComponent() {
       if (cached && Date.now() - cached.ts < CACHE_MAX_AGE) {
         setMarkers(cached.markers);
         setSummary(cached.summary);
+        computeBaseline(cached.markers);
         setLoading(false);
         return;
       }
@@ -159,12 +161,25 @@ export default function CustomerMapComponent() {
       await idb.set(CACHE_KEY, data);
       setMarkers(light);
       setSummary(res.data.summary);
+      computeBaseline(light);
     } catch (err) {
       console.error('Failed to load CRM map data:', err);
     } finally {
       setLoading(false);
     }
   }, [idb]);
+
+  const computeBaseline = useCallback((data: CRMMapMarker[]) => {
+    let aCount = 0, bCount = 0, cCount = 0, eCount = 0;
+    for (const m of data) {
+      const g = m.abc_grade;
+      if (g === 'A') aCount++;
+      else if (g === 'B') bCount++;
+      else if (g === 'E') eCount++;
+      else cCount++;
+    }
+    setBaselineStats({ total: data.length, aCount, bCount, cCount, eCount });
+  }, []);
 
   useEffect(() => { loadMapData(); }, [loadMapData]);
 
@@ -194,15 +209,6 @@ export default function CustomerMapComponent() {
         return true;
       });
   }, [markers, abcFilter, serviceTypeFilter, searchQuery]);
-
-  const stats = useMemo(() => {
-    const total = filteredCustomers.length;
-    const aCount = filteredCustomers.filter(c => c.abc === 'A').length;
-    const bCount = filteredCustomers.filter(c => c.abc === 'B').length;
-    const cCount = filteredCustomers.filter(c => c.abc === 'C').length;
-    const eCount = filteredCustomers.filter(c => c.abc === 'E').length;
-    return { total, aCount, bCount, cCount, eCount, dbTotal: summary?.total ?? 0 };
-  }, [filteredCustomers, summary]);
 
   /* ── Init map (once) ── */
   useEffect(() => {
@@ -426,15 +432,16 @@ export default function CustomerMapComponent() {
         <div style={{ marginBottom: 16 }}>
           <Text strong style={{ fontSize: 13, display: 'block', marginBottom: 8 }}>
             分類
-            <Text style={{ fontSize: 11, fontWeight: 400, marginLeft: 6 }}>{stats.total} 筆</Text>
+            <Text style={{ fontSize: 11, fontWeight: 400, marginLeft: 6 }}>{baselineStats?.total ?? 0} 筆</Text>
           </Text>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             {(['all', 'A', 'B', 'C', 'E'] as const).map(key => {
-              const count = key === 'all' ? stats.total
-                : key === 'A' ? stats.aCount
-                : key === 'B' ? stats.bCount
-                : key === 'C' ? stats.cCount
-                : stats.eCount;
+              const bs = baselineStats;
+              const count = key === 'all' ? (bs?.total ?? 0)
+                : key === 'A' ? (bs?.aCount ?? 0)
+                : key === 'B' ? (bs?.bCount ?? 0)
+                : key === 'C' ? (bs?.cCount ?? 0)
+                : (bs?.eCount ?? 0);
               return (
                 <Button
                   key={key}
