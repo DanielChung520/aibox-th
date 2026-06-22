@@ -29,7 +29,7 @@ const ABC_CONFIG: Record<string, { color: string; radius: number; label: string 
   E: { color: '#b37feb', radius: 7, label: 'E 類 · 外部來源' },
 };
 
-const SERVICE_TYPES = ['養護機構', '居家服務', '護理之家', '長照機構', '社區服務'];
+const SERVICE_TYPES = ['養護機構', '居家服務', '護理之家', '長照機構', '社區服務', '其他'];
 
 /** Check if category array contains meaningful Chinese labels (not just ASCII codes) */
 function hasExternalType(category?: string[]): boolean {
@@ -465,7 +465,7 @@ export default function CustomerMapComponent() {
         {/* Institution type */}
         <div style={{ marginBottom: 16 }}>
           <Text strong style={{ fontSize: 13, display: 'block', marginBottom: 8 }}>機構類型</Text>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4 }}>
             {SERVICE_TYPES.map(type => (
               <Checkbox
                 key={type}
