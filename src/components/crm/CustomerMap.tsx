@@ -8,8 +8,8 @@
  */
 
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Input, Button, Checkbox, Typography, Spin, Card, Space, Drawer } from 'antd';
-import { SearchOutlined, EyeOutlined, CalendarOutlined, RobotOutlined, ReloadOutlined } from '@ant-design/icons';
+import { Input, Button, Checkbox, Typography, Spin, Card, Space, Drawer, App } from 'antd';
+import { SearchOutlined, EyeOutlined, CalendarOutlined, RobotOutlined, ReloadOutlined, FlagOutlined, AimOutlined, RouteOutlined } from '@ant-design/icons';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet.markercluster/dist/MarkerCluster.css';
@@ -61,6 +61,7 @@ function classifyRegion(city?: string): string {
 /* ==================== Component ==================== */
 
 export default function CustomerMapComponent() {
+  const { message } = App.useApp();
   const tokens = useContentTokens();
   const { openAgentDrawer } = useCrmStore();
 
@@ -126,6 +127,8 @@ export default function CustomerMapComponent() {
   const [summary, setSummary] = useState<CRMMapResponse['summary'] | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(true);
   const [activeMarker, setActiveMarker] = useState<typeof filteredCustomers[number] | null>(null);
+  const [startPoint, setStartPoint] = useState<typeof filteredCustomers[number] | null>(null);
+  const [endPoint, setEndPoint] = useState<typeof filteredCustomers[number] | null>(null);
   const [baselineStats, setBaselineStats] = useState<{ total: number; aCount: number; bCount: number; cCount: number; eCount: number } | null>(null);
 
   /* ── Refs ── */
@@ -481,6 +484,18 @@ export default function CustomerMapComponent() {
           </div>
         </div>
 
+        {/* 路線狀態 */}
+        {(startPoint || endPoint) && (
+          <div style={{ marginBottom: 8, fontSize: 12, padding: '6px 8px', background: '#f5f5f5', borderRadius: 6 }}>
+            {startPoint && <div>🚩 起點：{startPoint.name}</div>}
+            {endPoint && <div>🎯 終點：{endPoint.name}</div>}
+            <Button size="small" type="link" style={{ fontSize: 11, padding: 0, height: 20 }}
+              onClick={() => { setStartPoint(null); setEndPoint(null); }}>
+              清除路線
+            </Button>
+          </div>
+        )}
+
         {/* 客戶詳情 */}
         {activeMarker && (
           <div style={{
@@ -535,6 +550,28 @@ export default function CustomerMapComponent() {
               <Button size="small" block icon={<EyeOutlined />}
                 onClick={() => { openAgentDrawer('customers', activeMarker.id); setActiveMarker(null); }}>
                 查看詳情
+              </Button>
+              <Button size="small" block icon={<FlagOutlined />}
+                onClick={() => { setStartPoint(activeMarker); setActiveMarker(null); }}
+                type={startPoint?.id === activeMarker.id ? 'primary' : 'default'}>
+                起點
+              </Button>
+              <Button size="small" block icon={<AimOutlined />}
+                onClick={() => { setEndPoint(activeMarker); setActiveMarker(null); }}
+                type={endPoint?.id === activeMarker.id ? 'primary' : 'default'}>
+                終點
+              </Button>
+              <Button size="small" block icon={<RouteOutlined />}
+                onClick={() => {
+                  if (startPoint && endPoint) {
+                    message.success(`已規劃拜訪路線：${startPoint.name} → ${endPoint.name}`);
+                    window.dispatchEvent(new CustomEvent('crm:route', { detail: { startId: startPoint.id, endId: endPoint.id } }));
+                  } else {
+                    message.warning('請先設定起點與終點');
+                  }
+                  setActiveMarker(null);
+                }}>
+                規劃拜訪
               </Button>
               <Button size="small" block icon={<CalendarOutlined />}
                 onClick={() => {
