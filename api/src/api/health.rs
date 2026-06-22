@@ -38,6 +38,8 @@ pub struct HealthServices {
     pub chat_api: bool,
     pub arangodb: bool,
     pub qdrant: bool,
+    pub seaweedfs: bool,
+    pub omlx: bool,
 }
 
 async fn health_check() -> Result<impl IntoResponse, ApiError> {
@@ -61,10 +63,16 @@ async fn health_check() -> Result<impl IntoResponse, ApiError> {
     // Check Qdrant (port 6333)
     let qdrant_ok = check_tcp_port("127.0.0.1:6333").await;
 
+    // Check SeaWeedFS Filer (port 8888)
+    let seaweedfs_ok = check_tcp_port("127.0.0.1:8888").await;
+
+    // Check oMLX (port 11400)
+    let omlx_ok = check_tcp_port("127.0.0.1:11400").await;
+
     // Main API is always ok if this handler runs
     let main_api_ok = true;
 
-    let all_ok = main_api_ok && chat_api_ok && arangodb_ok && qdrant_ok;
+    let all_ok = main_api_ok && chat_api_ok && arangodb_ok && qdrant_ok && seaweedfs_ok && omlx_ok;
     let status = if all_ok { "healthy" } else { "degraded" };
 
     let response = HealthResponse {
@@ -76,6 +84,8 @@ async fn health_check() -> Result<impl IntoResponse, ApiError> {
             chat_api: chat_api_ok,
             arangodb: arangodb_ok,
             qdrant: qdrant_ok,
+            seaweedfs: seaweedfs_ok,
+            omlx: omlx_ok,
         },
     };
     Ok(Json(response))

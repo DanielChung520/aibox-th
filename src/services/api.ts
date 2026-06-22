@@ -909,7 +909,7 @@ export interface HealthServices {
   arangodb: boolean;
   qdrant: boolean;
   seaweedfs: boolean;
-  ollama: boolean;
+  omlx: boolean;
 }
 
 export interface HealthResponse {
@@ -1551,6 +1551,7 @@ export interface CreateContactPayload {
 }
 
 export interface UpdateContactPayload {
+  _rev?: string;
   name_cn?: string;
   name_en?: string;
   customer_key?: string;
@@ -1605,7 +1606,7 @@ export const crmApi = {
     api.post<CRMImportResult>('/api/v1/crm/customers/import/business-kindom', { records }),
 
   importMohw: () =>
-    api.post('/api/v1/crm/customers/import/mohw'),
+    api.post<CRMImportResult>('/api/v1/crm/customers/import/mohw'),
 
   getPermission: (customerKey: string) =>
     api.get<{ code: number; data: CustomerPermission | null }>(`/api/v1/crm/permissions/${customerKey}`),

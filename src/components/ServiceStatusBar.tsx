@@ -45,6 +45,8 @@ const INFRA_DISPLAY_NAMES: Record<keyof HealthServices, string> = {
   chat_api: 'AI Task (Chat)',
   arangodb: 'ArangoDB',
   qdrant: 'Qdrant',
+  seaweedfs: 'SeaWeedFS',
+  omlx: 'oMLX (LLM)',
 };
 
 const HEARTBEAT_INTERVAL_MS = 5 * 60 * 1000; // 5 分鐘

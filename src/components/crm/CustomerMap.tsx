@@ -8,8 +8,8 @@
  */
 
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Input, Button, Checkbox, Typography, Spin, Card, Space, Drawer, App } from 'antd';
-import { SearchOutlined, EyeOutlined, CalendarOutlined, RobotOutlined, ReloadOutlined, FlagOutlined, AimOutlined } from '@ant-design/icons';
+import { Input, Button, Checkbox, Typography, Spin, Card, Space, Drawer } from 'antd';
+import { SearchOutlined, CalendarOutlined, ReloadOutlined, FlagOutlined, AimOutlined } from '@ant-design/icons';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet.markercluster/dist/MarkerCluster.css';
@@ -19,7 +19,6 @@ import { useContentTokens } from '../../contexts/AppThemeProvider';
 /** 台灣福祉總部位置 */
 const HQ_POSITION: [number, number] = [24.9907, 121.4205];
 import { crmApi, CRMMapMarker, CRMMapResponse } from '../../services/api';
-import { useCrmStore } from '../../stores/crmStore';
 
 const { Text } = Typography;
 
@@ -64,10 +63,7 @@ function classifyRegion(city?: string): string {
 /* ==================== Component ==================== */
 
 export default function CustomerMapComponent() {
-  const { message } = App.useApp();
   const tokens = useContentTokens();
-  const { openAgentDrawer } = useCrmStore();
-
   const DRAWER_WIDTH = 300;
   const CACHE_KEY = 'crm_map_cache';
   const CACHE_MAX_AGE = 3600000;
@@ -641,10 +637,6 @@ export default function CustomerMapComponent() {
               >✕</Button>
             </div>
             <Space direction="vertical" style={{ width: '100%' }} size={4}>
-              <Button size="small" block icon={<EyeOutlined />}
-                onClick={() => { openAgentDrawer('customers', activeMarker.id); setActiveMarker(null); }}>
-                查看詳情
-              </Button>
               <Button size="small" block icon={<FlagOutlined />}
                 onClick={() => { setStartPoint(activeMarker); setActiveMarker(null); }}
                 type={startPoint?.id === activeMarker.id ? 'primary' : 'default'}>
@@ -655,28 +647,12 @@ export default function CustomerMapComponent() {
                 type={endPoint?.id === activeMarker.id ? 'primary' : 'default'}>
                 終點
               </Button>
-              <Button size="small" block
-                onClick={() => {
-                  if (startPoint && endPoint) {
-                    message.success(`已規劃拜訪路線：${startPoint.name} → ${endPoint.name}`);
-                    window.dispatchEvent(new CustomEvent('crm:route', { detail: { startId: startPoint.id, endId: endPoint.id } }));
-                  } else {
-                    message.warning('請先設定起點與終點');
-                  }
-                  setActiveMarker(null);
-                }}>
-                規劃拜訪
-              </Button>
               <Button size="small" block icon={<CalendarOutlined />}
                 onClick={() => {
                   window.dispatchEvent(new CustomEvent('crm:schedule', { detail: { recordId: activeMarker.id } }));
                   setActiveMarker(null);
                 }}>
                 行程規劃
-              </Button>
-              <Button size="small" block icon={<RobotOutlined />}
-                onClick={() => { openAgentDrawer('customers', activeMarker.id); setActiveMarker(null); }}>
-                AI Agent
               </Button>
             </Space>
           </Card>
