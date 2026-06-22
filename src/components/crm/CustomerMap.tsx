@@ -486,14 +486,11 @@ export default function CustomerMapComponent() {
           <div style={{
             borderTop: '1px solid #f0f0f0', marginTop: 8, paddingTop: 12,
           }}>
-            <Text strong style={{ fontSize: 13, display: 'block', marginBottom: 8 }}>📋 客戶詳情</Text>
-            <div style={{ fontSize: 12, lineHeight: 2 }}>
-              <div><Text type="secondary" style={{ display: 'inline-block', width: 64 }}>全稱</Text>{activeMarker.name}</div>
-              <div><Text type="secondary" style={{ display: 'inline-block', width: 64 }}>負責人</Text>{activeMarker.salesRep || '-'}</div>
-              <div><Text type="secondary" style={{ display: 'inline-block', width: 64 }}>地址</Text>{activeMarker.address || '-'}</div>
-              <div><Text type="secondary" style={{ display: 'inline-block', width: 64 }}>資本額</Text>-</div>
-              <div><Text type="secondary" style={{ display: 'inline-block', width: 64 }}>聯繫人</Text>-</div>
-              <div><Text type="secondary" style={{ display: 'inline-block', width: 64 }}>電話</Text>{activeMarker.phone || '-'}</div>
+            <Text strong style={{ fontSize: 13, display: 'block', marginBottom: 4 }}>📋 {activeMarker.name}</Text>
+            <div style={{ fontSize: 12, lineHeight: 1.8, color: '#555' }}>
+              {activeMarker.salesRep && <div>👤 {activeMarker.salesRep}</div>}
+              {activeMarker.address && <div>📍 {activeMarker.address}</div>}
+              {activeMarker.phone && <div>📞 {activeMarker.phone}</div>}
             </div>
           </div>
         )}
