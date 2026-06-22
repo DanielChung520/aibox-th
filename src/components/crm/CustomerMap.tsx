@@ -12,10 +12,6 @@ import { Input, Button, Checkbox, Typography, Tag, Spin, Card, Space } from 'ant
 import { SearchOutlined, EyeOutlined, CalendarOutlined, RobotOutlined, ReloadOutlined } from '@ant-design/icons';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-// Make L available globally for leaflet.markercluster CJS interop
-(window as unknown as Record<string, unknown>).L = L;
-// @ts-ignore
-import 'leaflet.markercluster';
 import 'leaflet.markercluster/dist/MarkerCluster.css';
 import 'leaflet.markercluster/dist/MarkerCluster.Default.css';
 import { useContentTokens } from '../../contexts/AppThemeProvider';
@@ -170,15 +166,19 @@ export default function CustomerMapComponent() {
   /* ── Init map (once) ── */
   useEffect(() => {
     if (!mapContainerRef.current || initDoneRef.current) return;
-    initDoneRef.current = true;
 
-    const map = L.map(mapContainerRef.current, {
-      center: [23.8, 121.0],
-      zoom: 7.5,
-      zoomControl: true,
-      attributionControl: true,
+    // Dynamically import markercluster to ensure L is available
+    (window as any).L = L;
+    import('leaflet.markercluster').then(() => {
+      if (!mapContainerRef.current || initDoneRef.current) return;
+      initDoneRef.current = true;
 
-    });
+      const map = L.map(mapContainerRef.current, {
+        center: [23.8, 121.0],
+        zoom: 7.5,
+        zoomControl: true,
+        attributionControl: true,
+      });
 
     /* CartoDB tiles (more reliable than raw OSM) */
     L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
@@ -235,6 +235,7 @@ export default function CustomerMapComponent() {
       markerGroupRef.current = null;
       initDoneRef.current = false;
     };
+    }); // end of .then()
   }, []);
 
   /* ── Retry invalidateSize when container becomes visible (tab switch) ── */
