@@ -236,6 +236,19 @@ export default function CustomerMapComponent() {
         attributionControl: true,
       });
       L.control.zoom({ position: 'topright' }).addTo(map);
+      /* Refresh button */
+      const refreshCtrl = L.control({ position: 'topright' });
+      refreshCtrl.onAdd = () => {
+        const btn = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
+        btn.innerHTML = '<a href="#" style="font-size:16px;line-height:26px;cursor:pointer;" title="重新載入資料">↻</a>';
+        btn.onclick = async (e) => {
+          e.preventDefault();
+          await idb.remove(CACHE_KEY);
+          loadMapData(true);
+        };
+        return btn;
+      };
+      refreshCtrl.addTo(map);
 
     /* CartoDB tiles (more reliable than raw OSM) */
     L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
