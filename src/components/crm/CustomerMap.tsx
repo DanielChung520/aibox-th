@@ -550,6 +550,7 @@ export default function CustomerMapComponent() {
               <div style={{ fontSize: 12, lineHeight: 1.8, marginTop: 4 }}>
                 <div>預計車程約：<Text strong>{routeInfo.distance}</Text> 公里</div>
                 <div>路程時間約：<Text strong>{Math.floor(routeInfo.duration / 3600)}</Text> 小時 <Text strong>{Math.round((routeInfo.duration % 3600) / 60)}</Text> 分鐘</div>
+                <div style={{ fontSize: 10, color: 'var(--ant-color-text-tertiary, #999)', marginTop: 2 }}>本計算為參考路程及時間，實際按當時交通狀況及實際路線為準</div>
               </div>
             )}
             </div>
