@@ -118,7 +118,14 @@ export default function CustomerMapComponent() {
           city: m.city, address: m.address, sales_rep: m.sales_rep,
         }));
         const data = { ts: Date.now(), markers: light, summary: res.data.summary };
-        try { localStorage.setItem(CACHE_KEY, JSON.stringify(data)); } catch { /* quota exceeded */ }
+        const json = JSON.stringify(data);
+        console.log(`CRM cache: ${json.length} bytes for ${light.length} markers`);
+        try {
+          localStorage.setItem(CACHE_KEY, json);
+          console.log('CRM cache: saved to localStorage');
+        } catch (e) {
+          console.error('CRM cache: localStorage write failed', e);
+        }
         setMarkers(light);
         setSummary(res.data.summary);
       })
