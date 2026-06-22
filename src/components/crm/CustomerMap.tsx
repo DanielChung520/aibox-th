@@ -26,7 +26,7 @@ const ABC_CONFIG: Record<string, { color: string; radius: number; label: string 
   A: { color: '#52c41a', radius: 10, label: 'A 類 · 高價值' },
   B: { color: '#faad14', radius: 8, label: 'B 類 · 中等' },
   C: { color: '#ff4d4f', radius: 6, label: 'C 類 · 一般' },
-  E: { color: '#722ed1', radius: 7, label: 'E 類 · 外部來源' },
+  E: { color: '#b37feb', radius: 7, label: 'E 類 · 外部來源' },
 };
 
 const SERVICE_TYPES = ['養護機構', '居家服務', '護理之家', '長照機構', '社區服務'];
