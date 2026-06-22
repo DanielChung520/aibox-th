@@ -111,9 +111,15 @@ export default function CustomerMapComponent() {
     setLoading(true);
     crmApi.map()
       .then(res => {
-        const data = { ts: Date.now(), markers: res.data.markers, summary: res.data.summary };
+        const full = res.data.markers;
+        const light = full.map((m: CRMMapMarker) => ({
+          id: m.id, name: m.name, lat: m.lat, lng: m.lng,
+          abc_grade: m.abc_grade, category: m.category, source: m.source,
+          city: m.city, address: m.address, sales_rep: m.sales_rep,
+        }));
+        const data = { ts: Date.now(), markers: light, summary: res.data.summary };
         try { localStorage.setItem(CACHE_KEY, JSON.stringify(data)); } catch { /* quota exceeded */ }
-        setMarkers(res.data.markers);
+        setMarkers(light);
         setSummary(res.data.summary);
       })
       .catch(err => {
