@@ -7,9 +7,9 @@
  * @version     2.0.0
  */
 
-import { useState, useEffect, useRef, useMemo } from 'react';
-import { Input, Button, Checkbox, Typography, Tag, Spin } from 'antd';
-import { SearchOutlined } from '@ant-design/icons';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { Input, Button, Checkbox, Typography, Tag, Spin, Card, Space } from 'antd';
+import { SearchOutlined, EyeOutlined, CalendarOutlined, RobotOutlined, ReloadOutlined } from '@ant-design/icons';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useContentTokens } from '../../contexts/AppThemeProvider';
@@ -64,6 +64,10 @@ export default function CustomerMapComponent() {
   const tokens = useContentTokens();
   const { openAgentDrawer } = useCrmStore();
 
+  const DRAWER_WIDTH = 320;
+  const CACHE_KEY = 'crm_map_cache';
+  const CACHE_MAX_AGE = 3600000; // 1 hour
+
   /* ── State ── */
   const [searchQuery, setSearchQuery] = useState('');
   const [abcFilter, setAbcFilter] = useState<string>('all');
@@ -73,7 +77,7 @@ export default function CustomerMapComponent() {
   const [loading, setLoading] = useState(true);
   const [summary, setSummary] = useState<CRMMapResponse['summary'] | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(true);
-  const DRAWER_WIDTH = 320;
+  const [activeMarker, setActiveMarker] = useState<typeof filteredCustomers[number] | null>(null);
 
   /* ── Refs ── */
   const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -81,27 +85,44 @@ export default function CustomerMapComponent() {
   const markerGroupRef = useRef<L.LayerGroup | null>(null);
   const initDoneRef = useRef(false);
 
-  /* ── Fetch data from API ── */
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
+  /* ── Fetch data from API (with localStorage cache) ── */
+  const loadMapData = useCallback((forceRefresh = false) => {
+    const tryCache = () => {
+      if (forceRefresh) return null;
+      try {
+        const raw = localStorage.getItem(CACHE_KEY);
+        if (!raw) return null;
+        const cache = JSON.parse(raw);
+        if (Date.now() - cache.ts > CACHE_MAX_AGE) return null;
+        return cache;
+      } catch { return null; }
+    };
 
+    const cached = tryCache();
+    if (cached) {
+      setMarkers(cached.markers);
+      setSummary(cached.summary);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
     crmApi.map()
       .then(res => {
-        if (cancelled) return;
+        const data = { ts: Date.now(), markers: res.data.markers, summary: res.data.summary };
+        try { localStorage.setItem(CACHE_KEY, JSON.stringify(data)); } catch { /* quota exceeded */ }
         setMarkers(res.data.markers);
         setSummary(res.data.summary);
       })
       .catch(err => {
-        if (cancelled) return;
         console.error('Failed to fetch CRM map data:', err);
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        setLoading(false);
       });
-
-    return () => { cancelled = true; };
   }, []);
+
+  useEffect(() => { loadMapData(); }, [loadMapData]);
 
   /* ── Filtered data ── */
   const filteredCustomers = useMemo(() => {
@@ -223,20 +244,6 @@ export default function CustomerMapComponent() {
 
     markers.clearLayers();
 
-    const popupHtml = (c: typeof filteredCustomers[number], color: string) => `
-      <div style="min-width:210px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
-        <div style="font-weight:700;font-size:14px;margin-bottom:4px;">${c.name}</div>
-        <div style="display:flex;gap:6px;margin-bottom:8px;">
-          <span style="display:inline-block;padding:1px 10px;border-radius:10px;font-size:11px;font-weight:600;color:#fff;background:${color};">${c.abc} 類</span>
-          <span style="display:inline-block;padding:1px 8px;border-radius:10px;font-size:11px;background:#f0f0f0;color:#666;">${c.region}</span>
-        </div>
-        <div style="font-size:12px;color:#555;margin-bottom:2px;">📍 ${c.address}</div>
-        <div style="font-size:12px;color:#555;margin-bottom:2px;">👤 ${c.salesRep}</div>
-        <div style="font-size:12px;color:#555;margin-bottom:6px;">📅 ${c.lastVisit}</div>
-        <div class="crm-popup-detail" style="font-size:12px;color:#1677ff;cursor:pointer;text-align:right;border-top:1px solid #f0f0f0;padding-top:6px;">查看詳情 →</div>
-      </div>
-    `;
-
     filteredCustomers.forEach(c => {
       const cfg = ABC_CONFIG[c.abc] || ABC_CONFIG['C'];
       const marker = L.circleMarker([c.lat, c.lng], {
@@ -255,27 +262,29 @@ export default function CustomerMapComponent() {
         className: 'crm-map-tooltip',
       });
 
-      const popup = L.popup({ closeButton: true, maxWidth: 280, className: 'crm-map-popup' })
-        .setContent(popupHtml(c, cfg.color));
-
-      marker.bindPopup(popup);
-
-      marker.on('popupopen', () => {
-        const container = popup.getElement();
-        if (container) {
-          const detailLink = container.querySelector('.crm-popup-detail');
-          if (detailLink) {
-            detailLink.addEventListener('click', () => openAgentDrawer('customers', c.id));
-          }
-        }
-      });
+      marker.bindPopup(
+        L.popup({ closeButton: true, maxWidth: 240, className: 'crm-map-popup' })
+          .setContent(`
+            <div style="min-width:180px;font-family:-apple-system,sans-serif;">
+              <div style="font-weight:600;font-size:13px;margin-bottom:4px;">${c.name}</div>
+              <div style="display:flex;gap:4;margin-bottom:6px;">
+                <span style="display:inline-block;padding:0 8px;border-radius:8px;font-size:10px;font-weight:600;color:#fff;background:${cfg.color};">${c.abc} 類</span>
+                <span style="display:inline-block;padding:0 8px;border-radius:8px;font-size:10px;background:#f0f0f0;color:#666;">${c.region}</span>
+              </div>
+              <div style="margin-bottom:4px;font-size:11px;color:#555;">📍 ${c.address || ''}</div>
+            </div>
+          `)
+      );
 
       marker.on('click', () => {
-        openAgentDrawer('customers', c.id);
+        setActiveMarker(c);
       });
 
       markers.addLayer(marker);
     });
+
+    /* Dismiss floating menu on map click */
+    map.on('click', () => setActiveMarker(null));
 
     /* Close tooltips if zoom < 9 */
     if (map.getZoom() < 9) {
@@ -383,8 +392,8 @@ export default function CustomerMapComponent() {
         </div>
 
         {drawerOpen && (<>
-          {/* Search */}
-          <div style={{ marginBottom: 16 }}>
+          {/* Search + Refresh */}
+          <div style={{ marginBottom: 16, display: 'flex', gap: 6 }}>
             <Input
               prefix={<SearchOutlined style={{ color: '#999' }} />}
               placeholder="搜尋機構名稱或地址"
@@ -392,7 +401,12 @@ export default function CustomerMapComponent() {
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               size="middle"
+              style={{ flex: 1 }}
             />
+            <Button size="small" icon={<ReloadOutlined />} onClick={() => {
+              localStorage.removeItem(CACHE_KEY);
+              loadMapData(true);
+            }} />
           </div>
 
           {/* ABC Classification */}
@@ -472,6 +486,47 @@ export default function CustomerMapComponent() {
           </div>
         </>)}
       </div>
+
+      {/* ── 浮動行動選單（點擊標記後顯示） ── */}
+      {activeMarker && (
+        <div style={{
+          position: 'absolute',
+          bottom: 80,
+          left: drawerOpen ? 352 : 52,
+          zIndex: 1000,
+          transition: 'left 0.25s ease',
+        }}>
+          <Card size="small" style={{
+            width: 200, borderRadius: 10,
+            boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+          }}>
+            <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 6, paddingRight: 20 }}>
+              {activeMarker.name}
+              <Button size="small" type="text"
+                onClick={() => setActiveMarker(null)}
+                style={{ position: 'absolute', top: 4, right: 4, fontSize: 12, width: 22, height: 22, lineHeight: '16px' }}
+              >✕</Button>
+            </div>
+            <Space direction="vertical" style={{ width: '100%' }} size={4}>
+              <Button size="small" block icon={<EyeOutlined />}
+                onClick={() => { openAgentDrawer('customers', activeMarker.id); setActiveMarker(null); }}>
+                查看詳情
+              </Button>
+              <Button size="small" block icon={<CalendarOutlined />}
+                onClick={() => {
+                  window.dispatchEvent(new CustomEvent('crm:schedule', { detail: { recordId: activeMarker.id } }));
+                  setActiveMarker(null);
+                }}>
+                行程規劃
+              </Button>
+              <Button size="small" block icon={<RobotOutlined />}
+                onClick={() => { openAgentDrawer('customers', activeMarker.id); setActiveMarker(null); }}>
+                AI Agent
+              </Button>
+            </Space>
+          </Card>
+        </div>
+      )}
 
       {/* ── Legend (bottom-right) ── */}
       <div style={{
