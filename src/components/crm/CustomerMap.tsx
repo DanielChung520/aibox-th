@@ -8,7 +8,7 @@
  */
 
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Input, Button, Checkbox, Typography, Tag, Spin, Card, Space, Drawer } from 'antd';
+import { Input, Button, Checkbox, Typography, Spin, Card, Space, Drawer } from 'antd';
 import { SearchOutlined, EyeOutlined, CalendarOutlined, RobotOutlined, ReloadOutlined } from '@ant-design/icons';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -28,8 +28,6 @@ const ABC_CONFIG: Record<string, { color: string; radius: number; label: string 
   C: { color: '#ff4d4f', radius: 6, label: 'C 類 · 一般' },
   E: { color: '#722ed1', radius: 7, label: 'E 類 · 外部來源' },
 };
-
-const REGIONS = ['北部', '中部', '南部', '東部'] as const;
 
 const SERVICE_TYPES = ['養護機構', '居家服務', '護理之家', '長照機構', '社區服務'];
 
@@ -122,7 +120,6 @@ export default function CustomerMapComponent() {
   /* ── State ── */
   const [searchQuery, setSearchQuery] = useState('');
   const [abcFilter, setAbcFilter] = useState<string>('all');
-  const [regionFilter, setRegionFilter] = useState<string>('all');
   const [serviceTypeFilter, setServiceTypeFilter] = useState<string[]>([]);
   const [markers, setMarkers] = useState<CRMMapMarker[]>([]);
   const [loading, setLoading] = useState(true);
@@ -189,7 +186,6 @@ export default function CustomerMapComponent() {
       }))
       .filter(c => {
         if (abcFilter !== 'all' && c.abc !== abcFilter) return false;
-        if (regionFilter !== 'all' && c.region !== regionFilter) return false;
         if (serviceTypeFilter.length > 0 && !c.tags.some(t => serviceTypeFilter.includes(t))) return false;
         if (searchQuery) {
           const q = searchQuery.toLowerCase();
@@ -197,7 +193,7 @@ export default function CustomerMapComponent() {
         }
         return true;
       });
-  }, [markers, abcFilter, regionFilter, serviceTypeFilter, searchQuery]);
+  }, [markers, abcFilter, serviceTypeFilter, searchQuery]);
 
   const stats = useMemo(() => {
     const total = filteredCustomers.length;
@@ -426,25 +422,36 @@ export default function CustomerMapComponent() {
           }} />
         </div>
 
-        {/* ABC Classification */}
+        {/* ABC/E Classification with counts */}
         <div style={{ marginBottom: 16 }}>
-          <Text strong style={{ fontSize: 13, display: 'block', marginBottom: 8 }}>ABC／E 分類</Text>
+          <Text strong style={{ fontSize: 13, display: 'block', marginBottom: 8 }}>
+            分類
+            <Text style={{ fontSize: 11, fontWeight: 400, marginLeft: 6 }}>{stats.total} 筆</Text>
+          </Text>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            {(['all', 'A', 'B', 'C', 'E'] as const).map(key => (
-              <Button
-                key={key}
-                size="small"
-                type={abcFilter === key ? 'primary' : 'default'}
-                style={
-                  abcFilter === key && key !== 'all'
-                    ? { background: ABC_CONFIG[key].color, borderColor: ABC_CONFIG[key].color, color: '#fff' }
-                    : { fontSize: 12 }
-                }
-                onClick={() => setAbcFilter(key)}
-              >
-                {key === 'all' ? '全部' : `${key} 類`}
-              </Button>
-            ))}
+            {(['all', 'A', 'B', 'C', 'E'] as const).map(key => {
+              const count = key === 'all' ? stats.total
+                : key === 'A' ? stats.aCount
+                : key === 'B' ? stats.bCount
+                : key === 'C' ? stats.cCount
+                : stats.eCount;
+              return (
+                <Button
+                  key={key}
+                  size="small"
+                  type={abcFilter === key ? 'primary' : 'default'}
+                  style={key === 'all' ? { fontSize: 12 } : {
+                    background: abcFilter === key ? ABC_CONFIG[key].color : `${ABC_CONFIG[key].color}18`,
+                    borderColor: ABC_CONFIG[key].color,
+                    color: abcFilter === key ? '#fff' : ABC_CONFIG[key].color,
+                    fontSize: 12,
+                  }}
+                  onClick={() => setAbcFilter(key)}
+                >
+                  {key === 'all' ? '全部' : `${key} 類`} {count}
+                </Button>
+              );
+            })}
           </div>
         </div>
 
@@ -462,25 +469,6 @@ export default function CustomerMapComponent() {
                 {type}
               </Checkbox>
             ))}
-          </div>
-        </div>
-
-        {/* Divider */}
-        <div style={{ height: 1, background: '#f0f0f0', marginBottom: 14 }} />
-
-        {/* Stats */}
-        <div>
-          <Text style={{ fontSize: 13, color: tokens.textSecondary }}>
-            顯示 <span style={{ fontWeight: 600, color: tokens.colorTextBase }}>{stats.total}</span> 筆機構
-            {stats.dbTotal > 0 && (
-              <span style={{ color: tokens.textSecondary }}> (資料庫共 {stats.dbTotal})</span>
-            )}
-          </Text>
-          <div style={{ display: 'flex', gap: 12, marginTop: 8, flexWrap: 'wrap' }}>
-            <Tag color="#52c41a" style={{ borderRadius: 6, fontSize: 12 }}>A 類：{stats.aCount}</Tag>
-            <Tag color="#faad14" style={{ borderRadius: 6, fontSize: 12 }}>B 類：{stats.bCount}</Tag>
-            <Tag color="#ff4d4f" style={{ borderRadius: 6, fontSize: 12 }}>C 類：{stats.cCount}</Tag>
-            <Tag color="#722ed1" style={{ borderRadius: 6, fontSize: 12 }}>E 類：{stats.eCount}</Tag>
           </div>
         </div>
       </Drawer>
