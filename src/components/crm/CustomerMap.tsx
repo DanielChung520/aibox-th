@@ -9,7 +9,7 @@
 
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Input, Button, Checkbox, Typography, Spin, Card, Space, Drawer, App } from 'antd';
-import { SearchOutlined, EyeOutlined, CalendarOutlined, RobotOutlined, ReloadOutlined, FlagOutlined, AimOutlined, RouteOutlined } from '@ant-design/icons';
+import { SearchOutlined, EyeOutlined, CalendarOutlined, RobotOutlined, ReloadOutlined, FlagOutlined, AimOutlined } from '@ant-design/icons';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet.markercluster/dist/MarkerCluster.css';
@@ -561,7 +561,7 @@ export default function CustomerMapComponent() {
                 type={endPoint?.id === activeMarker.id ? 'primary' : 'default'}>
                 終點
               </Button>
-              <Button size="small" block icon={<RouteOutlined />}
+              <Button size="small" block
                 onClick={() => {
                   if (startPoint && endPoint) {
                     message.success(`已規劃拜訪路線：${startPoint.name} → ${endPoint.name}`);
