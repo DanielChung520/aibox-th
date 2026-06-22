@@ -132,6 +132,7 @@ export default function CustomerMapComponent() {
   const [activeMarker, setActiveMarker] = useState<typeof filteredCustomers[number] | null>(null);
   const [startPoint, setStartPoint] = useState<typeof filteredCustomers[number] | null>(null);
   const [endPoint, setEndPoint] = useState<typeof filteredCustomers[number] | null>(null);
+  const [routeInfo, setRouteInfo] = useState<{ distance: number; duration: number } | null>(null);
   const [baselineStats, setBaselineStats] = useState<{ total: number; aCount: number; bCount: number; cCount: number; eCount: number } | null>(null);
 
   /* ── Refs ── */
@@ -369,13 +370,14 @@ export default function CustomerMapComponent() {
       const resp = await fetch(url);
       const data = await resp.json();
       if (!data.routes?.length) return;
-      const coords = data.routes[0].geometry.coordinates.map((c: [number, number]) => [c[1], c[0]] as [number, number]);
+      const r = data.routes[0];
+      const coords = r.geometry.coordinates.map((c: [number, number]) => [c[1], c[0]] as [number, number]);
       if (routeLineRef.current) routeLineRef.current.remove();
       routeLineRef.current = L.polyline(coords, {
-        color: '#1677ff', weight: 4, opacity: 0.8,
-        dashArray: '10, 6',
+        color: '#1677ff', weight: 4, opacity: 0.8, dashArray: '10, 6',
       }).addTo(mapInstanceRef.current!);
       mapInstanceRef.current?.fitBounds(routeLineRef.current.getBounds(), { padding: [40, 40] });
+      setRouteInfo({ distance: Math.round(r.distance / 100) / 10, duration: Math.round(r.duration) });
     } catch { /* OSRM unavailable */ }
   }, []);
 
@@ -544,11 +546,18 @@ export default function CustomerMapComponent() {
             <div style={{ fontSize: 12, lineHeight: 1.8 }}>
               {startPoint && <div>🚩 起點：<Text strong>{startPoint.name}</Text></div>}
               {endPoint && <div>🎯 終點：<Text strong>{endPoint.name}</Text></div>}
+            {routeInfo && (
+              <div style={{ fontSize: 12, lineHeight: 1.8, marginTop: 4 }}>
+                <div>預計車程約：<Text strong>{routeInfo.distance}</Text> 公里</div>
+                <div>路程時間約：<Text strong>{Math.floor(routeInfo.duration / 3600)}</Text> 小時 <Text strong>{Math.round((routeInfo.duration % 3600) / 60)}</Text> 分鐘</div>
+              </div>
+            )}
             </div>
             <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
               <Button size="small" type="primary" icon={<AimOutlined />} style={{ flex: 1, fontSize: 11 }}
                 disabled={!endPoint}
                 onClick={() => {
+                  setRouteInfo(null);
                   const from: [number, number] = startPoint ? [startPoint.lat, startPoint.lng] : HQ_POSITION;
                   const to: [number, number] = [endPoint!.lat, endPoint!.lng];
                   calcRoute(from, to);
@@ -558,6 +567,7 @@ export default function CustomerMapComponent() {
               <Button size="small" style={{ fontSize: 11 }}
                 onClick={() => {
                   if (routeLineRef.current) { routeLineRef.current.remove(); routeLineRef.current = null; }
+                  setRouteInfo(null);
                   setStartPoint(null); setEndPoint(null);
                 }}>
                 清除路線
