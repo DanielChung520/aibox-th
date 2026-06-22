@@ -156,6 +156,7 @@ export default function CustomerMapComponent() {
         status: m.status || '', abc_grade: m.abc_grade,
         category: m.category, source: m.source || '',
         city: m.city, address: m.address, sales_rep: m.sales_rep,
+        phone: m.phone,
       }));
       const data = { ts: Date.now(), markers: light, summary: res.data.summary };
       await idb.set(CACHE_KEY, data);
@@ -196,6 +197,7 @@ export default function CustomerMapComponent() {
         tags: m.category || m.org_tags || [],
         address: m.address || '',
         salesRep: m.sales_rep || '',
+        phone: m.phone || '',
         lastVisit: 'N/A' as string,
         revenue: 0,
       }))
@@ -478,6 +480,23 @@ export default function CustomerMapComponent() {
             ))}
           </div>
         </div>
+
+        {/* 客戶詳情 */}
+        {activeMarker && (
+          <div style={{
+            borderTop: '1px solid #f0f0f0', marginTop: 8, paddingTop: 12,
+          }}>
+            <Text strong style={{ fontSize: 13, display: 'block', marginBottom: 8 }}>📋 客戶詳情</Text>
+            <div style={{ fontSize: 12, lineHeight: 2 }}>
+              <div><Text type="secondary" style={{ display: 'inline-block', width: 64 }}>全稱</Text>{activeMarker.name}</div>
+              <div><Text type="secondary" style={{ display: 'inline-block', width: 64 }}>負責人</Text>{activeMarker.salesRep || '-'}</div>
+              <div><Text type="secondary" style={{ display: 'inline-block', width: 64 }}>地址</Text>{activeMarker.address || '-'}</div>
+              <div><Text type="secondary" style={{ display: 'inline-block', width: 64 }}>資本額</Text>-</div>
+              <div><Text type="secondary" style={{ display: 'inline-block', width: 64 }}>聯繫人</Text>-</div>
+              <div><Text type="secondary" style={{ display: 'inline-block', width: 64 }}>電話</Text>{activeMarker.phone || '-'}</div>
+            </div>
+          </div>
+        )}
       </Drawer>
 
       {/* 展開按鈕（抽屜關閉時可在左側點擊重新打開） */}
