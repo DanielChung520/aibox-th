@@ -345,6 +345,27 @@ export default function CustomerMapComponent() {
     map.on('click', () => setActiveMarker(null));
   }, [filteredCustomers]);
 
+  /* ── Route markers (start/end) ── */
+  const routeLayerRef = useRef<L.LayerGroup | null>(null);
+  useEffect(() => {
+    if (!mapInstanceRef.current) return;
+    if (!routeLayerRef.current) {
+      routeLayerRef.current = L.layerGroup().addTo(mapInstanceRef.current);
+    }
+    routeLayerRef.current.clearLayers();
+
+    if (startPoint) {
+      L.circleMarker([startPoint.lat, startPoint.lng], {
+        radius: 14, fillColor: '#52c41a', color: '#fff', weight: 3, fillOpacity: 1,
+      }).addTo(routeLayerRef.current).bindTooltip('🚩 起點', { permanent: true, direction: 'top' });
+    }
+    if (endPoint) {
+      L.circleMarker([endPoint.lat, endPoint.lng], {
+        radius: 14, fillColor: '#ff4d4f', color: '#fff', weight: 3, fillOpacity: 1,
+      }).addTo(routeLayerRef.current).bindTooltip('🎯 終點', { permanent: true, direction: 'top' });
+    }
+  }, [startPoint, endPoint]);
+
   /* ── Handlers ── */
   const toggleServiceType = (type: string) => {
     setServiceTypeFilter(prev =>
