@@ -448,27 +448,9 @@ export default function CustomerMapComponent() {
           </div>
         </div>
 
-        {/* Region */}
+        {/* Institution type */}
         <div style={{ marginBottom: 16 }}>
-          <Text strong style={{ fontSize: 13, display: 'block', marginBottom: 8 }}>區域</Text>
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            {(['all', ...REGIONS] as const).map(key => (
-              <Button
-                key={key}
-                size="small"
-                type={regionFilter === key ? 'primary' : 'default'}
-                onClick={() => setRegionFilter(key)}
-                style={{ fontSize: 12 }}
-              >
-                {key === 'all' ? '全部' : key}
-              </Button>
-            ))}
-          </div>
-        </div>
-
-        {/* Service type */}
-        <div style={{ marginBottom: 16 }}>
-          <Text strong style={{ fontSize: 13, display: 'block', marginBottom: 8 }}>服務類型</Text>
+          <Text strong style={{ fontSize: 13, display: 'block', marginBottom: 8 }}>機構類型</Text>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
             {SERVICE_TYPES.map(type => (
               <Checkbox
