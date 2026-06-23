@@ -82,7 +82,6 @@ struct ServiceDef {
 fn service_defs() -> Vec<ServiceDef> {
     vec![
         ServiceDef { name: "aitask",           display_name: "AI Task",         port: 8001, health_via_tcp: false },
-        ServiceDef { name: "bpa-mm-agent",     display_name: "BPA MM Agent",   port: 8005, health_via_tcp: false },
         ServiceDef { name: "unified-agents",   display_name: "Unified Agents", port: 8011, health_via_tcp: false },
         ServiceDef { name: "celery",           display_name: "Celery Worker",   port: 6379, health_via_tcp: false },
     ]
